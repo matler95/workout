@@ -5,7 +5,6 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import { Checkbox } from '../components/ui/checkbox';
 import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
 import { apiCall } from '../../utils/supabase-client';
@@ -256,32 +255,7 @@ export function Onboarding() {
                   <RadioGroupItem value="bodyweight" id="bodyweight" />
                   <Label htmlFor="bodyweight">Bodyweight Only</Label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="limited" id="limited" />
-                  <Label htmlFor="limited">Limited Equipment</Label>
-                </div>
               </RadioGroup>
-              {data.equipment === 'limited' && (
-                <div className="mt-4 space-y-2 pl-6">
-                  <Label>Select your available equipment:</Label>
-                  {['Dumbbells', 'Barbell', 'Pull-up bar', 'Resistance bands', 'Bench'].map((item) => (
-                    <div key={item} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={item}
-                        checked={data.customEquipment.includes(item)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setData({ ...data, customEquipment: [...data.customEquipment, item] });
-                          } else {
-                            setData({ ...data, customEquipment: data.customEquipment.filter((e) => e !== item) });
-                          }
-                        }}
-                      />
-                      <Label htmlFor={item}>{item}</Label>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 

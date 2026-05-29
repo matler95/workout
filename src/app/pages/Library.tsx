@@ -60,7 +60,6 @@ export function Library() {
                   <SelectItem value="all">All Equipment</SelectItem>
                   <SelectItem value="full_gym">Full Gym</SelectItem>
                   <SelectItem value="bodyweight">Bodyweight</SelectItem>
-                  <SelectItem value="limited">Limited</SelectItem>
                 </SelectContent>
               </Select>
             </div>

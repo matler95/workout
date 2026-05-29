@@ -66,7 +66,6 @@ export function WorkoutBuilder() {
       .filter((ex) => {
         if (profile.equipment === 'full_gym') return true;
         if (profile.equipment === 'bodyweight') return ex.equipment === 'bodyweight';
-        if (profile.equipment === 'limited') return ex.equipment !== 'full_gym';
         return true;
       })
       .filter((ex) => {
