@@ -6,161 +6,106 @@ import { createClient } from "npm:@supabase/supabase-js";
 
 const app = new Hono();
 
-// Create Supabase clients
 const getServiceClient = () => createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-const getAnonClient = () => createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_ANON_KEY')!
-);
-
-// Enable logger
 app.use('*', logger(console.log));
+app.use("/*", cors({
+  origin: "*",
+  allowHeaders: ["Content-Type", "Authorization"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  exposeHeaders: ["Content-Length"],
+  maxAge: 600,
+}));
 
-// Enable CORS for all routes and methods
-app.use(
-  "/*",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-  }),
-);
+// Helper: get authenticated user
+async function getUser(c: any) {
+  const accessToken = c.req.header('Authorization')?.split(' ')[1];
+  if (!accessToken) return null;
+  const supabase = getServiceClient();
+  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+  if (error || !user) return null;
+  return user;
+}
 
-// Health check endpoint
-app.get("/make-server-975f4bc8/health", (c) => {
-  return c.json({ status: "ok" });
-});
+app.get("/make-server-975f4bc8/health", (c) => c.json({ status: "ok" }));
 
 // Auth: Signup
 app.post("/make-server-975f4bc8/auth/signup", async (c) => {
   try {
     const { email, password, name } = await c.req.json();
     const supabase = getServiceClient();
-
     const { data, error } = await supabase.auth.admin.createUser({
-      email,
-      password,
+      email, password,
       user_metadata: { name },
-      // Automatically confirm the user's email since an email server hasn't been configured.
-      email_confirm: true
+      email_confirm: true,
     });
-
-    if (error) {
-      console.log(`Signup error: ${error.message}`);
-      return c.json({ error: error.message }, 400);
-    }
-
+    if (error) return c.json({ error: error.message }, 400);
     return c.json({ user: data.user });
-  } catch (error) {
-    console.log(`Signup exception: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Auth: Get current session
+// Auth: Session
 app.get("/make-server-975f4bc8/auth/session", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    if (!accessToken) {
-      return c.json({ session: null });
-    }
-
-    const supabase = getServiceClient();
-    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
-
-    if (error || !user) {
-      return c.json({ session: null });
-    }
-
-    return c.json({ session: { user, access_token: accessToken } });
-  } catch (error) {
-    console.log(`Session check error: ${error.message}`);
+    const user = await getUser(c);
+    if (!user) return c.json({ session: null });
+    return c.json({ session: { user } });
+  } catch {
     return c.json({ session: null });
   }
 });
 
-// User profile: Save onboarding data
+// Profile: Save onboarding
 app.post("/make-server-975f4bc8/profile/onboarding", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const profileData = await c.req.json();
     await kv.set(`profile:${user.id}`, profileData);
-
     return c.json({ success: true });
-  } catch (error) {
-    console.log(`Onboarding save error: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// User profile: Get profile
+// Profile: Get
 app.get("/make-server-975f4bc8/profile", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const profile = await kv.get(`profile:${user.id}`);
     return c.json({ profile });
-  } catch (error) {
-    console.log(`Profile fetch error: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Workouts: Save workout plan
+// Workouts: Save plan
 app.post("/make-server-975f4bc8/workouts/plan", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const workoutPlan = await c.req.json();
     await kv.set(`workout_plan:${user.id}`, workoutPlan);
-
     return c.json({ success: true });
-  } catch (error) {
-    console.log(`Workout plan save error: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Workouts: Get workout plan
+// Workouts: Get plan
 app.get("/make-server-975f4bc8/workouts/plan", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const plan = await kv.get(`workout_plan:${user.id}`);
     return c.json({ plan });
-  } catch (error) {
-    console.log(`Workout plan fetch error: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
@@ -168,80 +113,62 @@ app.get("/make-server-975f4bc8/workouts/plan", async (c) => {
 // Workouts: Log completed workout
 app.post("/make-server-975f4bc8/workouts/log", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const workoutLog = await c.req.json();
     const timestamp = new Date().toISOString();
     await kv.set(`workout_log:${user.id}:${timestamp}`, workoutLog);
-
     return c.json({ success: true });
-  } catch (error) {
-    console.log(`Workout log error: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Workouts: Get workout history
+// Workouts: History (returns array sorted newest first)
 app.get("/make-server-975f4bc8/workouts/history", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const logs = await kv.getByPrefix(`workout_log:${user.id}:`);
-    return c.json({ history: logs || [] });
-  } catch (error) {
-    console.log(`Workout history fetch error: ${error.message}`);
+    // Sort newest first
+    const sorted = (logs || []).sort((a: any, b: any) =>
+      new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+    );
+    return c.json({ history: sorted });
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Progress: Save bodyweight entry
+// Progress: Save bodyweight entry — stores as { date, weight } object
 app.post("/make-server-975f4bc8/progress/bodyweight", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const { weight, date } = await c.req.json();
-    await kv.set(`bodyweight:${user.id}:${date}`, weight);
-
+    if (!weight || !date) return c.json({ error: 'Missing weight or date' }, 400);
+    const entry = { date, weight: parseFloat(weight) };
+    await kv.set(`bodyweight:${user.id}:${date}`, entry);
     return c.json({ success: true });
-  } catch (error) {
-    console.log(`Bodyweight save error: ${error.message}`);
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-// Progress: Get bodyweight history
+// Progress: Get bodyweight history — returns array of { date, weight }
 app.get("/make-server-975f4bc8/progress/bodyweight", async (c) => {
   try {
-    const accessToken = c.req.header('Authorization')?.split(' ')[1];
-    const supabase = getServiceClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-
+    const user = await getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
     const entries = await kv.getByPrefix(`bodyweight:${user.id}:`);
-    return c.json({ entries: entries || [] });
-  } catch (error) {
-    console.log(`Bodyweight history fetch error: ${error.message}`);
+    // Ensure entries are objects with { date, weight }
+    const normalized = (entries || []).map((e: any) => {
+      if (typeof e === 'number') return null; // skip old format
+      if (e && typeof e === 'object' && e.date && e.weight) return e;
+      return null;
+    }).filter(Boolean);
+    return c.json({ entries: normalized });
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });

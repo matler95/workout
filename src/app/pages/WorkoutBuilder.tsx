@@ -8,271 +8,396 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
 import { apiCall } from '../../utils/supabase-client';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, Clock, AlertCircle } from 'lucide-react';
+import { Search, Plus, Trash2, Clock, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+
+// Muscle group requirements per workout style / day type
+const MUSCLE_TARGETS: Record<string, string[]> = {
+  push: ['chest', 'front_delts', 'side_delts', 'triceps'],
+  pull: ['lats', 'upper_back', 'rear_delts', 'biceps'],
+  legs: ['quads', 'hamstrings', 'glutes'],
+  upper: ['chest', 'upper_back', 'lats', 'triceps', 'biceps'],
+  lower: ['quads', 'hamstrings', 'glutes'],
+  full: ['chest', 'upper_back', 'quads', 'hamstrings'],
+};
+
+function getDayType(dayName: string): string {
+  const n = dayName.toLowerCase();
+  if (n.includes('push')) return 'push';
+  if (n.includes('pull')) return 'pull';
+  if (n.includes('leg') || n.includes('lower')) return 'legs';
+  if (n.includes('upper')) return 'upper';
+  return 'full';
+}
+
+function assessWorkout(exercises: Exercise[], dayName: string): {
+  score: number;
+  label: string;
+  color: string;
+  missing: string[];
+  tips: string[];
+} {
+  if (exercises.length === 0) return { score: 0, label: 'Empty', color: 'gray', missing: [], tips: ['Add exercises to get started'] };
+
+  const dayType = getDayType(dayName);
+  const targets = MUSCLE_TARGETS[dayType] || MUSCLE_TARGETS.full;
+  const covered = new Set<string>();
+  exercises.forEach(ex => {
+    ex.primaryMuscles.forEach(m => covered.add(m));
+    ex.secondaryMuscles.forEach(m => covered.add(m));
+  });
+
+  const missing = targets.filter(m => !covered.has(m));
+  const coverage = Math.round(((targets.length - missing.length) / targets.length) * 100);
+
+  const tips: string[] = [];
+  if (exercises.length < 3) tips.push('Add more exercises for a complete session');
+  if (exercises.length > 8) tips.push('Too many exercises may make the session too long');
+  const hasCompound = exercises.some(ex => ex.primaryMuscles.length >= 2 || ex.secondaryMuscles.length >= 2);
+  if (!hasCompound) tips.push('Add at least one compound movement');
+
+  let score = coverage;
+  if (exercises.length >= 3 && exercises.length <= 8) score = Math.min(100, score + 10);
+  if (hasCompound) score = Math.min(100, score + 10);
+
+  const label = score >= 80 ? 'Great' : score >= 60 ? 'Good' : score >= 40 ? 'Needs work' : 'Incomplete';
+  const color = score >= 80 ? 'green' : score >= 60 ? 'yellow' : 'red';
+
+  return { score, label, color, missing, tips };
+}
 
 export function WorkoutBuilder() {
   const [profile, setProfile] = useState<any>(null);
   const [selectedExercises, setSelectedExercises] = useState<{ [key: string]: Exercise[] }>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [currentDay, setCurrentDay] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useEffect(() => { loadProfile(); }, []);
 
   const loadProfile = async () => {
     try {
       const { profile } = await apiCall('/profile');
       setProfile(profile);
-      initializeWorkoutDays(profile);
-    } catch (error: any) {
+      initializeDays(profile);
+
+      // Try to load existing plan
+      try {
+        const { plan } = await apiCall('/workouts/plan');
+        if (plan?.workouts) {
+          setSelectedExercises(plan.workouts);
+          setCurrentDay(Object.keys(plan.workouts)[0] || '');
+          return;
+        }
+      } catch { /* no plan yet */ }
+    } catch {
       toast.error('Failed to load profile');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const initializeWorkoutDays = (prof: any) => {
+  const initializeDays = (prof: any) => {
     const days: { [key: string]: Exercise[] } = {};
-
-    if (prof.workoutStyle === 'full_body') {
-      days['Day 1'] = [];
-      days['Day 2'] = [];
-      days['Day 3'] = [];
-    } else if (prof.workoutStyle === 'upper_lower') {
-      days['Upper 1'] = [];
-      days['Lower 1'] = [];
-      days['Upper 2'] = [];
-      days['Lower 2'] = [];
-    } else if (prof.workoutStyle === 'ppl') {
-      days['Push'] = [];
-      days['Pull'] = [];
-      days['Legs'] = [];
-    } else if (prof.workoutStyle === 'bro_split') {
-      days['Chest'] = [];
-      days['Back'] = [];
-      days['Shoulders'] = [];
-      days['Arms'] = [];
-      days['Legs'] = [];
-    }
-
+    const style = prof?.workoutStyle;
+    if (style === 'full_body') { ['Day 1', 'Day 2', 'Day 3'].forEach(d => days[d] = []); }
+    else if (style === 'upper_lower') { ['Upper A', 'Lower A', 'Upper B', 'Lower B'].forEach(d => days[d] = []); }
+    else if (style === 'ppl') { ['Push', 'Pull', 'Legs'].forEach(d => days[d] = []); }
+    else if (style === 'bro_split') { ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs'].forEach(d => days[d] = []); }
+    else { ['Day 1', 'Day 2', 'Day 3'].forEach(d => days[d] = []); }
     setSelectedExercises(days);
     setCurrentDay(Object.keys(days)[0]);
   };
 
-  const getSuggestedExercises = (): Exercise[] => {
-    if (!profile) return [];
+  const getFilteredExercises = (): { suggested: Exercise[]; rest: Exercise[] } => {
+    const all = exerciseDatabase.filter(ex => {
+      // Equipment filter
+      if (profile?.equipment === 'bodyweight' && ex.equipment !== 'bodyweight') return false;
+      if (profile?.equipment === 'limited' && ex.equipment === 'full_gym') return false;
+      // Experience filter
+      if (profile?.experienceLevel === 'beginner' && ex.difficulty === 'advanced') return false;
+      // Search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return ex.name.toLowerCase().includes(q) || ex.primaryMuscles.some(m => m.toLowerCase().includes(q));
+      }
+      return true;
+    });
 
-    return exerciseDatabase
-      .filter((ex) => {
-        if (profile.equipment === 'full_gym') return true;
-        if (profile.equipment === 'bodyweight') return ex.equipment === 'bodyweight';
-        return true;
-      })
-      .filter((ex) => {
-        if (profile.experienceLevel === 'beginner') return ex.difficulty !== 'advanced';
-        return true;
-      })
-      .filter((ex) => {
-        if (currentDay.toLowerCase().includes('push')) return ex.category === 'push';
-        if (currentDay.toLowerCase().includes('pull')) return ex.category === 'pull';
-        if (currentDay.toLowerCase().includes('legs') || currentDay.toLowerCase().includes('lower')) return ex.category === 'legs';
-        if (currentDay.toLowerCase().includes('chest')) return ex.category === 'push' && ex.primaryMuscles.includes('chest');
-        if (currentDay.toLowerCase().includes('back')) return ex.category === 'pull';
-        if (currentDay.toLowerCase().includes('shoulder')) return ex.category === 'push' && ex.primaryMuscles.some(m => m.includes('delt'));
-        return true;
-      })
-      .filter((ex) => {
-        if (!searchQuery) return true;
-        return ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               ex.primaryMuscles.some(m => m.toLowerCase().includes(searchQuery.toLowerCase()));
-      });
+    // Suggested: match the day type category
+    const dayType = getDayType(currentDay);
+    const suggested = all.filter(ex => {
+      if (dayType === 'push') return ex.category === 'push';
+      if (dayType === 'pull') return ex.category === 'pull';
+      if (dayType === 'legs') return ex.category === 'legs';
+      if (dayType === 'upper') return ex.category === 'push' || ex.category === 'pull';
+      return true; // full body — show all
+    });
+
+    const suggestedIds = new Set(suggested.map(e => e.id));
+    const rest = all.filter(e => !suggestedIds.has(e.id));
+
+    return { suggested, rest };
   };
 
   const addExercise = (exercise: Exercise) => {
-    if (!currentDay) return;
-
-    setSelectedExercises({
-      ...selectedExercises,
-      [currentDay]: [...(selectedExercises[currentDay] || []), exercise],
-    });
-    toast.success(`Added ${exercise.name}`);
+    const current = selectedExercises[currentDay] || [];
+    if (current.some(e => e.id === exercise.id)) {
+      toast.error('Already added');
+      return;
+    }
+    setSelectedExercises(prev => ({ ...prev, [currentDay]: [...current, exercise] }));
   };
 
-  const removeExercise = (dayKey: string, index: number) => {
-    setSelectedExercises({
-      ...selectedExercises,
-      [dayKey]: selectedExercises[dayKey].filter((_, i) => i !== index),
-    });
+  const removeExercise = (day: string, idx: number) => {
+    setSelectedExercises(prev => ({ ...prev, [day]: prev[day].filter((_, i) => i !== idx) }));
   };
 
-  const calculateSessionLength = (exercises: Exercise[]): number => {
-    const setsPerExercise = 3;
-    const restTime = 2;
-    const warmupCooldown = 10;
-
-    return warmupCooldown + (exercises.length * setsPerExercise * restTime);
+  const moveExercise = (day: string, idx: number, dir: -1 | 1) => {
+    const exs = [...(selectedExercises[day] || [])];
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= exs.length) return;
+    [exs[idx], exs[newIdx]] = [exs[newIdx], exs[idx]];
+    setSelectedExercises(prev => ({ ...prev, [day]: exs }));
   };
 
-  const getTrainedMuscles = (exercises: Exercise[]): string[] => {
-    const muscles = new Set<string>();
-    exercises.forEach((ex) => {
-      ex.primaryMuscles.forEach((m) => muscles.add(m));
-      ex.secondaryMuscles.forEach((m) => muscles.add(m));
-    });
-    return Array.from(muscles);
+  const getSessionLength = (exercises: Exercise[]): number => {
+    // 10min warmup + (sets × rest) + set time
+    // 3 sets per exercise, 2min rest between sets, ~45s per set
+    const setsPerEx = 3;
+    const restMinutes = 2;
+    const setTimeMinutes = 0.75;
+    return Math.round(10 + exercises.length * setsPerEx * (restMinutes + setTimeMinutes));
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       await apiCall('/workouts/plan', {
         method: 'POST',
-        body: JSON.stringify({
-          workouts: selectedExercises,
-          createdAt: new Date().toISOString(),
-        }),
+        body: JSON.stringify({ workouts: selectedExercises, createdAt: new Date().toISOString() }),
       });
       toast.success('Workout plan saved!');
-      navigate('/dashboard');
-    } catch (error: any) {
-      toast.error('Failed to save workout plan');
+      navigate('/plan');
+    } catch {
+      toast.error('Failed to save');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const suggestedExercises = getSuggestedExercises();
-  const currentDayExercises = selectedExercises[currentDay] || [];
-  const estimatedTime = calculateSessionLength(currentDayExercises);
-  const trainedMuscles = getTrainedMuscles(currentDayExercises);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
+  const days = Object.keys(selectedExercises);
+  const currentExercises = selectedExercises[currentDay] || [];
+  const { suggested, rest } = getFilteredExercises();
+  const sessionLen = getSessionLength(currentExercises);
+  const targetLen = profile?.sessionLength || 60;
+  const assessment = assessWorkout(currentExercises, currentDay);
+
+  const assessmentColorClass = {
+    green: 'bg-green-50 border-green-200 text-green-800',
+    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    red: 'bg-red-50 border-red-200 text-red-800',
+    gray: 'bg-gray-50 border-gray-200 text-gray-600',
+  }[assessment.color];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-20">
-      <div className="max-w-6xl mx-auto space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Build Your Workout Plan</CardTitle>
-            <p className="text-sm text-gray-600">
-              Select exercises for each workout day. Suggested exercises appear first based on your profile.
-            </p>
-          </CardHeader>
-        </Card>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Header */}
+      <div className="bg-white border-b px-4 py-3 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="font-bold text-lg">Workout Builder</h1>
+            <p className="text-xs text-gray-500">{profile?.workoutStyle?.replace(/_/g, ' ')} · {days.length} days</p>
+          </div>
+          <Button onClick={handleSave} disabled={saving} size="sm">
+            {saving ? 'Saving...' : 'Save Plan'}
+          </Button>
+        </div>
+      </div>
 
-        <Tabs value={currentDay} onValueChange={setCurrentDay} className="w-full">
-          <TabsList className="w-full justify-start overflow-x-auto">
-            {Object.keys(selectedExercises).map((day) => (
-              <TabsTrigger key={day} value={day}>
-                {day} ({selectedExercises[day].length})
+      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+        {/* Day tabs */}
+        <Tabs value={currentDay} onValueChange={setCurrentDay}>
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            {days.map(day => (
+              <TabsTrigger key={day} value={day} className="flex-shrink-0">
+                {day}
+                <span className="ml-1 text-xs opacity-60">({(selectedExercises[day] || []).length})</span>
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {Object.keys(selectedExercises).map((day) => (
-            <TabsContent key={day} value={day} className="space-y-4">
+          {days.map(day => (
+            <TabsContent key={day} value={day} className="space-y-4 mt-4">
               <div className="grid md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Selected Exercises</CardTitle>
-                    <div className="flex gap-2 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        <span>~{estimatedTime} min</span>
-                      </div>
-                      {estimatedTime > (profile?.sessionLength || 60) && (
-                        <div className="flex items-center gap-1 text-orange-600">
-                          <AlertCircle className="w-4 h-4" />
-                          <span>May be too long</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {currentDayExercises.length === 0 ? (
-                      <p className="text-sm text-gray-500">No exercises selected yet</p>
-                    ) : (
-                      <>
-                        {currentDayExercises.map((ex, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div>
-                              <div className="font-medium">{ex.name}</div>
-                              <div className="text-xs text-gray-600">
-                                {ex.primaryMuscles.join(', ')}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeExercise(day, idx)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                          <div className="text-sm font-medium mb-2">Trained Muscles:</div>
-                          <div className="flex flex-wrap gap-1">
-                            {trainedMuscles.map((muscle) => (
-                              <Badge key={muscle} variant="secondary">{muscle}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
 
+                {/* LEFT: Selected exercises */}
+                <div className="space-y-3">
+                  {/* Session stats */}
+                  <div className="flex gap-2 flex-wrap">
+                    <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border ${
+                      sessionLen > targetLen + 15 ? 'bg-red-50 border-red-200 text-red-700' :
+                      sessionLen < targetLen - 20 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                      'bg-green-50 border-green-200 text-green-700'
+                    }`}>
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>~{sessionLen} min</span>
+                      {sessionLen > targetLen + 15 && <AlertTriangle className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border ${assessmentColorClass}`}>
+                      {assessment.score >= 70 ? <CheckCircle className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />}
+                      <span>{assessment.label} ({assessment.score}%)</span>
+                    </div>
+                  </div>
+
+                  {/* Assessment feedback */}
+                  {(assessment.missing.length > 0 || assessment.tips.length > 0) && (
+                    <div className={`p-3 rounded-lg border text-sm space-y-1 ${assessmentColorClass}`}>
+                      {assessment.missing.length > 0 && (
+                        <p>Missing muscles: <span className="font-medium">{assessment.missing.map(m => m.replace(/_/g, ' ')).join(', ')}</span></p>
+                      )}
+                      {assessment.tips.map((tip, i) => <p key={i}>• {tip}</p>)}
+                    </div>
+                  )}
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-gray-600">Selected ({currentExercises.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {currentExercises.length === 0 ? (
+                        <p className="text-sm text-gray-400 py-4 text-center">No exercises yet — add from the library →</p>
+                      ) : (
+                        currentExercises.map((ex, idx) => (
+                          <div key={idx} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg group">
+                            <div className="flex flex-col gap-0.5">
+                              <button onClick={() => moveExercise(day, idx, -1)} disabled={idx === 0}
+                                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs leading-none">▲</button>
+                              <button onClick={() => moveExercise(day, idx, 1)} disabled={idx === currentExercises.length - 1}
+                                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs leading-none">▼</button>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{ex.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{ex.primaryMuscles.join(', ')}</p>
+                            </div>
+                            <button onClick={() => removeExercise(day, idx)}
+                              className="text-gray-300 hover:text-red-500 transition-colors p-1 flex-shrink-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Trained muscles */}
+                  {currentExercises.length > 0 && (() => {
+                    const allMuscles = new Map<string, 'primary' | 'secondary'>();
+                    currentExercises.forEach(ex => {
+                      ex.primaryMuscles.forEach(m => allMuscles.set(m, 'primary'));
+                      ex.secondaryMuscles.forEach(m => { if (!allMuscles.has(m)) allMuscles.set(m, 'secondary'); });
+                    });
+                    return (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Array.from(allMuscles.entries()).map(([m, type]) => (
+                          <Badge key={m} variant={type === 'primary' ? 'default' : 'secondary'} className="text-xs">
+                            {m.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* RIGHT: Exercise library */}
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Exercise Library</CardTitle>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Exercise Library</CardTitle>
+                    <div className="relative mt-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                       <Input
-                        placeholder="Search exercises..."
+                        placeholder="Search..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="pl-9 h-8 text-sm"
                       />
                     </div>
                   </CardHeader>
-                  <CardContent className="max-h-[600px] overflow-y-auto space-y-2">
-                    {suggestedExercises.map((ex) => {
-                      const isAdded = currentDayExercises.some((e) => e.id === ex.id);
-                      return (
-                        <div key={ex.id} className="p-3 border rounded-lg hover:bg-gray-50">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="font-medium">{ex.name}</div>
-                              <div className="text-xs text-gray-600 mt-1">
-                                {ex.primaryMuscles.join(', ')} • {ex.difficulty}
-                              </div>
-                              <Badge variant="outline" className="mt-2 text-xs">
-                                {ex.equipment.replace('_', ' ')}
-                              </Badge>
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => addExercise(ex)}
-                              disabled={isAdded}
-                            >
-                              {isAdded ? 'Added' : <Plus className="w-4 h-4" />}
-                            </Button>
+                  <CardContent className="p-0">
+                    <div className="max-h-[520px] overflow-y-auto">
+                      {suggested.length > 0 && (
+                        <>
+                          <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+                            <p className="text-xs font-medium text-indigo-700">✨ Suggested for {currentDay}</p>
                           </div>
-                        </div>
-                      );
-                    })}
+                          {suggested.map(ex => (
+                            <ExerciseRow key={ex.id} ex={ex}
+                              added={currentExercises.some(e => e.id === ex.id)}
+                              onAdd={() => addExercise(ex)} />
+                          ))}
+                        </>
+                      )}
+                      {rest.length > 0 && (
+                        <>
+                          {suggested.length > 0 && (
+                            <div className="px-4 py-2 bg-gray-50 border-y">
+                              <p className="text-xs text-gray-500">Other exercises</p>
+                            </div>
+                          )}
+                          {rest.map(ex => (
+                            <ExerciseRow key={ex.id} ex={ex}
+                              added={currentExercises.some(e => e.id === ex.id)}
+                              onAdd={() => addExercise(ex)} />
+                          ))}
+                        </>
+                      )}
+                      {suggested.length === 0 && rest.length === 0 && (
+                        <p className="text-sm text-gray-400 text-center py-8">No exercises match your search</p>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
           ))}
         </Tabs>
+      </div>
+    </div>
+  );
+}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => navigate('/dashboard')}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>
-            Save Workout Plan
-          </Button>
+function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd: () => void }) {
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-gray-50 transition-colors ${added ? 'opacity-50' : ''}`}>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm truncate">{ex.name}</p>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-xs text-gray-500">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded ${
+            ex.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
+            ex.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+            'bg-red-100 text-red-700'
+          }`}>{ex.difficulty}</span>
         </div>
       </div>
+      <button
+        onClick={onAdd}
+        disabled={added}
+        className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+          added ? 'bg-gray-100 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+        }`}
+      >
+        {added ? '✓' : <Plus className="w-3.5 h-3.5" />}
+      </button>
     </div>
   );
 }
