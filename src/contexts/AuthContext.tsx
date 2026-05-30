@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../utils/supabase-client';
+import { projectId } from '../../utils/supabase/info';
 import type { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -35,15 +36,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string) => {
-    const response = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID || 'fdvearwstzqlplcpxouu'}.supabase.co/functions/v1/make-server-975f4bc8/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
+    // Step 1: Try client-side signup (works if email confirm is OFF or already configured)
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { name } },
     });
 
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
+    if (!error && data.session) {
+      // Email confirmation is OFF → session returned, user is signed in
+      return;
+    }
 
+    if (!error && data?.user && !data.session) {
+      // User was created but email confirmation is required.
+      // Try signing in anyway — some projects have email confirm enabled
+      // at the auth level but auto-confirm via triggers
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!signInError) return;
+      // If sign-in fails, user needs to check their email
+      throw new Error('Account created! Please check your email to confirm before signing in.');
+    }
+
+    // Step 2: Edge function fallback (uses admin.createUser, bypasses confirmation)
+    const response = await fetch(
+      `https://${projectId}.supabase.co/functions/v1/make-server-975f4bc8/auth/signup`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, name }) }
+    );
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+
+    // Step 3: Sign in after admin-created account
     await signIn(email, password);
   };
 
