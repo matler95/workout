@@ -21,7 +21,7 @@ import {
   type ProgressionSuggestion,
   type WorkoutLog,
   type SessionData,
-} from '../../utils/progressiveOverload';
+} from '../../../utils/progressiveOverload.ts';
 
 interface SetLog {
   exerciseId: string;

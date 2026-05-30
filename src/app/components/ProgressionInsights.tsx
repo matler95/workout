@@ -10,7 +10,7 @@ import {
   epley,
   type ProgressionSuggestion,
   type WorkoutLog,
-} from '../../utils/progressiveOverload';
+} from '../../../utils/progressiveOverload.ts';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
