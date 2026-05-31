@@ -3,12 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine
+  Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { apiCall } from '../../utils/supabase-client';
 import { Badge } from '../components/ui/badge';
 import { TrendingUp, Activity, Calendar, Flame, Dumbbell } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
+import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
 import { ProgressionInsights } from '../components/ProgressionInsights';
 
 interface SetLog {
@@ -24,33 +24,33 @@ interface WorkoutLog {
   dayName: string;
   completedAt: string;
   sets: SetLog[];
-  feedback?: string;
   perceivedEffort?: number;
 }
 
 export function Progress() {
-  const [bodyweightData, setBodyweightData] = useState<{ date: string; weight: number }[]>([]);
-  const [workoutHistory, setWorkoutHistory] = useState<WorkoutLog[]>([]);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [bodyweightData, setBodyweightData]   = useState<{ date: string; weight: number }[]>([]);
+  const [workoutHistory, setWorkoutHistory]   = useState<WorkoutLog[]>([]);
+  const [dbVolumeData, setDbVolumeData]       = useState<VolumeEntry[]>([]);
+  const [profile, setProfile]                 = useState<any>(null);
+  const [loading, setLoading]                 = useState(true);
+  const [selectedExercise, setSelectedExercise] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
-      const [weightRes, historyRes, profileRes] = await Promise.all([
-        apiCall('/progress/bodyweight'),
-        apiCall('/workouts/history'),
-        apiCall('/profile'),
+      const [bw, history, vol, prof] = await Promise.all([
+        progressApi.getBodyweight(90),
+        workoutApi.getHistory(100),
+        progressApi.getWeeklyVolume(),
+        profileApi.get(),
       ]);
-      setBodyweightData(weightRes.entries || []);
-      const sorted = [...(historyRes.history || [])].sort(
-        (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
-      );
-      setWorkoutHistory(sorted);
-      setProfile(profileRes.profile);
+
+      setBodyweightData(bw);
+      // history comes back newest-first from the server; keep that order
+      setWorkoutHistory(history as WorkoutLog[]);
+      setDbVolumeData(vol);
+      setProfile(prof);
     } catch (e) {
       console.error('Failed to load progress:', e);
     } finally {
@@ -58,165 +58,139 @@ export function Progress() {
     }
   };
 
-  // ── Strength data ──────────────────────────────────────────────────────────
+  // ── Strength: build per-exercise chart data from history ──────────────────
+  // History already has the DB-computed e1rm on each set — use it directly.
   const getStrengthData = () => {
-    const exerciseMap: { [name: string]: { date: string; weight: number; reps: number; volume: number }[] } = {};
+    const map: Record<string, { date: string; weight: number; reps: number; e1rm: number }[]> = {};
 
     for (const log of [...workoutHistory].reverse()) {
       const date = format(parseISO(log.completedAt), 'MMM d');
-      const byExercise: { [id: string]: SetLog[] } = {};
+      const byExercise: Record<string, SetLog[]> = {};
       for (const s of (log.sets || [])) {
         if (!byExercise[s.exerciseName]) byExercise[s.exerciseName] = [];
         byExercise[s.exerciseName].push(s);
       }
       for (const [name, sets] of Object.entries(byExercise)) {
         const best = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
-        const vol = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
-        if (!exerciseMap[name]) exerciseMap[name] = [];
-        exerciseMap[name].push({ date, weight: best.weight, reps: best.reps, volume: vol });
+        // Use DB-stored e1rm if available, otherwise compute
+        const e1rm = (best as any).e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
+        if (!map[name]) map[name] = [];
+        map[name].push({ date, weight: best.weight, reps: best.reps, e1rm });
       }
     }
-    return exerciseMap;
+    return map;
   };
 
-  // ── Volume data ────────────────────────────────────────────────────────────
+  // ── Volume: map DB rows to display format ─────────────────────────────────
+  // DB returns rows per exercise; we group into muscle categories via the
+  // same keyword inference — but the aggregation (total_reps, total_sets)
+  // is now done by Postgres, not loaded from full history in JS.
   const getVolumeData = () => {
-    const muscleVolume: { [muscle: string]: number } = {};
-    const oneWeekAgo = subDays(new Date(), 7);
+    const muscleVolume: Record<string, number> = {};
 
-    for (const log of workoutHistory) {
-      if (new Date(log.completedAt) < oneWeekAgo) continue;
-      for (const s of (log.sets || [])) {
-        // We don't have muscle info in sets directly, use exercise name heuristics
-        // The exercise data has primaryMuscles, but we only store exerciseName in sets
-        // We'll bucket by exerciseId/name patterns
-        const name = s.exerciseName?.toLowerCase() || '';
-        const muscles = inferMuscles(name);
-        for (const m of muscles) {
-          muscleVolume[m] = (muscleVolume[m] || 0) + s.reps;
-        }
+    for (const row of dbVolumeData) {
+      const name = row.exercise_name.toLowerCase();
+      const muscles = inferMuscleGroup(name);
+      for (const m of muscles) {
+        muscleVolume[m] = (muscleVolume[m] || 0) + row.total_reps;
       }
     }
 
-    const muscleOrder = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
+    const order = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
     const maxVol = Math.max(...Object.values(muscleVolume), 1);
-    return muscleOrder.map(m => ({
+    return order.map(m => ({
       muscle: m,
-      sets: muscleVolume[m] || 0,
+      reps: muscleVolume[m] || 0,
+      sets: dbVolumeData
+        .filter(r => inferMuscleGroup(r.exercise_name.toLowerCase()).includes(m))
+        .reduce((s, r) => s + r.total_sets, 0),
       pct: Math.round(((muscleVolume[m] || 0) / maxVol) * 100),
     }));
   };
 
-  const inferMuscles = (name: string): string[] => {
+  const inferMuscleGroup = (name: string): string[] => {
     if (name.includes('bench') || name.includes('chest') || name.includes('push-up') || name.includes('pushup') || name.includes('dip') || name.includes('fly')) return ['Chest', 'Triceps'];
     if (name.includes('row') || name.includes('pull') || name.includes('lat') || name.includes('deadlift')) return ['Back', 'Biceps'];
     if (name.includes('squat') || name.includes('leg press') || name.includes('lunge')) return ['Quads', 'Hamstrings'];
-    if (name.includes('romanian') || name.includes('hamstring') || name.includes('curl')) return ['Hamstrings'];
-    if (name.includes('press') || name.includes('delt') || name.includes('shoulder')) return ['Shoulders', 'Triceps'];
+    if (name.includes('romanian') || name.includes('hamstring') || name.includes('leg curl')) return ['Hamstrings'];
+    if (name.includes('press') || name.includes('delt') || name.includes('shoulder') || name.includes('overhead')) return ['Shoulders', 'Triceps'];
     if (name.includes('curl') || name.includes('bicep')) return ['Biceps'];
-    if (name.includes('tricep') || name.includes('extension') || name.includes('pushdown')) return ['Triceps'];
-    if (name.includes('plank') || name.includes('crunch') || name.includes('ab') || name.includes('core')) return ['Core'];
+    if (name.includes('tricep') || name.includes('extension') || name.includes('pushdown') || name.includes('kickback')) return ['Triceps'];
+    if (name.includes('plank') || name.includes('crunch') || name.includes('ab') || name.includes('core') || name.includes('hanging')) return ['Core'];
     return [];
   };
 
-  // ── Streak & heatmap data ──────────────────────────────────────────────────
+  // ── Streaks ────────────────────────────────────────────────────────────────
   const getStreakInfo = () => {
     if (workoutHistory.length === 0) return { current: 0, longest: 0, consistency: 0 };
 
     const plannedPerWeek = profile?.trainingDays || 3;
-    const weeks: { [weekKey: string]: number } = {};
-
+    const weeks: Record<string, number> = {};
     for (const log of workoutHistory) {
-      const d = parseISO(log.completedAt);
-      const weekStart = startOfWeek(d, { weekStartsOn: 1 });
-      const key = format(weekStart, 'yyyy-MM-dd');
+      const key = format(startOfWeek(parseISO(log.completedAt), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       weeks[key] = (weeks[key] || 0) + 1;
     }
 
-    const weekKeys = Object.keys(weeks).sort();
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let streak = 0;
-
-    const nowWeek = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
-    for (const key of weekKeys) {
-      if (weeks[key] >= plannedPerWeek) {
-        streak++;
-        longestStreak = Math.max(longestStreak, streak);
-      } else {
-        streak = 0;
-      }
+    const keys = Object.keys(weeks).sort();
+    let longest = 0, streak = 0, current = 0;
+    for (const k of keys) {
+      if (weeks[k] >= plannedPerWeek) { streak++; longest = Math.max(longest, streak); }
+      else streak = 0;
     }
-
-    // Current streak: count back from now
-    const sortedDesc = [...weekKeys].reverse();
-    for (const key of sortedDesc) {
-      if (weeks[key] >= plannedPerWeek) currentStreak++;
+    for (const k of [...keys].reverse()) {
+      if (weeks[k] >= plannedPerWeek) current++;
       else break;
     }
-
-    // Last 30 days consistency
-    const last30 = subDays(new Date(), 30);
-    const workoutsLast30 = workoutHistory.filter(l => new Date(l.completedAt) >= last30).length;
-    const expectedLast30 = Math.round((plannedPerWeek / 7) * 30);
-    const consistency = Math.min(100, Math.round((workoutsLast30 / expectedLast30) * 100));
-
-    return { current: currentStreak, longest: longestStreak, consistency };
+    const last30      = subDays(new Date(), 30);
+    const done30      = workoutHistory.filter(l => new Date(l.completedAt) >= last30).length;
+    const expected30  = Math.round((plannedPerWeek / 7) * 30);
+    const consistency = Math.min(100, Math.round((done30 / expected30) * 100));
+    return { current, longest, consistency };
   };
 
-  const getHeatmapData = () => {
-    // Last 12 weeks, 7 days each = 84 squares
-    const days: { date: Date; count: number; label: string }[] = [];
-    for (let i = 83; i >= 0; i--) {
-      const d = subDays(new Date(), i);
-      const count = workoutHistory.filter(l => isSameDay(parseISO(l.completedAt), d)).length;
-      days.push({ date: d, count, label: format(d, 'MMM d') });
-    }
-    return days;
-  };
+  const getHeatmapData = () =>
+    Array.from({ length: 84 }, (_, i) => {
+      const d = subDays(new Date(), 83 - i);
+      return {
+        date: d,
+        count: workoutHistory.filter(l => isSameDay(parseISO(l.completedAt), d)).length,
+        label: format(d, 'MMM d'),
+      };
+    });
 
-  const getWeeklyBarData = () => {
-    const weeks: { week: string; workouts: number; target: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const weekStart = startOfWeek(subDays(new Date(), i * 7), { weekStartsOn: 1 });
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-      const count = workoutHistory.filter(l => {
-        const d = parseISO(l.completedAt);
-        return d >= weekStart && d < weekEnd;
-      }).length;
-      weeks.push({
-        week: format(weekStart, 'MMM d'),
-        workouts: count,
-        target: profile?.trainingDays || 3,
-      });
-    }
-    return weeks;
-  };
+  const getWeeklyBarData = () =>
+    Array.from({ length: 12 }, (_, i) => {
+      const weekStart = startOfWeek(subDays(new Date(), (11 - i) * 7), { weekStartsOn: 1 });
+      const weekEnd   = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+      return {
+        week:     format(weekStart, 'MMM d'),
+        workouts: workoutHistory.filter(l => { const d = parseISO(l.completedAt); return d >= weekStart && d < weekEnd; }).length,
+        target:   profile?.trainingDays || 3,
+      };
+    });
 
-  const weightChartData = [...bodyweightData]
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const weightChartData = bodyweightData
     .slice(-30)
     .map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
 
-  const strengthData = getStrengthData();
-  const exerciseNames = Object.keys(strengthData);
-  const [selectedExercise, setSelectedExercise] = useState('');
+  const strengthData   = getStrengthData();
+  const exerciseNames  = Object.keys(strengthData);
   const activeExercise = selectedExercise || exerciseNames[0] || '';
+  const volumeData     = getVolumeData();
+  const streakInfo     = getStreakInfo();
+  const heatmap        = getHeatmapData();
+  const weeklyBars     = getWeeklyBarData();
 
-  const volumeData = getVolumeData();
-  const streakInfo = getStreakInfo();
-  const heatmap = getHeatmapData();
-  const weeklyBars = getWeeklyBarData();
-
-  const bmi = profile ? Math.round((profile.weight / Math.pow(profile.height / 100, 2)) * 10) / 10 : null;
-  const estBodyFat = profile
+  const bmi        = profile ? Math.round((profile.weight / Math.pow(profile.height / 100, 2)) * 10) / 10 : null;
+  const estBodyFat = profile && bmi
     ? profile.gender === 'male'
-      ? Math.round(1.2 * bmi! + 0.23 * profile.age - 16.2)
-      : Math.round(1.2 * bmi! + 0.23 * profile.age - 5.4)
+      ? Math.round(1.2 * bmi + 0.23 * profile.age - 16.2)
+      : Math.round(1.2 * bmi + 0.23 * profile.age - 5.4)
     : null;
-  const leanMass = profile && estBodyFat ? Math.round(profile.weight * (1 - estBodyFat / 100) * 10) / 10 : null;
+  const leanMass = profile && estBodyFat
+    ? Math.round(profile.weight * (1 - estBodyFat / 100) * 10) / 10
+    : null;
 
   if (loading) {
     return (
@@ -239,7 +213,7 @@ export function Progress() {
             <TabsTrigger value="streaks">Streaks</TabsTrigger>
           </TabsList>
 
-          {/* ── Body Tab ─────────────────────────────────────────────────── */}
+          {/* ── Body ──────────────────────────────────────────────────────── */}
           <TabsContent value="body" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <Card>
@@ -247,7 +221,10 @@ export function Progress() {
                   <div className="text-2xl font-bold">{bmi ?? '–'}</div>
                   <div className="text-xs text-gray-500 mt-1">BMI</div>
                   {bmi && (
-                    <Badge variant={bmi < 18.5 ? 'destructive' : bmi < 25 ? 'secondary' : 'outline'} className="text-xs mt-1">
+                    <Badge
+                      variant={bmi < 18.5 ? 'destructive' : bmi < 25 ? 'secondary' : 'outline'}
+                      className="text-xs mt-1"
+                    >
                       {bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese'}
                     </Badge>
                   )}
@@ -262,7 +239,7 @@ export function Progress() {
               </Card>
               <Card>
                 <CardContent className="pt-4 pb-4 text-center">
-                  <div className="text-2xl font-bold">{leanMass ? `${leanMass}` : '–'}</div>
+                  <div className="text-2xl font-bold">{leanMass ?? '–'}</div>
                   <div className="text-xs text-gray-500 mt-1">Lean kg</div>
                   <div className="text-xs text-gray-400 mt-1">estimated</div>
                 </CardContent>
@@ -289,27 +266,23 @@ export function Progress() {
                 ) : (
                   <div className="py-8 text-center text-sm text-gray-500">
                     {weightChartData.length === 1
-                      ? `Current: ${weightChartData[0].weight} kg — log more entries to see a trend`
-                      : 'No bodyweight data yet. Log your weight from the dashboard.'}
+                      ? `Current: ${weightChartData[0].weight} kg — log more to see a trend`
+                      : 'No bodyweight data yet. Log from the dashboard.'}
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* ── Strength Tab ──────────────────────────────────────────────── */}
+          {/* ── Strength ──────────────────────────────────────────────────── */}
           <TabsContent value="strength" className="space-y-4">
-            {exerciseNames.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center text-sm text-gray-500">
-                  <Dumbbell className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                  <p>Complete workouts to see strength progress here.</p>
-                </CardContent>
-              </Card>
-            ) : (
+            {/* Progression suggestions — uses the ProgressionInsights component */}
+            <ProgressionInsights />
+
+            {/* Raw strength chart — top set weight over time */}
+            {exerciseNames.length > 0 && (
               <>
-                {/* Exercise selector */}
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap pt-2">
                   {exerciseNames.map(name => (
                     <button
                       key={name}
@@ -328,7 +301,7 @@ export function Progress() {
                 {activeExercise && strengthData[activeExercise] && (
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base">{activeExercise} — Top Set Weight</CardTitle>
+                      <CardTitle className="text-base">{activeExercise}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={200}>
@@ -336,34 +309,34 @@ export function Progress() {
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                           <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                           <YAxis tick={{ fontSize: 11 }} unit="kg" domain={['auto', 'auto']} />
-                          <Tooltip formatter={(v: any) => [`${v}kg`, 'Weight']} />
-                          <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2} dot={{ r: 4 }} />
+                          <Tooltip formatter={(v: any, n: string) => [`${Math.round(v)} kg`, n === 'e1rm' ? 'Est. 1RM' : 'Top set']} />
+                          <Line type="monotone" dataKey="weight" stroke="#94a3b8" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="weight" />
+                          <Line type="monotone" dataKey="e1rm"   stroke="#6366f1" strokeWidth={2}   dot={{ r: 3 }} name="e1rm" />
                         </LineChart>
                       </ResponsiveContainer>
+                      <p className="text-xs text-gray-400 text-center mt-1">— e1RM &nbsp;&nbsp; - - top set weight</p>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Summary cards for all exercises */}
                 <div className="space-y-2">
                   {exerciseNames.map(name => {
                     const data = strengthData[name];
-                    const first = data[0];
-                    const last = data[data.length - 1];
-                    const diff = last.weight - first.weight;
+                    const first = data[0], last = data[data.length - 1];
+                    const diff = Math.round((last.weight - first.weight) * 10) / 10;
                     return (
                       <Card key={name} className="cursor-pointer hover:border-indigo-300 transition-colors"
                         onClick={() => setSelectedExercise(name)}>
                         <CardContent className="py-3 flex items-center justify-between">
                           <div>
                             <p className="font-medium text-sm">{name}</p>
-                            <p className="text-xs text-gray-500">{data.length} session{data.length !== 1 ? 's' : ''} logged</p>
+                            <p className="text-xs text-gray-500">{data.length} session{data.length !== 1 ? 's' : ''}</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold">{last.weight}kg</p>
+                            <p className="font-bold">{last.weight} kg</p>
                             {data.length > 1 && (
                               <p className={`text-xs ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                                {diff > 0 ? '+' : ''}{diff}kg
+                                {diff > 0 ? '+' : ''}{diff} kg
                               </p>
                             )}
                           </div>
@@ -374,36 +347,30 @@ export function Progress() {
                 </div>
               </>
             )}
-
-            {/* Progression insights powered by progressive overload engine */}
-            <ProgressionInsights />
           </TabsContent>
 
-          {/* ── Volume Tab ────────────────────────────────────────────────── */}
+          {/* ── Volume ────────────────────────────────────────────────────── */}
           <TabsContent value="volume" className="space-y-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Activity className="w-4 h-4" /> Muscle Volume This Week
                 </CardTitle>
-                <p className="text-xs text-gray-500">Based on total reps per muscle group</p>
+                <p className="text-xs text-gray-500">Aggregated from DB — total reps per muscle group</p>
               </CardHeader>
               <CardContent>
-                {volumeData.every(d => d.sets === 0) ? (
+                {volumeData.every(d => d.reps === 0) ? (
                   <p className="text-sm text-gray-500 py-4 text-center">Complete workouts this week to see volume data</p>
                 ) : (
                   <div className="space-y-3">
-                    {volumeData.map(({ muscle, sets, pct }) => (
+                    {volumeData.map(({ muscle, reps, sets, pct }) => (
                       <div key={muscle}>
                         <div className="flex justify-between text-sm mb-1">
                           <span className="font-medium">{muscle}</span>
-                          <span className="text-gray-500">{sets} reps</span>
+                          <span className="text-gray-500">{sets} sets · {reps} reps</span>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500 rounded-full transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
+                          <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     ))}
@@ -420,7 +387,7 @@ export function Progress() {
                 <CardContent>
                   <div className="space-y-2">
                     {workoutHistory.slice(0, 5).map((log, i) => {
-                      const totalVol = (log.sets || []).reduce((s, x) => s + x.weight * x.reps, 0);
+                      const vol = (log.sets || []).reduce((s, x) => s + x.weight * x.reps, 0);
                       return (
                         <div key={i} className="flex justify-between items-center py-2 border-b last:border-0 text-sm">
                           <div>
@@ -429,7 +396,7 @@ export function Progress() {
                           </div>
                           <div className="text-right">
                             <p className="font-medium">{(log.sets || []).length} sets</p>
-                            <p className="text-xs text-gray-500">{Math.round(totalVol / 1000)}k kg vol</p>
+                            <p className="text-xs text-gray-500">{Math.round(vol / 1000 * 10) / 10}t vol</p>
                           </div>
                         </div>
                       );
@@ -440,36 +407,32 @@ export function Progress() {
             )}
           </TabsContent>
 
-          {/* ── Streaks Tab ───────────────────────────────────────────────── */}
+          {/* ── Streaks ───────────────────────────────────────────────────── */}
           <TabsContent value="streaks" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Flame className="w-5 h-5 text-orange-500" />
-                    <span className="text-2xl font-bold">{streakInfo.current}</span>
-                  </div>
-                  <div className="text-xs text-gray-500">Current streak</div>
-                  <div className="text-xs text-gray-400">weeks</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <div className="text-2xl font-bold">{streakInfo.longest}</div>
-                  <div className="text-xs text-gray-500 mt-1">Best streak</div>
-                  <div className="text-xs text-gray-400">weeks</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <div className="text-2xl font-bold">{streakInfo.consistency}%</div>
-                  <div className="text-xs text-gray-500 mt-1">Consistency</div>
-                  <div className="text-xs text-gray-400">last 30 days</div>
-                </CardContent>
-              </Card>
+              {[
+                { value: streakInfo.current,     label: 'Current streak', sub: 'weeks', icon: <Flame className="w-5 h-5 text-orange-500" /> },
+                { value: streakInfo.longest,     label: 'Best streak',    sub: 'weeks' },
+                { value: `${streakInfo.consistency}%`, label: 'Consistency', sub: 'last 30 days' },
+              ].map(({ value, label, sub, icon }) => (
+                <Card key={label}>
+                  <CardContent className="pt-4 pb-4 text-center">
+                    {icon ? (
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        {icon}
+                        <span className="text-2xl font-bold">{value}</span>
+                      </div>
+                    ) : (
+                      <div className="text-2xl font-bold">{value}</div>
+                    )}
+                    <div className="text-xs text-gray-500 mt-1">{label}</div>
+                    <div className="text-xs text-gray-400">{sub}</div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
-            {/* Activity heatmap */}
+            {/* Heatmap */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -479,16 +442,14 @@ export function Progress() {
               <CardContent>
                 <div className="overflow-x-auto">
                   <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(12, 1fr)', minWidth: 280 }}>
-                    {Array.from({ length: 12 }, (_, weekIdx) => (
-                      <div key={weekIdx} className="flex flex-col gap-1">
-                        {heatmap.slice(weekIdx * 7, weekIdx * 7 + 7).map((day, dayIdx) => (
+                    {Array.from({ length: 12 }, (_, w) => (
+                      <div key={w} className="flex flex-col gap-1">
+                        {heatmap.slice(w * 7, w * 7 + 7).map((day, d) => (
                           <div
-                            key={dayIdx}
+                            key={d}
                             title={`${day.label}: ${day.count} workout${day.count !== 1 ? 's' : ''}`}
-                            className={`w-full aspect-square rounded-sm transition-colors ${
-                              day.count === 0 ? 'bg-gray-100' :
-                              day.count === 1 ? 'bg-indigo-200' :
-                              'bg-indigo-500'
+                            className={`w-full aspect-square rounded-sm ${
+                              day.count === 0 ? 'bg-gray-100' : day.count === 1 ? 'bg-indigo-200' : 'bg-indigo-500'
                             }`}
                           />
                         ))}
@@ -506,7 +467,7 @@ export function Progress() {
               </CardContent>
             </Card>
 
-            {/* Weekly bar chart */}
+            {/* Weekly bars */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Workouts per Week</CardTitle>
@@ -518,7 +479,8 @@ export function Progress() {
                     <XAxis dataKey="week" tick={{ fontSize: 10 }} interval={2} />
                     <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                     <Tooltip />
-                    <ReferenceLine y={profile?.trainingDays || 3} stroke="#6366f1" strokeDasharray="4 2" label={{ value: 'target', position: 'right', fontSize: 10 }} />
+                    <ReferenceLine y={profile?.trainingDays || 3} stroke="#6366f1" strokeDasharray="4 2"
+                      label={{ value: 'target', position: 'right', fontSize: 10 }} />
                     <Bar dataKey="workouts" fill="#6366f1" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
