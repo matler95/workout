@@ -6,14 +6,16 @@ import {
   getRepTarget,
   type ProgressionSuggestion,
   type WorkoutLog,
-} from '../../utils/progressiveOverload';
-import { workoutApi, progressApi, type ExerciseHistoryPoint } from '../../utils/api';
+} from '../../../utils/progressiveOverload';
+import { workoutApi, type ExerciseHistoryPoint } from '../../utils/api';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, ArrowUp, AlertTriangle, Info } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+
+type FilterKey = 'all' | 'increase' | 'maintain' | 'deload';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -47,17 +49,21 @@ interface ExerciseCardProps {
 }
 
 function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCardProps) {
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData]     = useState<any[]>([]);
   const [loadingChart, setLoadingChart] = useState(false);
 
   const tier = classifyExercise(exerciseKey);
   const [repLo, repHi] = getRepTarget(tier);
-  const tierLabel = { heavy_barbell: 'Barbell', compound_db_machine: 'Compound', isolation: 'Isolation', bodyweight: 'Bodyweight' }[tier];
+  const tierLabel: Record<string, string> = {
+    heavy_barbell: 'Barbell', compound_db_machine: 'Compound',
+    isolation: 'Isolation', bodyweight: 'Bodyweight',
+  };
 
-  const trendColor = suggestion.e1RMTrend === 'up' ? 'text-green-600' : suggestion.e1RMTrend === 'down' ? 'text-red-500' : 'text-gray-400';
-  const TrendIcon  = suggestion.e1RMTrend === 'up' ? TrendingUp : suggestion.e1RMTrend === 'down' ? TrendingDown : Minus;
+  const trendColor = suggestion.e1RMTrend === 'up' ? 'text-green-600'
+    : suggestion.e1RMTrend === 'down' ? 'text-red-500' : 'text-gray-400';
+  const TrendIcon = suggestion.e1RMTrend === 'up' ? TrendingUp
+    : suggestion.e1RMTrend === 'down' ? TrendingDown : Minus;
 
-  // Load chart data lazily when the card is expanded
   useEffect(() => {
     if (!expanded || chartData.length > 0) return;
     setLoadingChart(true);
@@ -69,7 +75,7 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
           weight: p.weight_kg,
         })));
       })
-      .catch(() => {/* chart just won't show */})
+      .catch(() => {/* chart stays empty */})
       .finally(() => setLoadingChart(false));
   }, [expanded, exerciseKey]);
 
@@ -85,17 +91,12 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
             <div className="flex items-center gap-2 flex-wrap">
               <ActionIcon action={suggestion.action} />
               <span className="font-medium text-sm truncate">{exerciseKey}</span>
-              <span className="text-xs text-gray-400">{tierLabel}</span>
+              <span className="text-xs text-gray-400">{tierLabel[tier]}</span>
             </div>
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               <ActionBadge action={suggestion.action} />
-              {suggestion.action === 'increase_weight' && (
-                <span className="text-sm font-semibold text-green-700">
-                  {suggestion.currentWeight} → {suggestion.suggestedWeight} kg
-                </span>
-              )}
-              {suggestion.action === 'deload' && (
-                <span className="text-sm font-semibold text-amber-700">
+              {(suggestion.action === 'increase_weight' || suggestion.action === 'deload') && (
+                <span className={`text-sm font-semibold ${suggestion.action === 'deload' ? 'text-amber-700' : 'text-green-700'}`}>
                   {suggestion.currentWeight} → {suggestion.suggestedWeight} kg
                 </span>
               )}
@@ -134,10 +135,9 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <span>Target:</span>
               <span className="font-medium text-gray-700">{repLo}–{repHi} reps</span>
-              <span className="text-gray-400">({tierLabel})</span>
+              <span className="text-gray-400">({tierLabel[tier]})</span>
             </div>
 
-            {/* e1RM chart — loaded lazily from DB view */}
             <div>
               <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide">Estimated 1RM history</p>
               {loadingChart ? (
@@ -169,7 +169,7 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
             <div className="flex items-center gap-2 text-xs">
               <span className="text-gray-400">Confidence:</span>
               <span className={`font-medium ${
-                suggestion.confidence === 'high' ? 'text-green-600' :
+                suggestion.confidence === 'high'   ? 'text-green-600' :
                 suggestion.confidence === 'medium' ? 'text-yellow-600' : 'text-gray-500'
               }`}>{suggestion.confidence}</span>
             </div>
@@ -180,22 +180,36 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
   );
 }
 
+// ─── Props: accept pre-loaded history to avoid double fetch ───────────────────
+
+interface ProgressionInsightsProps {
+  /** Pass workout history from the parent if already loaded (avoids a second fetch). */
+  history?: WorkoutLog[];
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export function ProgressionInsights() {
+export function ProgressionInsights({ history: externalHistory }: ProgressionInsightsProps = {}) {
   const [suggestions, setSuggestions] = useState<Record<string, ProgressionSuggestion>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]         = useState(true);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'increase' | 'maintain' | 'deload'>('all');
+  const [filter, setFilter]           = useState<FilterKey>('all');
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (externalHistory) {
+      // Parent already loaded history — compute directly, no extra fetch
+      const allSuggestions = computeAllSuggestions(externalHistory);
+      setSuggestions(allSuggestions);
+      setLoading(false);
+    } else {
+      loadData();
+    }
+  }, [externalHistory]);
 
   const loadData = async () => {
     try {
-      // Only need history for the suggestion engine — e1RM charts load lazily per card
       const history = await workoutApi.getHistory(100);
-      const allSuggestions = computeAllSuggestions(history as WorkoutLog[]);
-      setSuggestions(allSuggestions);
+      setSuggestions(computeAllSuggestions(history as WorkoutLog[]));
     } catch (e) {
       console.error('Failed to load progression data', e);
     } finally {
@@ -212,7 +226,6 @@ export function ProgressionInsights() {
     return true;
   });
 
-  // Sort: ready-to-progress first
   const sortOrder: Record<ProgressionSuggestion['action'], number> = {
     increase_weight: 0, increase_reps: 0, maintain: 1, deload: 2, insufficient_data: 3,
   };
@@ -248,14 +261,14 @@ export function ProgressionInsights() {
     <div className="space-y-4">
       {/* Summary filter buttons */}
       <div className="grid grid-cols-3 gap-2">
-        {[
-          { key: 'increase', count: counts.increase, label: 'Ready to progress', bg: 'bg-green-50 border-green-100', activeBg: 'bg-green-100 border-green-300', text: 'text-green-700' },
-          { key: 'maintain', count: counts.maintain, label: 'Keep weight',        bg: 'bg-blue-50 border-blue-100',  activeBg: 'bg-blue-100 border-blue-300',  text: 'text-blue-700' },
-          { key: 'deload',   count: counts.deload,   label: 'Deload',             bg: 'bg-amber-50 border-amber-100',activeBg: 'bg-amber-100 border-amber-300',text: 'text-amber-700' },
-        ].map(({ key, count, label, bg, activeBg, text }) => (
+        {([
+          { key: 'increase' as FilterKey, count: counts.increase, label: 'Ready to progress', bg: 'bg-green-50 border-green-100', activeBg: 'bg-green-100 border-green-300', text: 'text-green-700' },
+          { key: 'maintain' as FilterKey, count: counts.maintain, label: 'Keep weight',        bg: 'bg-blue-50 border-blue-100',  activeBg: 'bg-blue-100 border-blue-300',  text: 'text-blue-700' },
+          { key: 'deload'   as FilterKey, count: counts.deload,   label: 'Deload',             bg: 'bg-amber-50 border-amber-100',activeBg: 'bg-amber-100 border-amber-300',text: 'text-amber-700' },
+        ] as const).map(({ key, count, label, bg, activeBg, text }) => (
           <button
             key={key}
-            onClick={() => setFilter(filter === key as any ? 'all' : key as any)}
+            onClick={() => setFilter(filter === key ? 'all' : key)}
             className={`rounded-lg p-3 text-center transition-colors border ${filter === key ? activeBg : bg}`}
           >
             <div className={`text-2xl font-bold ${text}`}>{count}</div>

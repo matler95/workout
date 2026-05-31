@@ -38,25 +38,30 @@ interface SetLog {
   timestamp: string;
 }
 
-/** What we know about this exercise going into the session */
 interface ExercisePlan {
   suggestedWeight: number;
   suggestedReps: [number, number];
   sets: number;
   source: 'history' | 'estimated' | 'bodyweight';
-  suggestion?: ProgressionSuggestion;   // only when source === 'history'
-  estimate?: StartingWeightResult;       // only when source === 'estimated'
-  isFirstSession: boolean;               // true = no prior history exists
+  suggestion?: ProgressionSuggestion;
+  estimate?: StartingWeightResult;
+  isFirstSession: boolean;
 }
 
 // ─── Suggestion banner ─────────────────────────────────────────────────────────
 
-function SuggestionBanner({ plan }: { plan: ExercisePlan }) {
+function SuggestionBanner({ plan, exerciseKey }: { plan: ExercisePlan; exerciseKey: string }) {
   if (plan.source === 'bodyweight') return null;
 
-  // First-session estimate
   if (plan.source === 'estimated') {
     const e = plan.estimate!;
+    const tier = classifyExercise(exerciseKey);
+    const tierLabel: Record<string, string> = {
+      heavy_barbell: 'barbell',
+      compound_db_machine: 'compound',
+      isolation: 'isolation',
+      bodyweight: 'bodyweight',
+    };
     return (
       <div className="border rounded-lg p-3 bg-indigo-50 border-indigo-200">
         <div className="flex items-start gap-2 text-indigo-800">
@@ -64,10 +69,13 @@ function SuggestionBanner({ plan }: { plan: ExercisePlan }) {
           <div>
             <p className="text-sm font-medium">Estimated starting weight</p>
             <p className="text-xs mt-0.5 opacity-80 leading-relaxed">
-              Based on your bodyweight, {e.confidence === 'matched' ? 'this exercise\'s strength standards' : 'your training tier'}, experience level, and goal. Start here — the app will calibrate after you log your effort rating.
+              Based on your bodyweight, experience level, and goal. Start here — the app will
+              calibrate after you log your effort rating.
             </p>
             {e.confidence === 'tier_fallback' && (
-              <p className="text-xs mt-1 opacity-60 italic">No exact match found — using {classifyExercise(plan.estimate ? '' : '')} tier average.</p>
+              <p className="text-xs mt-1 opacity-60 italic">
+                No exact match found — using {tierLabel[tier] ?? tier} tier average.
+              </p>
             )}
           </div>
         </div>
@@ -75,7 +83,6 @@ function SuggestionBanner({ plan }: { plan: ExercisePlan }) {
     );
   }
 
-  // History-based suggestion
   const s = plan.suggestion!;
   if (s.action === 'insufficient_data') return null;
 
@@ -135,22 +142,22 @@ function E1RMDisplay({ plan }: { plan: ExercisePlan }) {
 export function ActiveWorkout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const dayName = location.state?.dayName;
+  const dayName  = location.state?.dayName;
 
-  const [exercises, setExercises] = useState<any[]>([]);
-  const [plans, setPlans] = useState<Record<string, ExercisePlan>>({});
-  const [currentPhase, setCurrentPhase] = useState<'warmup' | 'exercise' | 'feedback'>('warmup');
+  const [exercises, setExercises]           = useState<any[]>([]);
+  const [plans, setPlans]                   = useState<Record<string, ExercisePlan>>({});
+  const [currentPhase, setCurrentPhase]     = useState<'warmup' | 'exercise' | 'feedback'>('warmup');
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [currentSet, setCurrentSet] = useState(1);
-  const [restTimer, setRestTimer] = useState(0);
-  const [completedSets, setCompletedSets] = useState<SetLog[]>([]);
-  const [feedback, setFeedback] = useState('');
+  const [currentSet, setCurrentSet]         = useState(1);
+  const [restTimer, setRestTimer]           = useState(0);
+  const [completedSets, setCompletedSets]   = useState<SetLog[]>([]);
+  const [feedback, setFeedback]             = useState('');
   const [perceivedEffort, setPerceivedEffort] = useState(6);
-  const [customWeight, setCustomWeight] = useState('');
-  const [customReps, setCustomReps] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [customWeight, setCustomWeight]     = useState('');
+  const [customReps, setCustomReps]         = useState('');
+  const [loading, setLoading]               = useState(true);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(Date.now());
   const SETS_PER_EXERCISE = 3;
 
@@ -187,33 +194,23 @@ export function ActiveWorkout() {
       const history: WorkoutLog[] = historyRes.history || [];
       const profile: UserProfile | null = profileRes.profile;
 
-      // History-based suggestions (exercises with ≥1 logged session)
       const historySuggestions = computeAllSuggestions(history);
-
-      // Build a plan for every exercise in today's workout
       const builtPlans: Record<string, ExercisePlan> = {};
 
       for (const ex of exs) {
-        const key = ex.id || ex.name;
-        const historySuggestion = historySuggestions[key];
+        const key  = ex.id || ex.name;
         const tier = classifyExercise(ex.name);
         const [repLo, repHi] = getRepTarget(tier);
+        const historySuggestion = historySuggestions[key];
 
         if (historySuggestion && historySuggestion.action !== 'insufficient_data') {
-          // ── We have real history — use progressive overload suggestion ───────
-          let w = historySuggestion.currentWeight;
+          let w: number = historySuggestion.currentWeight;
           let reps: [number, number] = historySuggestion.suggestedReps ?? [repLo, repHi];
 
           switch (historySuggestion.action) {
-            case 'increase_weight':
-              w = historySuggestion.suggestedWeight ?? w;
-              break;
-            case 'deload':
-              w = historySuggestion.suggestedWeight ?? w;
-              break;
-            case 'increase_reps':
-              reps = historySuggestion.suggestedReps ?? reps;
-              break;
+            case 'increase_weight': w    = historySuggestion.suggestedWeight ?? w; break;
+            case 'deload':          w    = historySuggestion.suggestedWeight ?? w; break;
+            case 'increase_reps':   reps = historySuggestion.suggestedReps   ?? reps; break;
           }
 
           builtPlans[key] = {
@@ -225,7 +222,6 @@ export function ActiveWorkout() {
             isFirstSession: false,
           };
         } else if (profile) {
-          // ── No history — estimate from profile ───────────────────────────────
           const estimate = estimateStartingWeight(ex.name, profile);
           builtPlans[key] = {
             suggestedWeight: estimate.weight,
@@ -236,7 +232,6 @@ export function ActiveWorkout() {
             isFirstSession: true,
           };
         } else {
-          // ── No history, no profile — blank fallback ──────────────────────────
           builtPlans[key] = {
             suggestedWeight: 0,
             suggestedReps: [repLo, repHi],
@@ -248,8 +243,6 @@ export function ActiveWorkout() {
       }
 
       setPlans(builtPlans);
-
-      // Pre-fill first exercise
       if (exs.length > 0) applyPlanToInputs(exs[0], builtPlans);
     } catch (e) {
       toast.error('Failed to load workout');
@@ -259,12 +252,9 @@ export function ActiveWorkout() {
     }
   };
 
-  /** Sets weight/reps inputs from the computed plan */
   const applyPlanToInputs = (ex: any, allPlans: Record<string, ExercisePlan>) => {
-    const key = ex.id || ex.name;
-    const plan = allPlans[key];
+    const plan = allPlans[ex.id || ex.name];
     if (!plan) { setCustomWeight(''); setCustomReps(''); return; }
-
     if (plan.source === 'bodyweight') {
       setCustomWeight('0');
       setCustomReps(String(plan.suggestedReps[0]));
@@ -278,22 +268,22 @@ export function ActiveWorkout() {
 
   const handleSetComplete = () => {
     const weight = parseFloat(customWeight) || 0;
-    const reps = parseInt(customReps) || 0;
+    const reps   = parseInt(customReps) || 0;
     if (reps <= 0) { toast.error('Enter reps'); return; }
 
-    const ex = exercises[currentExerciseIndex];
+    const ex   = exercises[currentExerciseIndex];
     const plan = plans[ex.id || ex.name];
     const isBodyweight = plan?.source === 'bodyweight';
 
     if (!isBodyweight && weight <= 0) { toast.error('Enter weight'); return; }
 
     const newSet: SetLog = {
-      exerciseId: ex.id,
+      exerciseId:   ex.id,
       exerciseName: ex.name,
-      set: currentSet,
-      weight: isBodyweight ? 0 : weight,
+      set:          currentSet,
+      weight:       isBodyweight ? 0 : weight,
       reps,
-      timestamp: new Date().toISOString(),
+      timestamp:    new Date().toISOString(),
     };
 
     const newCompleted = [...completedSets, newSet];
@@ -325,11 +315,9 @@ export function ActiveWorkout() {
 
   const handleWorkoutComplete = async () => {
     try {
-      // Apply first-session RPE corrections to the stored plans
-      // so next session starts at the calibrated weight, not the estimate
       const rpeCorrections: Record<string, number> = {};
       for (const ex of exercises) {
-        const key = ex.id || ex.name;
+        const key  = ex.id || ex.name;
         const plan = plans[key];
         if (plan?.isFirstSession && plan.source === 'estimated') {
           const { newWeight } = applyFirstSessionRPECorrection(
@@ -345,12 +333,12 @@ export function ActiveWorkout() {
         method: 'POST',
         body: JSON.stringify({
           dayName,
-          completedAt: new Date().toISOString(),
-          sets: completedSets,
+          completedAt:    new Date().toISOString(),
+          sets:           completedSets,
           feedback,
           perceivedEffort,
-          rpeCorrections,   // stored so next session can reference calibrated weight
-          duration: Math.round((Date.now() - startTimeRef.current) / 60000),
+          rpeCorrections,
+          duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
         }),
       });
 
@@ -362,6 +350,7 @@ export function ActiveWorkout() {
   };
 
   // ── Loading ────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -387,9 +376,10 @@ export function ActiveWorkout() {
   }
 
   // ── Warmup screen ───────────────────────────────────────────────────────────
+
   if (currentPhase === 'warmup') {
     const progressionCount = Object.values(plans).filter(p => p.suggestion?.action === 'increase_weight').length;
-    const firstTimers = Object.values(plans).filter(p => p.isFirstSession).length;
+    const firstTimers      = Object.values(plans).filter(p => p.isFirstSession).length;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4">
@@ -401,9 +391,7 @@ export function ActiveWorkout() {
             <CardTitle className="text-xl">{dayName}</CardTitle>
             <p className="text-gray-400 text-sm">{exercises.length} exercises</p>
           </CardHeader>
-
           <CardContent className="space-y-4">
-            {/* Progression alerts */}
             {progressionCount > 0 && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-sm font-medium text-green-800 mb-2">
@@ -425,7 +413,6 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* First-time exercises notice */}
             {firstTimers > 0 && progressionCount === 0 && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
                 <p className="text-sm font-medium text-indigo-800">
@@ -437,7 +424,6 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* Warm-up reminder */}
             <div className="bg-white rounded-lg p-3 text-sm space-y-1 border border-gray-100">
               <p className="font-medium text-gray-700">Warm-up first (5–10 min)</p>
               <p className="text-gray-500">• Light cardio to raise heart rate</p>
@@ -445,7 +431,6 @@ export function ActiveWorkout() {
               <p className="text-gray-500">• 1–2 light warm-up sets with ~50% of working weight</p>
             </div>
 
-            {/* Exercise list */}
             <div className="space-y-1">
               {exercises.map((ex, i) => {
                 const plan = plans[ex.id || ex.name];
@@ -489,10 +474,11 @@ export function ActiveWorkout() {
   }
 
   // ── Feedback screen ─────────────────────────────────────────────────────────
+
   if (currentPhase === 'feedback') {
-    const totalVolume = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
+    const totalVolume    = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
     const uniqueExercises = new Set(completedSets.map(s => s.exerciseId)).size;
-    const durationMin = Math.round((Date.now() - startTimeRef.current) / 60000);
+    const durationMin    = Math.round((Date.now() - startTimeRef.current) / 60000);
     const firstSessionExercises = exercises.filter(ex => plans[ex.id || ex.name]?.isFirstSession);
 
     return (
@@ -505,12 +491,11 @@ export function ActiveWorkout() {
             <CardTitle className="text-xl">Workout Complete!</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Stats */}
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
                 { value: completedSets.length, label: 'sets' },
-                { value: uniqueExercises, label: 'exercises' },
-                { value: `${durationMin}m`, label: 'duration' },
+                { value: uniqueExercises,      label: 'exercises' },
+                { value: `${durationMin}m`,    label: 'duration' },
               ].map(({ value, label }) => (
                 <div key={label} className="bg-green-50 rounded-lg py-3">
                   <div className="text-xl font-bold text-green-700">{value}</div>
@@ -529,11 +514,8 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* Overall RPE */}
             <div>
-              <label className="text-sm font-medium mb-2 block">
-                Overall effort (RPE 1–10)
-              </label>
+              <label className="text-sm font-medium mb-2 block">Overall effort (RPE 1–10)</label>
               {firstSessionExercises.length > 0 && (
                 <p className="text-xs text-indigo-600 mb-2 leading-relaxed">
                   ℹ️ This rating also calibrates starting weights for your {firstSessionExercises.length} new exercise{firstSessionExercises.length > 1 ? 's' : ''} — be honest!
@@ -565,14 +547,13 @@ export function ActiveWorkout() {
               </p>
             </div>
 
-            {/* First-session calibration preview */}
             {firstSessionExercises.length > 0 && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
                 <p className="text-xs font-medium text-indigo-800 mb-2">Next session adjustments (based on RPE {perceivedEffort}):</p>
                 {firstSessionExercises.map(ex => {
                   const plan = plans[ex.id || ex.name];
                   if (!plan || plan.source !== 'estimated') return null;
-                  const { newWeight, adjustment } = applyFirstSessionRPECorrection(
+                  const { newWeight } = applyFirstSessionRPECorrection(
                     plan.suggestedWeight,
                     perceivedEffort,
                     classifyExercise(ex.name),
@@ -590,7 +571,6 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* Notes */}
             <div>
               <label className="text-sm font-medium mb-1.5 block">Notes (optional)</label>
               <Textarea
@@ -611,17 +591,18 @@ export function ActiveWorkout() {
   }
 
   // ── Exercise screen ─────────────────────────────────────────────────────────
-  const currentExercise = exercises[currentExerciseIndex];
-  const exerciseKey = currentExercise.id || currentExercise.name;
-  const plan = plans[exerciseKey];
-  const tier = classifyExercise(currentExercise.name);
-  const [repLo, repHi] = plan?.suggestedReps ?? getRepTarget(tier);
-  const exerciseSets = completedSets.filter(s => s.exerciseId === currentExercise.id);
-  const setsForThisExercise = plan?.sets ?? SETS_PER_EXERCISE;
-  const totalSetsAll = exercises.reduce((sum, ex) => sum + (plans[ex.id || ex.name]?.sets ?? SETS_PER_EXERCISE), 0);
-  const progressPct = Math.round((completedSets.length / totalSetsAll) * 100);
-  const weightStep = tier === 'isolation' ? 1 : 2.5;
-  const isBodyweight = plan?.source === 'bodyweight';
+
+  const currentExercise       = exercises[currentExerciseIndex];
+  const exerciseKey           = currentExercise.id || currentExercise.name;
+  const plan                  = plans[exerciseKey];
+  const tier                  = classifyExercise(currentExercise.name);
+  const [repLo, repHi]        = plan?.suggestedReps ?? getRepTarget(tier);
+  const exerciseSets          = completedSets.filter(s => s.exerciseId === currentExercise.id);
+  const setsForThisExercise   = plan?.sets ?? SETS_PER_EXERCISE;
+  const totalSetsAll          = exercises.reduce((sum, ex) => sum + (plans[ex.id || ex.name]?.sets ?? SETS_PER_EXERCISE), 0);
+  const progressPct           = Math.round((completedSets.length / totalSetsAll) * 100);
+  const weightStep            = tier === 'isolation' ? 1 : 2.5;
+  const isBodyweight          = plan?.source === 'bodyweight';
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
@@ -692,26 +673,18 @@ export function ActiveWorkout() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {/* Suggestion / estimate banner */}
-            {plan && <SuggestionBanner plan={plan} />}
-
-            {/* e1RM (only for history-based) */}
+            {plan && <SuggestionBanner plan={plan} exerciseKey={exerciseKey} />}
             {plan && <E1RMDisplay plan={plan} />}
 
-            {/* Weight + reps inputs */}
             <div className={`grid gap-3 ${isBodyweight ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {!isBodyweight && (
                 <div>
                   <label className="text-sm font-medium mb-1.5 block">Weight (kg)</label>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 flex-shrink-0"
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
                       onClick={() => setCustomWeight(w =>
                         String(Math.max(0, Math.round((parseFloat(w || '0') - weightStep) * 10) / 10))
-                      )}
-                    >
+                      )}>
                       <Minus className="w-3 h-3" />
                     </Button>
                     <Input
@@ -721,14 +694,10 @@ export function ActiveWorkout() {
                       onChange={e => setCustomWeight(e.target.value)}
                       className="text-center font-medium"
                     />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 flex-shrink-0"
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
                       onClick={() => setCustomWeight(w =>
                         String(Math.round((parseFloat(w || '0') + weightStep) * 10) / 10)
-                      )}
-                    >
+                      )}>
                       <Plus className="w-3 h-3" />
                     </Button>
                   </div>
@@ -738,12 +707,8 @@ export function ActiveWorkout() {
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Reps</label>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 flex-shrink-0"
-                    onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r || '1') - 1)))}
-                  >
+                  <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                    onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r || '1') - 1)))}>
                     <Minus className="w-3 h-3" />
                   </Button>
                   <Input
@@ -753,38 +718,32 @@ export function ActiveWorkout() {
                     onChange={e => setCustomReps(e.target.value)}
                     className="text-center font-medium"
                   />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 flex-shrink-0"
-                    onClick={() => setCustomReps(r => String(parseInt(r || '0') + 1))}
-                  >
+                  <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                    onClick={() => setCustomReps(r => String(parseInt(r || '0') + 1))}>
                     <Plus className="w-3 h-3" />
                   </Button>
                 </div>
               </div>
             </div>
 
-            {/* Rep range live feedback */}
             {customReps && (() => {
               const reps = parseInt(customReps);
               if (isNaN(reps)) return null;
               const inRange = reps >= repLo && reps <= repHi;
-              const above = reps > repHi;
+              const above   = reps > repHi;
               return (
                 <div className={`text-xs px-3 py-1.5 rounded ${
                   inRange ? 'bg-green-50 text-green-700'
-                  : above ? 'bg-blue-50 text-blue-700'
+                  : above  ? 'bg-blue-50 text-blue-700'
                   : 'bg-gray-50 text-gray-500'
                 }`}>
                   {inRange && `✓ In target range (${repLo}–${repHi})`}
-                  {above && `↑ ${reps - repHi} above target — consider more weight next set`}
+                  {above   && `↑ ${reps - repHi} above target — consider more weight next set`}
                   {!inRange && !above && `${repLo - reps} short of target — reduce weight if needed`}
                 </div>
               );
             })()}
 
-            {/* Complete set */}
             <Button
               onClick={handleSetComplete}
               className="w-full"
@@ -795,7 +754,6 @@ export function ActiveWorkout() {
               Complete Set {currentSet}
             </Button>
 
-            {/* Completed sets log */}
             {exerciseSets.length > 0 && (
               <div className="border-t pt-3">
                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">This exercise</p>
@@ -818,7 +776,6 @@ export function ActiveWorkout() {
           </CardContent>
         </Card>
 
-        {/* Instructions */}
         {currentExercise.instructions && (
           <Card>
             <CardContent className="pt-4 pb-4">
@@ -830,7 +787,6 @@ export function ActiveWorkout() {
           </Card>
         )}
 
-        {/* Up next */}
         {currentExerciseIndex < exercises.length - 1 && (
           <Card>
             <CardContent className="pt-3 pb-3">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
 
@@ -36,11 +36,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function AppRoutes() {
-  const { user, loading } = useAuth();
-  const location = window.location.pathname;
+const NO_NAV_PATHS = new Set([
+  '/login',
+  '/signup',
+  '/onboarding',
+  '/workout-builder',
+  '/active-workout',
+]);
 
-  const showBottomNav = user && !['/login', '/signup', '/onboarding', '/workout-builder', '/active-workout'].includes(location);
+function AppRoutes() {
+  const { user } = useAuth();
+  // useLocation() is reactive — re-renders whenever the route changes
+  const location = useLocation();
+
+  const showBottomNav = user && !NO_NAV_PATHS.has(location.pathname);
 
   return (
     <>

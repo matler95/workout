@@ -6,10 +6,11 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { Badge } from '../components/ui/badge';
-import { TrendingUp, Activity, Calendar, Flame, Dumbbell } from 'lucide-react';
+import { TrendingUp, Activity, Calendar, Flame } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
 import { ProgressionInsights } from '../components/ProgressionInsights';
+import type { WorkoutLog as EngineWorkoutLog } from '../../../utils/progressiveOverload';
 
 interface SetLog {
   exerciseId: string;
@@ -45,9 +46,7 @@ export function Progress() {
         progressApi.getWeeklyVolume(),
         profileApi.get(),
       ]);
-
       setBodyweightData(bw);
-      // history comes back newest-first from the server; keep that order
       setWorkoutHistory(history as WorkoutLog[]);
       setDbVolumeData(vol);
       setProfile(prof);
@@ -58,11 +57,10 @@ export function Progress() {
     }
   };
 
-  // ── Strength: build per-exercise chart data from history ──────────────────
-  // History already has the DB-computed e1rm on each set — use it directly.
+  // ── Strength chart data ────────────────────────────────────────────────────
+
   const getStrengthData = () => {
     const map: Record<string, { date: string; weight: number; reps: number; e1rm: number }[]> = {};
-
     for (const log of [...workoutHistory].reverse()) {
       const date = format(parseISO(log.completedAt), 'MMM d');
       const byExercise: Record<string, SetLog[]> = {};
@@ -72,7 +70,6 @@ export function Progress() {
       }
       for (const [name, sets] of Object.entries(byExercise)) {
         const best = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
-        // Use DB-stored e1rm if available, otherwise compute
         const e1rm = (best as any).e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
         if (!map[name]) map[name] = [];
         map[name].push({ date, weight: best.weight, reps: best.reps, e1rm });
@@ -81,27 +78,20 @@ export function Progress() {
     return map;
   };
 
-  // ── Volume: map DB rows to display format ─────────────────────────────────
-  // DB returns rows per exercise; we group into muscle categories via the
-  // same keyword inference — but the aggregation (total_reps, total_sets)
-  // is now done by Postgres, not loaded from full history in JS.
+  // ── Volume from DB ─────────────────────────────────────────────────────────
+
   const getVolumeData = () => {
     const muscleVolume: Record<string, number> = {};
-
     for (const row of dbVolumeData) {
-      const name = row.exercise_name.toLowerCase();
-      const muscles = inferMuscleGroup(name);
-      for (const m of muscles) {
-        muscleVolume[m] = (muscleVolume[m] || 0) + row.total_reps;
-      }
+      const muscles = inferMuscleGroup(row.exercise_name.toLowerCase());
+      for (const m of muscles) muscleVolume[m] = (muscleVolume[m] || 0) + row.total_reps;
     }
-
-    const order = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
+    const order  = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
     const maxVol = Math.max(...Object.values(muscleVolume), 1);
     return order.map(m => ({
       muscle: m,
-      reps: muscleVolume[m] || 0,
-      sets: dbVolumeData
+      reps:   muscleVolume[m] || 0,
+      sets:   dbVolumeData
         .filter(r => inferMuscleGroup(r.exercise_name.toLowerCase()).includes(m))
         .reduce((s, r) => s + r.total_sets, 0),
       pct: Math.round(((muscleVolume[m] || 0) / maxVol) * 100),
@@ -121,16 +111,15 @@ export function Progress() {
   };
 
   // ── Streaks ────────────────────────────────────────────────────────────────
+
   const getStreakInfo = () => {
     if (workoutHistory.length === 0) return { current: 0, longest: 0, consistency: 0 };
-
     const plannedPerWeek = profile?.trainingDays || 3;
     const weeks: Record<string, number> = {};
     for (const log of workoutHistory) {
       const key = format(startOfWeek(parseISO(log.completedAt), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       weeks[key] = (weeks[key] || 0) + 1;
     }
-
     const keys = Object.keys(weeks).sort();
     let longest = 0, streak = 0, current = 0;
     for (const k of keys) {
@@ -141,11 +130,10 @@ export function Progress() {
       if (weeks[k] >= plannedPerWeek) current++;
       else break;
     }
-    const last30      = subDays(new Date(), 30);
-    const done30      = workoutHistory.filter(l => new Date(l.completedAt) >= last30).length;
-    const expected30  = Math.round((plannedPerWeek / 7) * 30);
-    const consistency = Math.min(100, Math.round((done30 / expected30) * 100));
-    return { current, longest, consistency };
+    const last30     = subDays(new Date(), 30);
+    const done30     = workoutHistory.filter(l => new Date(l.completedAt) >= last30).length;
+    const expected30 = Math.round((plannedPerWeek / 7) * 30);
+    return { current, longest, consistency: Math.min(100, Math.round((done30 / expected30) * 100)) };
   };
 
   const getHeatmapData = () =>
@@ -169,7 +157,8 @@ export function Progress() {
       };
     });
 
-  // ── Derived values ─────────────────────────────────────────────────────────
+  // ── Derived ────────────────────────────────────────────────────────────────
+
   const weightChartData = bodyweightData
     .slice(-30)
     .map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
@@ -182,7 +171,9 @@ export function Progress() {
   const heatmap        = getHeatmapData();
   const weeklyBars     = getWeeklyBarData();
 
-  const bmi        = profile ? Math.round((profile.weight / Math.pow(profile.height / 100, 2)) * 10) / 10 : null;
+  const bmi = profile
+    ? Math.round((profile.weight / Math.pow(profile.height / 100, 2)) * 10) / 10
+    : null;
   const estBodyFat = profile && bmi
     ? profile.gender === 'male'
       ? Math.round(1.2 * bmi + 0.23 * profile.age - 16.2)
@@ -216,34 +207,19 @@ export function Progress() {
           {/* ── Body ──────────────────────────────────────────────────────── */}
           <TabsContent value="body" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <div className="text-2xl font-bold">{bmi ?? '–'}</div>
-                  <div className="text-xs text-gray-500 mt-1">BMI</div>
-                  {bmi && (
-                    <Badge
-                      variant={bmi < 18.5 ? 'destructive' : bmi < 25 ? 'secondary' : 'outline'}
-                      className="text-xs mt-1"
-                    >
-                      {bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese'}
-                    </Badge>
-                  )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <div className="text-2xl font-bold">{estBodyFat ? `${estBodyFat}%` : '–'}</div>
-                  <div className="text-xs text-gray-500 mt-1">Est. Body Fat</div>
-                  <div className="text-xs text-gray-400 mt-1">approx.</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <div className="text-2xl font-bold">{leanMass ?? '–'}</div>
-                  <div className="text-xs text-gray-500 mt-1">Lean kg</div>
-                  <div className="text-xs text-gray-400 mt-1">estimated</div>
-                </CardContent>
-              </Card>
+              {[
+                { value: bmi ?? '–',                  label: 'BMI',           sub: bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null },
+                { value: estBodyFat ? `${estBodyFat}%` : '–', label: 'Est. Body Fat', sub: 'approx.' },
+                { value: leanMass ?? '–',              label: 'Lean kg',       sub: 'estimated' },
+              ].map(({ value, label, sub }) => (
+                <Card key={label}>
+                  <CardContent className="pt-4 pb-4 text-center">
+                    <div className="text-2xl font-bold">{value}</div>
+                    <div className="text-xs text-gray-500 mt-1">{label}</div>
+                    {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             <Card>
@@ -276,10 +252,12 @@ export function Progress() {
 
           {/* ── Strength ──────────────────────────────────────────────────── */}
           <TabsContent value="strength" className="space-y-4">
-            {/* Progression suggestions — uses the ProgressionInsights component */}
-            <ProgressionInsights />
+            {/*
+              Pass history down — ProgressionInsights will skip its own fetch
+              since we already loaded it for this page.
+            */}
+            <ProgressionInsights history={workoutHistory as unknown as EngineWorkoutLog[]} />
 
-            {/* Raw strength chart — top set weight over time */}
             {exerciseNames.length > 0 && (
               <>
                 <div className="flex gap-2 flex-wrap pt-2">
@@ -321,9 +299,9 @@ export function Progress() {
 
                 <div className="space-y-2">
                   {exerciseNames.map(name => {
-                    const data = strengthData[name];
+                    const data  = strengthData[name];
                     const first = data[0], last = data[data.length - 1];
-                    const diff = Math.round((last.weight - first.weight) * 10) / 10;
+                    const diff  = Math.round((last.weight - first.weight) * 10) / 10;
                     return (
                       <Card key={name} className="cursor-pointer hover:border-indigo-300 transition-colors"
                         onClick={() => setSelectedExercise(name)}>
@@ -356,7 +334,7 @@ export function Progress() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <Activity className="w-4 h-4" /> Muscle Volume This Week
                 </CardTitle>
-                <p className="text-xs text-gray-500">Aggregated from DB — total reps per muscle group</p>
+                <p className="text-xs text-gray-500">Total reps per muscle group from the current week</p>
               </CardHeader>
               <CardContent>
                 {volumeData.every(d => d.reps === 0) ? (
@@ -381,9 +359,7 @@ export function Progress() {
 
             {workoutHistory.length > 0 && (
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Recent Workouts</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-base">Recent Workouts</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-2">
                     {workoutHistory.slice(0, 5).map((log, i) => {
@@ -411,16 +387,15 @@ export function Progress() {
           <TabsContent value="streaks" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: streakInfo.current,     label: 'Current streak', sub: 'weeks', icon: <Flame className="w-5 h-5 text-orange-500" /> },
-                { value: streakInfo.longest,     label: 'Best streak',    sub: 'weeks' },
-                { value: `${streakInfo.consistency}%`, label: 'Consistency', sub: 'last 30 days' },
+                { value: streakInfo.current,              label: 'Current streak', sub: 'weeks', icon: <Flame className="w-5 h-5 text-orange-500" /> },
+                { value: streakInfo.longest,              label: 'Best streak',    sub: 'weeks' },
+                { value: `${streakInfo.consistency}%`,   label: 'Consistency',    sub: 'last 30 days' },
               ].map(({ value, label, sub, icon }) => (
                 <Card key={label}>
                   <CardContent className="pt-4 pb-4 text-center">
                     {icon ? (
                       <div className="flex items-center justify-center gap-1 mb-1">
-                        {icon}
-                        <span className="text-2xl font-bold">{value}</span>
+                        {icon}<span className="text-2xl font-bold">{value}</span>
                       </div>
                     ) : (
                       <div className="text-2xl font-bold">{value}</div>
@@ -432,7 +407,6 @@ export function Progress() {
               ))}
             </div>
 
-            {/* Heatmap */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -467,11 +441,8 @@ export function Progress() {
               </CardContent>
             </Card>
 
-            {/* Weekly bars */}
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Workouts per Week</CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base">Workouts per Week</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={weeklyBars} barSize={16}>

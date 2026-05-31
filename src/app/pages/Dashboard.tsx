@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
 import { Input } from '../components/ui/input';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { profileApi, workoutApi, progressApi } from '../../utils/api';
+import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
 import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, ChevronRight } from 'lucide-react';
 import { format, parseISO, startOfWeek, subDays, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
@@ -15,14 +15,14 @@ export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [profile, setProfile]             = useState<any>(null);
-  const [workoutPlan, setWorkoutPlan]     = useState<any>(null);
+  const [profile, setProfile]               = useState<any>(null);
+  const [workoutPlan, setWorkoutPlan]       = useState<any>(null);
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [bodyweightData, setBodyweightData] = useState<{ date: string; weight: number }[]>([]);
-  const [showWeightLog, setShowWeightLog] = useState(false);
-  const [newWeight, setNewWeight]         = useState('');
-  const [loggingWeight, setLoggingWeight] = useState(false);
-  const [loading, setLoading]             = useState(true);
+  const [showWeightLog, setShowWeightLog]   = useState(false);
+  const [newWeight, setNewWeight]           = useState('');
+  const [loggingWeight, setLoggingWeight]   = useState(false);
+  const [loading, setLoading]               = useState(true);
 
   useEffect(() => { loadData(); }, []);
 
@@ -30,28 +30,20 @@ export function Dashboard() {
     try {
       const [prof, plan, history, bw] = await Promise.all([
         profileApi.get(),
-        planApi_get(),
-        workoutApi.getHistory(50).catch(() => []),  // don't fail whole page
-        progressApi.getBodyweight(30),
+        planApi.get().catch(() => null),           // planApi imported directly — errors still caught
+        workoutApi.getHistory(50).catch(() => []),
+        progressApi.getBodyweight(30).catch(() => []),
       ]);
       setProfile(prof);
+      setWorkoutPlan(plan);
       setWorkoutHistory(history);
       setBodyweightData(bw);
-      setWorkoutPlan(plan);
     } catch (e) {
       console.error('Dashboard load error:', e);
     } finally {
       setLoading(false);
     }
   };
-
-  // Inline helper to get plan (planApi not imported above to avoid duplication)
-  async function planApi_get() {
-    try {
-      const { planApi } = await import('../../utils/api');
-      return await planApi.get();
-    } catch { return null; }
-  }
 
   const handleLogWeight = async () => {
     const w = parseFloat(newWeight);
@@ -127,20 +119,19 @@ export function Dashboard() {
     return streak;
   };
 
-  const weekProg     = getWeeklyProgress();
-  const readiness    = getReadinessScore();
-  const nextWorkout  = getNextWorkout();
-  const cals         = getCalorieTarget();
-  const protein      = profile ? Math.round(profile.weight * 2.2) : null;
-  const streak       = getStreak();
+  const weekProg    = getWeeklyProgress();
+  const readiness   = getReadinessScore();
+  const nextWorkout = getNextWorkout();
+  const cals        = getCalorieTarget();
+  const protein     = profile ? Math.round(profile.weight * 2.2) : null;
+  const streak      = getStreak();
 
-  const sortedBw = [...bodyweightData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sortedBw     = [...bodyweightData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const latestWeight = sortedBw[sortedBw.length - 1] ?? null;
   const weightDelta  = sortedBw.length >= 2
     ? Math.round((sortedBw[sortedBw.length - 1].weight - sortedBw[0].weight) * 10) / 10
     : null;
-
-  const weightChart = sortedBw.map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
+  const weightChart  = sortedBw.map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
 
   const readinessColor = !readiness ? 'gray'
     : readiness >= 75 ? 'green' : readiness >= 50 ? 'yellow' : 'red';
@@ -296,7 +287,6 @@ export function Dashboard() {
                 </Button>
               </div>
             )}
-
             {latestWeight && (
               <div className="flex items-end gap-2 mb-3">
                 <span className="text-3xl font-bold">{latestWeight.weight}</span>
@@ -313,7 +303,6 @@ export function Dashboard() {
                 )}
               </div>
             )}
-
             {weightChart.length > 1 ? (
               <ResponsiveContainer width="100%" height={80}>
                 <LineChart data={weightChart}>
@@ -379,7 +368,7 @@ export function Dashboard() {
               <div className="space-y-2">
                 {workoutHistory.slice(0, 3).map((log, i) => {
                   const sets = (log.sets || []).length;
-                  const vol = Math.round((log.sets || []).reduce((s: number, x: any) => s + x.weight * x.reps, 0) / 1000 * 10) / 10;
+                  const vol  = Math.round((log.sets || []).reduce((s: number, x: any) => s + x.weight * x.reps, 0) / 1000 * 10) / 10;
                   return (
                     <div key={i} className="flex justify-between items-center text-sm py-1.5 border-b last:border-0">
                       <div>

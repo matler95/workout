@@ -10,7 +10,6 @@ import { apiCall } from '../../utils/supabase-client';
 import { toast } from 'sonner';
 import { Search, Plus, Trash2, Clock, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
-// Muscle group requirements per workout style / day type
 const MUSCLE_TARGETS: Record<string, string[]> = {
   push: ['chest', 'front_delts', 'side_delts', 'triceps'],
   pull: ['lats', 'upper_back', 'rear_delts', 'biceps'],
@@ -22,34 +21,30 @@ const MUSCLE_TARGETS: Record<string, string[]> = {
 
 function getDayType(dayName: string): string {
   const n = dayName.toLowerCase();
-  if (n.includes('push')) return 'push';
-  if (n.includes('pull')) return 'pull';
+  if (n.includes('push'))             return 'push';
+  if (n.includes('pull'))             return 'pull';
   if (n.includes('leg') || n.includes('lower')) return 'legs';
-  if (n.includes('upper')) return 'upper';
+  if (n.includes('upper'))            return 'upper';
   return 'full';
 }
 
-function assessWorkout(exercises: Exercise[], dayName: string): {
-  score: number;
-  label: string;
-  color: string;
-  missing: string[];
-  tips: string[];
-} {
-  if (exercises.length === 0) return { score: 0, label: 'Empty', color: 'gray', missing: [], tips: ['Add exercises to get started'] };
+function assessWorkout(exercises: Exercise[], dayName: string) {
+  if (exercises.length === 0) {
+    return { score: 0, label: 'Empty', color: 'gray', missing: [], tips: ['Add exercises to get started'] };
+  }
 
-  const dayType = getDayType(dayName);
-  const targets = MUSCLE_TARGETS[dayType] || MUSCLE_TARGETS.full;
-  const covered = new Set<string>();
+  const dayType  = getDayType(dayName);
+  const targets  = MUSCLE_TARGETS[dayType] || MUSCLE_TARGETS.full;
+  const covered  = new Set<string>();
   exercises.forEach(ex => {
     ex.primaryMuscles.forEach(m => covered.add(m));
     ex.secondaryMuscles.forEach(m => covered.add(m));
   });
 
-  const missing = targets.filter(m => !covered.has(m));
+  const missing  = targets.filter(m => !covered.has(m));
   const coverage = Math.round(((targets.length - missing.length) / targets.length) * 100);
-
   const tips: string[] = [];
+
   if (exercises.length < 3) tips.push('Add more exercises for a complete session');
   if (exercises.length > 8) tips.push('Too many exercises may make the session too long');
   const hasCompound = exercises.some(ex => ex.primaryMuscles.length >= 2 || ex.secondaryMuscles.length >= 2);
@@ -61,17 +56,16 @@ function assessWorkout(exercises: Exercise[], dayName: string): {
 
   const label = score >= 80 ? 'Great' : score >= 60 ? 'Good' : score >= 40 ? 'Needs work' : 'Incomplete';
   const color = score >= 80 ? 'green' : score >= 60 ? 'yellow' : 'red';
-
   return { score, label, color, missing, tips };
 }
 
 export function WorkoutBuilder() {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile]                 = useState<any>(null);
   const [selectedExercises, setSelectedExercises] = useState<{ [key: string]: Exercise[] }>({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentDay, setCurrentDay] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [currentDay, setCurrentDay]           = useState('');
+  const [loading, setLoading]                 = useState(true);
+  const [saving, setSaving]                   = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => { loadProfile(); }, []);
@@ -82,7 +76,6 @@ export function WorkoutBuilder() {
       setProfile(profile);
       initializeDays(profile);
 
-      // Try to load existing plan
       try {
         const { plan } = await apiCall('/workouts/plan');
         if (plan?.workouts) {
@@ -90,7 +83,7 @@ export function WorkoutBuilder() {
           setCurrentDay(Object.keys(plan.workouts)[0] || '');
           return;
         }
-      } catch { /* no plan yet */ }
+      } catch { /* no plan yet — use freshly initialised days */ }
     } catch {
       toast.error('Failed to load profile');
     } finally {
@@ -101,23 +94,20 @@ export function WorkoutBuilder() {
   const initializeDays = (prof: any) => {
     const days: { [key: string]: Exercise[] } = {};
     const style = prof?.workoutStyle;
-    if (style === 'full_body') { ['Day 1', 'Day 2', 'Day 3'].forEach(d => days[d] = []); }
-    else if (style === 'upper_lower') { ['Upper A', 'Lower A', 'Upper B', 'Lower B'].forEach(d => days[d] = []); }
-    else if (style === 'ppl') { ['Push', 'Pull', 'Legs'].forEach(d => days[d] = []); }
-    else if (style === 'bro_split') { ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs'].forEach(d => days[d] = []); }
-    else { ['Day 1', 'Day 2', 'Day 3'].forEach(d => days[d] = []); }
+    if      (style === 'full_body')    ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
+    else if (style === 'upper_lower')  ['Upper A', 'Lower A', 'Upper B', 'Lower B'].forEach(d => (days[d] = []));
+    else if (style === 'ppl')          ['Push', 'Pull', 'Legs'].forEach(d => (days[d] = []));
+    else if (style === 'bro_split')    ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs'].forEach(d => (days[d] = []));
+    else                               ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
     setSelectedExercises(days);
     setCurrentDay(Object.keys(days)[0]);
   };
 
   const getFilteredExercises = (): { suggested: Exercise[]; rest: Exercise[] } => {
     const all = exerciseDatabase.filter(ex => {
-      // Equipment filter
       if (profile?.equipment === 'bodyweight' && ex.equipment !== 'bodyweight') return false;
-      if (profile?.equipment === 'limited' && ex.equipment === 'full_gym') return false;
-      // Experience filter
+      if (profile?.equipment === 'limited'    && ex.equipment === 'full_gym')   return false;
       if (profile?.experienceLevel === 'beginner' && ex.difficulty === 'advanced') return false;
-      // Search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return ex.name.toLowerCase().includes(q) || ex.primaryMuscles.some(m => m.toLowerCase().includes(q));
@@ -125,28 +115,21 @@ export function WorkoutBuilder() {
       return true;
     });
 
-    // Suggested: match the day type category
     const dayType = getDayType(currentDay);
     const suggested = all.filter(ex => {
-      if (dayType === 'push') return ex.category === 'push';
-      if (dayType === 'pull') return ex.category === 'pull';
-      if (dayType === 'legs') return ex.category === 'legs';
+      if (dayType === 'push')  return ex.category === 'push';
+      if (dayType === 'pull')  return ex.category === 'pull';
+      if (dayType === 'legs')  return ex.category === 'legs';
       if (dayType === 'upper') return ex.category === 'push' || ex.category === 'pull';
-      return true; // full body — show all
+      return true;
     });
-
     const suggestedIds = new Set(suggested.map(e => e.id));
-    const rest = all.filter(e => !suggestedIds.has(e.id));
-
-    return { suggested, rest };
+    return { suggested, rest: all.filter(e => !suggestedIds.has(e.id)) };
   };
 
   const addExercise = (exercise: Exercise) => {
     const current = selectedExercises[currentDay] || [];
-    if (current.some(e => e.id === exercise.id)) {
-      toast.error('Already added');
-      return;
-    }
+    if (current.some(e => e.id === exercise.id)) { toast.error('Already added'); return; }
     setSelectedExercises(prev => ({ ...prev, [currentDay]: [...current, exercise] }));
   };
 
@@ -155,20 +138,20 @@ export function WorkoutBuilder() {
   };
 
   const moveExercise = (day: string, idx: number, dir: -1 | 1) => {
-    const exs = [...(selectedExercises[day] || [])];
+    const exs    = [...(selectedExercises[day] || [])];
     const newIdx = idx + dir;
     if (newIdx < 0 || newIdx >= exs.length) return;
     [exs[idx], exs[newIdx]] = [exs[newIdx], exs[idx]];
     setSelectedExercises(prev => ({ ...prev, [day]: exs }));
   };
 
+  // Sets per exercise depends on experience level — mirrors startingWeights.ts logic
+  const setsPerExercise = profile?.experienceLevel === 'beginner' ? 2 : 3;
+
   const getSessionLength = (exercises: Exercise[]): number => {
-    // 10min warmup + (sets × rest) + set time
-    // 3 sets per exercise, 2min rest between sets, ~45s per set
-    const setsPerEx = 3;
-    const restMinutes = 2;
+    const restMinutes   = 2;
     const setTimeMinutes = 0.75;
-    return Math.round(10 + exercises.length * setsPerEx * (restMinutes + setTimeMinutes));
+    return Math.round(10 + exercises.length * setsPerExercise * (restMinutes + setTimeMinutes));
   };
 
   const handleSave = async () => {
@@ -195,18 +178,18 @@ export function WorkoutBuilder() {
     );
   }
 
-  const days = Object.keys(selectedExercises);
+  const days             = Object.keys(selectedExercises);
   const currentExercises = selectedExercises[currentDay] || [];
   const { suggested, rest } = getFilteredExercises();
-  const sessionLen = getSessionLength(currentExercises);
-  const targetLen = profile?.sessionLength || 60;
-  const assessment = assessWorkout(currentExercises, currentDay);
+  const sessionLen       = getSessionLength(currentExercises);
+  const targetLen        = profile?.sessionLength || 60;
+  const assessment       = assessWorkout(currentExercises, currentDay);
 
   const assessmentColorClass = {
     green: 'bg-green-50 border-green-200 text-green-800',
     yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    red: 'bg-red-50 border-red-200 text-red-800',
-    gray: 'bg-gray-50 border-gray-200 text-gray-600',
+    red:   'bg-red-50 border-red-200 text-red-800',
+    gray:  'bg-gray-50 border-gray-200 text-gray-600',
   }[assessment.color];
 
   return (
@@ -216,7 +199,10 @@ export function WorkoutBuilder() {
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="font-bold text-lg">Workout Builder</h1>
-            <p className="text-xs text-gray-500">{profile?.workoutStyle?.replace(/_/g, ' ')} · {days.length} days</p>
+            <p className="text-xs text-gray-500">
+              {profile?.workoutStyle?.replace(/_/g, ' ')} · {days.length} days ·{' '}
+              {setsPerExercise} sets/exercise
+            </p>
           </div>
           <Button onClick={handleSave} disabled={saving} size="sm">
             {saving ? 'Saving...' : 'Save Plan'}
@@ -225,7 +211,6 @@ export function WorkoutBuilder() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        {/* Day tabs */}
         <Tabs value={currentDay} onValueChange={setCurrentDay}>
           <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
             {days.map(day => (
@@ -240,7 +225,7 @@ export function WorkoutBuilder() {
             <TabsContent key={day} value={day} className="space-y-4 mt-4">
               <div className="grid md:grid-cols-2 gap-4">
 
-                {/* LEFT: Selected exercises */}
+                {/* LEFT — selected exercises */}
                 <div className="space-y-3">
                   {/* Session stats */}
                   <div className="flex gap-2 flex-wrap">
@@ -289,6 +274,9 @@ export function WorkoutBuilder() {
                               <p className="font-medium text-sm truncate">{ex.name}</p>
                               <p className="text-xs text-gray-500 truncate">{ex.primaryMuscles.join(', ')}</p>
                             </div>
+                            <Badge variant="outline" className="text-xs flex-shrink-0">
+                              {setsPerExercise} sets
+                            </Badge>
                             <button onClick={() => removeExercise(day, idx)}
                               className="text-gray-300 hover:text-red-500 transition-colors p-1 flex-shrink-0">
                               <Trash2 className="w-3.5 h-3.5" />
@@ -318,7 +306,7 @@ export function WorkoutBuilder() {
                   })()}
                 </div>
 
-                {/* RIGHT: Exercise library */}
+                {/* RIGHT — exercise library */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Exercise Library</CardTitle>
@@ -383,9 +371,9 @@ function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs text-gray-500">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded ${
-            ex.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
+            ex.difficulty === 'beginner'     ? 'bg-green-100 text-green-700' :
             ex.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
-            'bg-red-100 text-red-700'
+                                               'bg-red-100 text-red-700'
           }`}>{ex.difficulty}</span>
         </div>
       </div>

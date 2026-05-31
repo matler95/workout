@@ -4,16 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { apiCall } from '../../utils/supabase-client';
-import { Dumbbell, Clock, Calendar, Edit } from 'lucide-react';
+import { Dumbbell, Clock, Edit } from 'lucide-react';
 
 export function Plan() {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile]       = useState<any>(null);
   const [workoutPlan, setWorkoutPlan] = useState<any>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
@@ -32,13 +30,9 @@ export function Plan() {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
         <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>No Workout Plan</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>No Workout Plan</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">
-              You haven't created a workout plan yet.
-            </p>
+            <p className="text-sm text-gray-600 mb-4">You haven't created a workout plan yet.</p>
             <Button onClick={() => navigate('/workout-builder')} className="w-full">
               Create Workout Plan
             </Button>
@@ -48,7 +42,9 @@ export function Plan() {
     );
   }
 
-  const workoutDays = Object.keys(workoutPlan.workouts || {});
+  // Mirrors startingWeights.ts: beginners get 2 sets, everyone else 3
+  const setsPerExercise = profile?.experienceLevel === 'beginner' ? 2 : 3;
+  const workoutDays     = Object.keys(workoutPlan.workouts || {});
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 pb-24">
@@ -56,8 +52,7 @@ export function Plan() {
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Workout Plan</h1>
           <Button variant="outline" size="sm" onClick={() => navigate('/workout-builder')}>
-            <Edit className="w-4 h-4 mr-2" />
-            Edit Plan
+            <Edit className="w-4 h-4 mr-2" /> Edit Plan
           </Button>
         </div>
 
@@ -66,14 +61,16 @@ export function Plan() {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold">{workoutDays.length}</div>
-                <div className="text-xs text-gray-600">Days/Week</div>
+                <div className="text-xs text-gray-600">Days / Week</div>
               </div>
               <div>
                 <div className="text-2xl font-bold">{profile?.sessionLength || 60}</div>
-                <div className="text-xs text-gray-600">Min/Session</div>
+                <div className="text-xs text-gray-600">Min / Session</div>
               </div>
               <div>
-                <div className="text-2xl font-bold">{profile?.workoutStyle?.replace('_', ' ')}</div>
+                <div className="text-2xl font-bold capitalize">
+                  {profile?.workoutStyle?.replace(/_/g, ' ') || '—'}
+                </div>
                 <div className="text-xs text-gray-600">Style</div>
               </div>
             </div>
@@ -81,8 +78,9 @@ export function Plan() {
         </Card>
 
         <div className="space-y-3">
-          {workoutDays.map((dayName, index) => {
+          {workoutDays.map(dayName => {
             const exercises = workoutPlan.workouts[dayName] || [];
+            const estimatedMin = Math.round(10 + exercises.length * setsPerExercise * 2.75);
             return (
               <Card key={dayName}>
                 <CardHeader className="pb-3">
@@ -96,7 +94,7 @@ export function Plan() {
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
-                          <span>~{10 + exercises.length * 6} min</span>
+                          <span>~{estimatedMin} min</span>
                         </div>
                       </div>
                     </div>
@@ -114,12 +112,10 @@ export function Plan() {
                       <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                         <div>
                           <div className="font-medium text-sm">{ex.name}</div>
-                          <div className="text-xs text-gray-600">
-                            {ex.primaryMuscles?.join(', ')}
-                          </div>
+                          <div className="text-xs text-gray-600">{ex.primaryMuscles?.join(', ')}</div>
                         </div>
                         <Badge variant="outline" className="text-xs">
-                          3 sets
+                          {setsPerExercise} sets
                         </Badge>
                       </div>
                     ))}
