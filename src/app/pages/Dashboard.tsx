@@ -30,9 +30,9 @@ export function Dashboard() {
     try {
       const [prof, plan, history, bw] = await Promise.all([
         profileApi.get(),
+        planApi_get(),
         workoutApi.getHistory(50).catch(() => []),  // don't fail whole page
         progressApi.getBodyweight(30),
-        planApi_get(),
       ]);
       setProfile(prof);
       setWorkoutHistory(history);
