@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
 import { Textarea } from '../components/ui/textarea';
-import { profileApi } from '../../utils/api';
+import { profileApi, progressApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -118,6 +118,16 @@ export function Onboarding() {
     setLoading(true);
     try {
       await profileApi.saveOnboarding(data as any);
+
+      // Log initial bodyweight from onboarding
+      const weight = parseFloat(data.weight);
+      if (weight && weight >= 20 && weight <= 500) {
+        const today = new Date().toISOString().split('T')[0];
+        progressApi.logBodyweight(weight, today).catch(() => {
+          // Non-critical — don't block onboarding if this fails
+        });
+      }
+
       toast.success("Profile created! Let's build your workout plan");
       navigate('/workout-builder');
     } catch (error: any) {
