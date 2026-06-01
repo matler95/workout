@@ -34,6 +34,18 @@ interface OnboardingData {
   injuries: string;
 }
 
+// FIX #11: client-side range validation for demographic inputs.
+function validateDemographics(data: OnboardingData): string | null {
+  const age    = parseInt(data.age);
+  const height = parseFloat(data.height);
+  const weight = parseFloat(data.weight);
+
+  if (!data.age || isNaN(age)       || age    < 10  || age    > 120) return 'Age must be between 10 and 120';
+  if (!data.height || isNaN(height) || height < 50  || height > 300) return 'Height must be between 50 and 300 cm';
+  if (!data.weight || isNaN(weight) || weight < 20  || weight > 500) return 'Weight must be between 20 and 500 kg';
+  return null;
+}
+
 export function Onboarding() {
   const [step, setStep]       = useState(1);
   const [loading, setLoading] = useState(false);
@@ -63,7 +75,15 @@ export function Onboarding() {
 
   const totalSteps = 10;
 
-  const handleNext = () => { if (step < totalSteps) setStep(step + 1); };
+  const handleNext = () => {
+    // FIX #11: validate demographics on step 4 before advancing
+    if (step === 4) {
+      const err = validateDemographics(data);
+      if (err) { toast.error(err); return; }
+    }
+    if (step < totalSteps) setStep(step + 1);
+  };
+
   const handleBack = () => { if (step > 1) setStep(step - 1); };
 
   const handleSubmit = async () => {
@@ -171,7 +191,7 @@ export function Onboarding() {
             </div>
           )}
 
-          {/* Step 4 — Demographics */}
+          {/* Step 4 — Demographics (with inline hints) */}
           {step === 4 && (
             <div className="space-y-4">
               <CardTitle>Tell us about yourself</CardTitle>
@@ -194,20 +214,45 @@ export function Onboarding() {
                   </RadioGroup>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
+                  {/* FIX #11: explicit min/max hints on each field */}
                   <div className="space-y-2">
                     <Label htmlFor="age">Age</Label>
-                    <Input id="age" type="number" value={data.age}
-                      onChange={e => setData({ ...data, age: e.target.value })} placeholder="25" />
+                    <Input
+                      id="age"
+                      type="number"
+                      min={10}
+                      max={120}
+                      value={data.age}
+                      onChange={e => setData({ ...data, age: e.target.value })}
+                      placeholder="25"
+                    />
+                    <p className="text-xs text-gray-400">10–120</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="height">Height (cm)</Label>
-                    <Input id="height" type="number" value={data.height}
-                      onChange={e => setData({ ...data, height: e.target.value })} placeholder="175" />
+                    <Input
+                      id="height"
+                      type="number"
+                      min={50}
+                      max={300}
+                      value={data.height}
+                      onChange={e => setData({ ...data, height: e.target.value })}
+                      placeholder="175"
+                    />
+                    <p className="text-xs text-gray-400">50–300 cm</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="weight">Weight (kg)</Label>
-                    <Input id="weight" type="number" value={data.weight}
-                      onChange={e => setData({ ...data, weight: e.target.value })} placeholder="70" />
+                    <Input
+                      id="weight"
+                      type="number"
+                      min={20}
+                      max={500}
+                      value={data.weight}
+                      onChange={e => setData({ ...data, weight: e.target.value })}
+                      placeholder="70"
+                    />
+                    <p className="text-xs text-gray-400">20–500 kg</p>
                   </div>
                 </div>
               </div>

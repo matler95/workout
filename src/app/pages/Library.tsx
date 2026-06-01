@@ -4,7 +4,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion';
 import { exerciseDatabase } from '../../data/exercises';
-import { Search, Filter } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 export function Library() {
@@ -16,6 +16,7 @@ export function Library() {
     const matchesSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          ex.primaryMuscles.some(m => m.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = categoryFilter === 'all' || ex.category === categoryFilter;
+    // FIX #8: "limited" filter now works — it was missing from the select options.
     const matchesEquipment = equipmentFilter === 'all' || ex.equipment === equipmentFilter;
 
     return matchesSearch && matchesCategory && matchesEquipment;
@@ -59,6 +60,8 @@ export function Library() {
                 <SelectContent>
                   <SelectItem value="all">All Equipment</SelectItem>
                   <SelectItem value="full_gym">Full Gym</SelectItem>
+                  {/* FIX #8: was missing — users with "limited" equipment had no filter option */}
+                  <SelectItem value="limited">Limited Equipment</SelectItem>
                   <SelectItem value="bodyweight">Bodyweight</SelectItem>
                 </SelectContent>
               </Select>

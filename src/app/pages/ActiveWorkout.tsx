@@ -6,12 +6,22 @@ import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { apiCall } from '../../utils/supabase-client';
 import { toast } from 'sonner';
 import {
   Clock, Check, Trophy, TrendingUp, TrendingDown,
   SkipForward, Minus, Plus, ArrowUp,
-  AlertTriangle, Info, Minus as MinusIcon,
+  AlertTriangle, Info, Minus as MinusIcon, X,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -137,6 +147,55 @@ function E1RMDisplay({ plan }: { plan: ExercisePlan }) {
   );
 }
 
+// ─── Exit dialog ───────────────────────────────────────────────────────────────
+// FIX #7: gives users a safe way to abandon a workout with explicit choices.
+
+type ExitChoice = 'save' | 'discard' | null;
+
+function ExitDialog({
+  open,
+  hasSets,
+  onChoice,
+}: {
+  open: boolean;
+  hasSets: boolean;
+  onChoice: (choice: ExitChoice) => void;
+}) {
+  return (
+    <AlertDialog open={open}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>End workout?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {hasSets
+              ? 'You have logged sets this session. Would you like to save your progress or discard it?'
+              : 'No sets have been logged yet. Are you sure you want to exit?'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+          {hasSets && (
+            <AlertDialogAction
+              onClick={() => onChoice('save')}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              Save partial workout
+            </AlertDialogAction>
+          )}
+          <AlertDialogAction
+            onClick={() => onChoice('discard')}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            Discard workout
+          </AlertDialogAction>
+          <AlertDialogCancel onClick={() => onChoice(null)}>
+            Keep training
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function ActiveWorkout() {
@@ -156,6 +215,8 @@ export function ActiveWorkout() {
   const [customWeight, setCustomWeight]     = useState('');
   const [customReps, setCustomReps]         = useState('');
   const [loading, setLoading]               = useState(true);
+  // FIX #7: exit dialog state
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(Date.now());
@@ -178,7 +239,7 @@ export function ActiveWorkout() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [restTimer]);
 
-  // ── Load workout + build per-exercise plans ──────────────────────────────────
+  // ── Load workout ─────────────────────────────────────────────────────────────
 
   const loadWorkout = async () => {
     try {
@@ -262,6 +323,36 @@ export function ActiveWorkout() {
       setCustomWeight(plan.suggestedWeight > 0 ? String(plan.suggestedWeight) : '');
       setCustomReps(String(plan.suggestedReps[0]));
     }
+  };
+
+  // ── Exit handling (FIX #7) ────────────────────────────────────────────────
+
+  const handleExitChoice = async (choice: ExitChoice) => {
+    setShowExitDialog(false);
+    if (choice === null) return; // "Keep training"
+
+    if (choice === 'save' && completedSets.length > 0) {
+      // Save whatever was logged so far, with a note that it was partial
+      try {
+        await apiCall('/workouts/log', {
+          method: 'POST',
+          body: JSON.stringify({
+            dayName,
+            completedAt:    new Date().toISOString(),
+            sets:           completedSets,
+            feedback:       '(partial workout)',
+            perceivedEffort,
+            rpeCorrections: {},
+            duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
+          }),
+        });
+        toast.success('Partial workout saved');
+      } catch {
+        toast.error('Could not save — workout discarded');
+      }
+    }
+
+    navigate('/plan');
   };
 
   // ── Set / exercise flow ──────────────────────────────────────────────────────
@@ -385,6 +476,16 @@ export function ActiveWorkout() {
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
+            <div className="flex justify-end mb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-gray-600"
+                onClick={() => navigate('/plan')}
+              >
+                <X className="w-4 h-4 mr-1" /> Cancel
+              </Button>
+            </div>
             <div className="mx-auto mb-3 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center">
               <Clock className="w-8 h-8 text-white" />
             </div>
@@ -606,7 +707,7 @@ export function ActiveWorkout() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
-      {/* Sticky header */}
+      {/* FIX #7: exit button in sticky header */}
       <div className="bg-white border-b sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
@@ -615,12 +716,30 @@ export function ActiveWorkout() {
               Ex. {currentExerciseIndex + 1}/{exercises.length} · Set {currentSet}/{setsForThisExercise}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-400">{progressPct}%</p>
-            <Progress value={progressPct} className="w-20 h-1.5 mt-0.5" />
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <p className="text-xs text-gray-400">{progressPct}%</p>
+              <Progress value={progressPct} className="w-20 h-1.5 mt-0.5" />
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-400 hover:text-red-500 h-8 px-2"
+              onClick={() => setShowExitDialog(true)}
+              title="End workout"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* Exit confirmation dialog */}
+      <ExitDialog
+        open={showExitDialog}
+        hasSets={completedSets.length > 0}
+        onChoice={handleExitChoice}
+      />
 
       <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
 
@@ -744,11 +863,16 @@ export function ActiveWorkout() {
               );
             })()}
 
+            {/* FIX #14: button always enabled; show warning during rest instead of disabling */}
+            {restTimer > 0 && (
+              <p className="text-xs text-amber-600 text-center">
+                ⏱ Rest in progress — you can still log this set early
+              </p>
+            )}
             <Button
               onClick={handleSetComplete}
               className="w-full"
               size="lg"
-              disabled={restTimer > 0}
             >
               <Check className="w-5 h-5 mr-2" />
               Complete Set {currentSet}

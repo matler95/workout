@@ -5,17 +5,11 @@ import { createClient } from "npm:@supabase/supabase-js";
 
 const app = new Hono();
 
-// ── Supabase clients ─────────────────────────────────────────────────────────
-// Service client: used for auth.admin and writes that bypass RLS in rare cases.
-// Anon client with user JWT: used for all data queries — RLS enforces ownership.
-
 const serviceClient = () => createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
-// Returns a Supabase client that runs queries AS the authenticated user,
-// so RLS policies (user_id = auth.uid()) enforce data isolation automatically.
 const userClient = (jwt: string) => createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -31,13 +25,15 @@ app.use("/*", cors({
 }));
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
+// FIX #6: removed redundant c.status(401) calls inside requireAuth;
+// the caller owns the response.
 
 async function requireAuth(c: any): Promise<{ user: any; db: any } | null> {
   const token = c.req.header('Authorization')?.split(' ')[1];
-  if (!token) { c.status(401); return null; }
+  if (!token) return null;
 
   const { data: { user }, error } = await serviceClient().auth.getUser(token);
-  if (error || !user) { c.status(401); return null; }
+  if (error || !user) return null;
 
   return { user, db: userClient(token) };
 }
@@ -81,7 +77,6 @@ app.post("/make-server-975f4bc8/profile/onboarding", async (c) => {
     const body = await c.req.json();
     const { user, db } = auth;
 
-    // Upsert into user_profiles (creates or replaces the profile row)
     const { error } = await db.from('user_profiles').upsert({
       user_id:          user.id,
       name:             body.name || '',
@@ -126,8 +121,6 @@ app.get("/make-server-975f4bc8/profile", async (c) => {
       .maybeSingle();
 
     if (error) return c.json({ error: error.message }, 500);
-
-    // Map DB columns back to camelCase for the frontend
     const profile = data ? mapProfileToClient(data) : null;
     return c.json({ profile });
   } catch (e: any) {
@@ -135,7 +128,7 @@ app.get("/make-server-975f4bc8/profile", async (c) => {
   }
 });
 
-// ── Profile: Update preferences (units, theme, language) ─────────────────────
+// ── Profile: Update preferences ───────────────────────────────────────────────
 
 app.patch("/make-server-975f4bc8/profile/preferences", async (c) => {
   const auth = await requireAuth(c);
@@ -161,8 +154,6 @@ app.patch("/make-server-975f4bc8/profile/preferences", async (c) => {
 });
 
 // ── Workout Plan: Save ────────────────────────────────────────────────────────
-// Replaces all existing plan rows for this user, then inserts fresh ones.
-// Atomically using a transaction-style approach: delete + insert in sequence.
 
 app.post("/make-server-975f4bc8/workouts/plan", async (c) => {
   const auth = await requireAuth(c);
@@ -172,14 +163,12 @@ app.post("/make-server-975f4bc8/workouts/plan", async (c) => {
     const { workouts } = await c.req.json();
     const { user, db } = auth;
 
-    // Delete existing plan days
     const { error: delError } = await db
       .from('workout_plans')
       .delete()
       .eq('user_id', user.id);
     if (delError) return c.json({ error: delError.message }, 500);
 
-    // Insert new days
     const days = Object.entries(workouts).map(([day_name, exercises], idx) => ({
       user_id:    user.id,
       day_name,
@@ -213,7 +202,6 @@ app.get("/make-server-975f4bc8/workouts/plan", async (c) => {
 
     if (error) return c.json({ error: error.message }, 500);
 
-    // Reconstruct the {workouts: {dayName: exercises[]}} shape the frontend expects
     const workouts: Record<string, any[]> = {};
     for (const row of (data || [])) {
       workouts[row.day_name] = row.exercises;
@@ -225,7 +213,9 @@ app.get("/make-server-975f4bc8/workouts/plan", async (c) => {
   }
 });
 
-// ── Workout Log: Save completed session ───────────────────────────────────────
+// ── Workout Log: Save ─────────────────────────────────────────────────────────
+// FIX #3: always use s.exerciseId as the canonical key; never fall back to
+// s.exerciseName so that the progression engine sees consistent IDs.
 
 app.post("/make-server-975f4bc8/workouts/log", async (c) => {
   const auth = await requireAuth(c);
@@ -235,7 +225,6 @@ app.post("/make-server-975f4bc8/workouts/log", async (c) => {
     const body = await c.req.json();
     const { user, db } = auth;
 
-    // 1. Insert session row
     const { data: session, error: sessErr } = await db
       .from('workout_sessions')
       .insert({
@@ -252,11 +241,13 @@ app.post("/make-server-975f4bc8/workouts/log", async (c) => {
 
     if (sessErr) return c.json({ error: sessErr.message }, 500);
 
-    // 2. Insert individual sets
+    // FIX #3: exercise_id must always be the stable DB id (ex.id), never the
+    // display name. ActiveWorkout.tsx sets exerciseId: ex.id — trust that value
+    // and do NOT fall back to exerciseName if exerciseId is present.
     const sets = (body.sets || []).map((s: any) => ({
       session_id:    session.id,
       user_id:       user.id,
-      exercise_id:   s.exerciseId || s.exerciseName,
+      exercise_id:   s.exerciseId,   // ← was: s.exerciseId || s.exerciseName
       exercise_name: s.exerciseName,
       set_number:    s.set,
       weight_kg:     s.weight || 0,
@@ -276,8 +267,8 @@ app.post("/make-server-975f4bc8/workouts/log", async (c) => {
 });
 
 // ── Workout History: Get ──────────────────────────────────────────────────────
-// Returns sessions with their sets nested, newest first.
-// Supports optional ?limit= and ?exercise_id= query params.
+// FIX #2: removed the dead exercise_id query parameter (was declared but never
+// used). The per-exercise endpoint below handles filtered lookups.
 
 app.get("/make-server-975f4bc8/workouts/history", async (c) => {
   const auth = await requireAuth(c);
@@ -285,9 +276,8 @@ app.get("/make-server-975f4bc8/workouts/history", async (c) => {
 
   try {
     const limit = parseInt(c.req.query('limit') || '50');
-    const exerciseId = c.req.query('exercise_id'); // optional filter
 
-    let query = auth.db
+    const { data, error } = await auth.db
       .from('workout_sessions')
       .select(`
         id, day_name, completed_at, duration_minutes,
@@ -301,20 +291,17 @@ app.get("/make-server-975f4bc8/workouts/history", async (c) => {
       .order('completed_at', { ascending: false })
       .limit(limit);
 
-    const { data, error } = await query;
     if (error) return c.json({ error: error.message }, 500);
 
-    // Map to the shape the frontend algorithms expect
     const history = (data || []).map(mapSessionToClient);
-
     return c.json({ history });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
 });
 
-// ── Exercise strength history (for a single exercise) ─────────────────────────
-// Used by ProgressionInsights to get clean per-exercise e1RM trend.
+// ── Exercise strength history ─────────────────────────────────────────────────
+// FIX #5: now queries consistently by exercise_id (the stable DB id).
 
 app.get("/make-server-975f4bc8/workouts/exercise-history", async (c) => {
   const auth = await requireAuth(c);
@@ -324,7 +311,6 @@ app.get("/make-server-975f4bc8/workouts/exercise-history", async (c) => {
     const exerciseId = c.req.query('exercise_id');
     if (!exerciseId) return c.json({ error: 'exercise_id required' }, 400);
 
-    // Use the best_sets_per_session view for clean per-session best sets
     const { data, error } = await auth.db
       .from('best_sets_per_session')
       .select('session_id, exercise_name, completed_at, weight_kg, reps, e1rm_kg')
@@ -349,7 +335,6 @@ app.post("/make-server-975f4bc8/progress/bodyweight", async (c) => {
     const { weight, date } = await c.req.json();
     if (!weight || !date) return c.json({ error: 'weight and date required' }, 400);
 
-    // Upsert: if same user + date exists, update the weight
     const { error } = await auth.db
       .from('bodyweight_log')
       .upsert(
@@ -382,7 +367,6 @@ app.get("/make-server-975f4bc8/progress/bodyweight", async (c) => {
 
     if (error) return c.json({ error: error.message }, 500);
 
-    // Map to {date, weight} shape the frontend uses
     const entries = (data || []).map((r: any) => ({
       date: r.logged_at,
       weight: parseFloat(r.weight_kg),
@@ -395,17 +379,21 @@ app.get("/make-server-975f4bc8/progress/bodyweight", async (c) => {
 });
 
 // ── Weekly volume summary ─────────────────────────────────────────────────────
+// FIX #1: use DATE string (split('T')[0]) instead of full ISO timestamp so the
+// comparison against the DATE column week_start works correctly.
 
 app.get("/make-server-975f4bc8/progress/volume", async (c) => {
   const auth = await requireAuth(c);
   if (!auth) return c.json({ error: 'Unauthorized' }, 401);
 
   try {
+    const oneWeekAgoDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+
     const { data, error } = await auth.db
       .from('weekly_volume')
       .select('*')
       .eq('user_id', auth.user.id)
-      .gte('week_start', new Date(Date.now() - 7 * 86400000).toISOString())
+      .gte('week_start', oneWeekAgoDate)   // ← was: full ISO timestamp
       .order('total_sets', { ascending: false });
 
     if (error) return c.json({ error: error.message }, 500);
@@ -415,7 +403,7 @@ app.get("/make-server-975f4bc8/progress/volume", async (c) => {
   }
 });
 
-// ── Data reset (Profile page) ─────────────────────────────────────────────────
+// ── Data reset ────────────────────────────────────────────────────────────────
 
 app.delete("/make-server-975f4bc8/profile/data", async (c) => {
   const auth = await requireAuth(c);
@@ -423,7 +411,6 @@ app.delete("/make-server-975f4bc8/profile/data", async (c) => {
 
   try {
     const { user, db } = auth;
-    // CASCADE on workout_sessions will delete workout_sets automatically
     await Promise.all([
       db.from('workout_sessions').delete().eq('user_id', user.id),
       db.from('workout_plans').delete().eq('user_id', user.id),

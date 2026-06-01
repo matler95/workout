@@ -6,11 +6,16 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { Badge } from '../components/ui/badge';
-import { TrendingUp, Activity, Calendar, Flame } from 'lucide-react';
+import { TrendingUp, Activity, Calendar, Flame, Info } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
 import { ProgressionInsights } from '../components/ProgressionInsights';
-import type { WorkoutLog as EngineWorkoutLog } from '../../../utils/progressiveOverload';
+import {
+  computeAllSuggestions,
+  type WorkoutLog as EngineWorkoutLog,
+} from '../../../utils/progressiveOverload';
+
+// ─── Local types (match what the API returns) ──────────────────────────────────
 
 interface SetLog {
   exerciseId: string;
@@ -18,14 +23,32 @@ interface SetLog {
   set: number;
   weight: number;
   reps: number;
+  e1rm?: number | null;
   timestamp: string;
 }
 
 interface WorkoutLog {
+  id?: string;
   dayName: string;
   completedAt: string;
   sets: SetLog[];
   perceivedEffort?: number;
+}
+
+// FIX #17: explicit mapper instead of `as unknown as EngineWorkoutLog[]`.
+// The engine only needs { dayName, completedAt, sets[{exerciseId, exerciseName, weight, reps}], perceivedEffort }.
+function toEngineHistory(logs: WorkoutLog[]): EngineWorkoutLog[] {
+  return logs.map(log => ({
+    dayName:         log.dayName,
+    completedAt:     log.completedAt,
+    perceivedEffort: log.perceivedEffort,
+    sets: (log.sets || []).map(s => ({
+      exerciseId:   s.exerciseId,
+      exerciseName: s.exerciseName,
+      weight:       s.weight,
+      reps:         s.reps,
+    })),
+  }));
 }
 
 export function Progress() {
@@ -41,10 +64,10 @@ export function Progress() {
   const loadData = async () => {
     try {
       const [bw, history, vol, prof] = await Promise.all([
-        progressApi.getBodyweight(90),
-        workoutApi.getHistory(100),
-        progressApi.getWeeklyVolume(),
-        profileApi.get(),
+        progressApi.getBodyweight(90).catch(() => []),
+        workoutApi.getHistory(100).catch(() => []),
+        progressApi.getWeeklyVolume().catch(() => []),
+        profileApi.get().catch(() => null),
       ]);
       setBodyweightData(bw);
       setWorkoutHistory(history as WorkoutLog[]);
@@ -69,8 +92,8 @@ export function Progress() {
         byExercise[s.exerciseName].push(s);
       }
       for (const [name, sets] of Object.entries(byExercise)) {
-        const best = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
-        const e1rm = (best as any).e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
+        const best  = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
+        const e1rm  = best.e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
         if (!map[name]) map[name] = [];
         map[name].push({ date, weight: best.weight, reps: best.reps, e1rm });
       }
@@ -222,6 +245,18 @@ export function Progress() {
               ))}
             </div>
 
+            {/* FIX #16: body composition disclaimer */}
+            {(estBodyFat !== null || bmi !== null) && (
+              <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500">
+                <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-gray-400" />
+                <p>
+                  Body fat % and lean mass are rough estimates using the Deurenberg equation applied
+                  to BMI. Accuracy varies significantly by individual — use these as directional
+                  trends only, not precise measurements.
+                </p>
+              </div>
+            )}
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -252,11 +287,8 @@ export function Progress() {
 
           {/* ── Strength ──────────────────────────────────────────────────── */}
           <TabsContent value="strength" className="space-y-4">
-            {/*
-              Pass history down — ProgressionInsights will skip its own fetch
-              since we already loaded it for this page.
-            */}
-            <ProgressionInsights history={workoutHistory as unknown as EngineWorkoutLog[]} />
+            {/* FIX #17: use explicit mapper instead of `as unknown as EngineWorkoutLog[]` */}
+            <ProgressionInsights history={toEngineHistory(workoutHistory)} />
 
             {exerciseNames.length > 0 && (
               <>
@@ -387,7 +419,7 @@ export function Progress() {
           <TabsContent value="streaks" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: streakInfo.current,              label: 'Current streak', sub: 'weeks', icon: <Flame className="w-5 h-5 text-orange-500" /> },
+                { value: streakInfo.current,              label: 'Weeks on target', sub: 'consecutive', icon: <Flame className="w-5 h-5 text-orange-500" /> },
                 { value: streakInfo.longest,              label: 'Best streak',    sub: 'weeks' },
                 { value: `${streakInfo.consistency}%`,   label: 'Consistency',    sub: 'last 30 days' },
               ].map(({ value, label, sub, icon }) => (
@@ -406,6 +438,11 @@ export function Progress() {
                 </Card>
               ))}
             </div>
+
+            {/* FIX #15: brief note explaining what "weeks on target" means */}
+            <p className="text-xs text-gray-400 px-1">
+              A week counts as "on target" when you complete at least {profile?.trainingDays ?? 3} workouts in that calendar week.
+            </p>
 
             <Card>
               <CardHeader className="pb-2">

@@ -8,7 +8,7 @@ import { Input } from '../components/ui/input';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
 import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, ChevronRight } from 'lucide-react';
-import { format, parseISO, startOfWeek, subDays, isSameDay } from 'date-fns';
+import { format, parseISO, startOfWeek, subDays } from 'date-fns';
 import { toast } from 'sonner';
 
 export function Dashboard() {
@@ -26,11 +26,12 @@ export function Dashboard() {
 
   useEffect(() => { loadData(); }, []);
 
+  // FIX #12: every request has its own catch so a single failure can't blank the dashboard.
   const loadData = async () => {
     try {
       const [prof, plan, history, bw] = await Promise.all([
-        profileApi.get(),
-        planApi.get().catch(() => null),           // planApi imported directly — errors still caught
+        profileApi.get().catch(() => null),
+        planApi.get().catch(() => null),
         workoutApi.getHistory(50).catch(() => []),
         progressApi.getBodyweight(30).catch(() => []),
       ]);
@@ -225,7 +226,8 @@ export function Dashboard() {
             <CardContent className="py-3 flex items-center gap-3">
               <Flame className="w-8 h-8 text-orange-500 flex-shrink-0" />
               <div>
-                <p className="font-semibold text-orange-800">{streak} week streak! 🔥</p>
+                {/* FIX #15: renamed to "weeks on target" to avoid confusion with daily streaks */}
+                <p className="font-semibold text-orange-800">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
                 <p className="text-xs text-orange-600">Keep it going</p>
               </div>
             </CardContent>
