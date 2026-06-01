@@ -34,15 +34,38 @@ interface OnboardingData {
   injuries: string;
 }
 
-// FIX #11: client-side range validation for demographic inputs.
+// ─── Validation ────────────────────────────────────────────────────────────────
+
+// FIX #2 (expanded): client-side range validation for all numeric onboarding inputs.
+// These ranges are intentionally generous — they're a sanity check, not medical criteria.
+//   Age:            13–100  (DB allows 10–120; we tighten slightly for realistic users)
+//   Height:        100–250 cm (DB allows 50–300)
+//   Weight:         30–300 kg  (DB allows 20–500)
+//   Training days:   1–7   (DB allows 1–7; UI previously restricted to 2 — fix #3)
+//   Session length: 15–180 min (DB minimum is 15)
+
 function validateDemographics(data: OnboardingData): string | null {
   const age    = parseInt(data.age);
   const height = parseFloat(data.height);
   const weight = parseFloat(data.weight);
 
-  if (!data.age || isNaN(age)       || age    < 10  || age    > 120) return 'Age must be between 10 and 120';
-  if (!data.height || isNaN(height) || height < 50  || height > 300) return 'Height must be between 50 and 300 cm';
-  if (!data.weight || isNaN(weight) || weight < 20  || weight > 500) return 'Weight must be between 20 and 500 kg';
+  if (!data.age    || isNaN(age))    return 'Please enter your age.';
+  if (age    < 13  || age    > 100)  return 'Age must be between 13 and 100.';
+  if (!data.height || isNaN(height)) return 'Please enter your height.';
+  if (height < 100 || height > 250)  return 'Height must be between 100 and 250 cm.';
+  if (!data.weight || isNaN(weight)) return 'Please enter your weight.';
+  if (weight < 30  || weight > 300)  return 'Weight must be between 30 and 300 kg.';
+
+  return null;
+}
+
+function validateAvailability(data: OnboardingData): string | null {
+  // FIX #3: training days now allows 1 (min was previously 2 in the UI slider,
+  // but the DB always accepted 1–7). This validation confirms the value is in range.
+  if (data.trainingDays < 1 || data.trainingDays > 7)
+    return 'Training days must be between 1 and 7.';
+  if (data.sessionLength < 15 || data.sessionLength > 180)
+    return 'Session length must be between 15 and 180 minutes.';
   return null;
 }
 
@@ -76,9 +99,14 @@ export function Onboarding() {
   const totalSteps = 10;
 
   const handleNext = () => {
-    // FIX #11: validate demographics on step 4 before advancing
+    // FIX #2: validate demographics on step 4 before advancing
     if (step === 4) {
       const err = validateDemographics(data);
+      if (err) { toast.error(err); return; }
+    }
+    // FIX #3 / #2: validate availability on step 6
+    if (step === 6) {
+      const err = validateAvailability(data);
       if (err) { toast.error(err); return; }
     }
     if (step < totalSteps) setStep(step + 1);
@@ -191,7 +219,7 @@ export function Onboarding() {
             </div>
           )}
 
-          {/* Step 4 — Demographics (with inline hints) */}
+          {/* Step 4 — Demographics */}
           {step === 4 && (
             <div className="space-y-4">
               <CardTitle>Tell us about yourself</CardTitle>
@@ -214,45 +242,45 @@ export function Onboarding() {
                   </RadioGroup>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  {/* FIX #11: explicit min/max hints on each field */}
+                  {/* FIX #2: tightened to realistic ranges (13–100, 100–250, 30–300) */}
                   <div className="space-y-2">
                     <Label htmlFor="age">Age</Label>
                     <Input
                       id="age"
                       type="number"
-                      min={10}
-                      max={120}
+                      min={13}
+                      max={100}
                       value={data.age}
                       onChange={e => setData({ ...data, age: e.target.value })}
                       placeholder="25"
                     />
-                    <p className="text-xs text-gray-400">10–120</p>
+                    <p className="text-xs text-gray-400">13–100</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="height">Height (cm)</Label>
                     <Input
                       id="height"
                       type="number"
-                      min={50}
-                      max={300}
+                      min={100}
+                      max={250}
                       value={data.height}
                       onChange={e => setData({ ...data, height: e.target.value })}
                       placeholder="175"
                     />
-                    <p className="text-xs text-gray-400">50–300 cm</p>
+                    <p className="text-xs text-gray-400">100–250 cm</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="weight">Weight (kg)</Label>
                     <Input
                       id="weight"
                       type="number"
-                      min={20}
-                      max={500}
+                      min={30}
+                      max={300}
                       value={data.weight}
                       onChange={e => setData({ ...data, weight: e.target.value })}
                       placeholder="70"
                     />
-                    <p className="text-xs text-gray-400">20–500 kg</p>
+                    <p className="text-xs text-gray-400">30–300 kg</p>
                   </div>
                 </div>
               </div>
@@ -295,15 +323,21 @@ export function Onboarding() {
               <CardTitle>Training Availability</CardTitle>
               <div className="space-y-4">
                 <div className="space-y-2">
+                  {/* FIX #3: min changed from 2 to 1 — some users train only once a week */}
                   <Label>Training days per week: {data.trainingDays}</Label>
                   <Slider
                     value={[data.trainingDays]}
                     onValueChange={([v]) => setData({ ...data, trainingDays: v })}
-                    min={2} max={6} step={1}
+                    min={1} max={7} step={1}
                   />
                   <div className="flex justify-between text-xs text-gray-500">
-                    <span>2 days</span><span>6 days</span>
+                    <span>1 day</span><span>7 days</span>
                   </div>
+                  {data.trainingDays === 1 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      One session per week is a great start — full-body training works best at this frequency.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Session length (minutes): {data.sessionLength}</Label>
@@ -340,6 +374,11 @@ export function Onboarding() {
                   </div>
                 ))}
               </RadioGroup>
+              {data.trainingDays <= 2 && data.workoutStyle !== '' && data.workoutStyle !== 'full_body' && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
+                  Full body training is usually most effective with {data.trainingDays} day{data.trainingDays > 1 ? 's' : ''}/week.
+                </p>
+              )}
             </div>
           )}
 

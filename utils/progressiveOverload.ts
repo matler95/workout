@@ -1,10 +1,18 @@
 /**
  * Progressive Overload Engine
  *
- * FIX #2: WorkoutLog now carries rpeCorrections. computeAllSuggestions reads
- * them so that a first-session RPE calibration actually affects the next
- * session's suggested weight — instead of being displayed in the UI but silently
- * discarded.
+ * FIX #2 (previous): WorkoutLog carries rpeCorrections so first-session
+ *   calibrations propagate to the next suggestion.
+ *
+ * FIX #4 (this patch): One-session dead zone eliminated.
+ *   Previously, sessions.length < 2 always returned action:'maintain' with
+ *   confidence:'low' and no directional guidance. Now the engine generates a
+ *   low-confidence directional suggestion based on the available data:
+ *     - RPE from the session (if provided)
+ *     - Avg reps vs the target range
+ *     - Whether there is an RPE correction override
+ *   This gives the user something actionable after their first session instead
+ *   of just "come back after your second session."
  */
 
 export type ExerciseTier =
@@ -143,6 +151,135 @@ function isStalling(e1RMs: number[], windowSize = 3): boolean {
   return (last - first) / first < 0.01;
 }
 
+// ─── FIX #4: One-session directional suggestion ───────────────────────────────
+//
+// When only a single session exists we can still give useful guidance.
+// We have three signals:
+//   1. avgReps vs target range  → weight too light / too heavy / about right
+//   2. perceivedEffort (RPE)    → subjective difficulty
+//   3. rpeCorrection override   → already handled by computeAllSuggestions
+//
+// Rules (conservative — confidence is always 'low'):
+//   RPE ≤ 4 AND reps > repHi   → suggest increase_weight (too easy on both counts)
+//   RPE ≤ 4                    → suggest increase_weight (felt very easy)
+//   reps > repHi               → suggest increase_reps target for now, weight next
+//   RPE ≥ 9                    → suggest deload (too hard on first exposure)
+//   reps < repLo               → maintain, focus on hitting rep floor
+//   otherwise                  → maintain, aiming for top of rep range
+
+function buildOneSuggestion(
+  exerciseName: string,
+  session: SessionData,
+): ProgressionSuggestion {
+  const tier = classifyExercise(exerciseName);
+  const [repLo, repHi] = getRepTarget(tier);
+
+  const currentWeight = topSetWeight(session.sets);
+  const currentE1RM   = sessionE1RM(session.sets);
+  const avgReps       = avgRepsAtTopWeight(session.sets);
+  const rpe           = session.perceivedEffort ?? 6; // default: moderate
+
+  // Bodyweight: only rep guidance
+  if (tier === 'bodyweight') {
+    if (avgReps > repHi && rpe <= 6) {
+      return {
+        action: 'increase_reps',
+        currentWeight: 0,
+        suggestedReps: [repLo + 2, repHi + 2],
+        currentE1RM,
+        previousE1RM: null,
+        e1RMTrend: 'unknown',
+        confidence: 'low',
+        reasoning: `First session: you averaged ${Math.round(avgReps)} reps — above the ${repHi}-rep ceiling at RPE ${rpe}. Aim for ${repLo + 2}–${repHi + 2} reps next time.`,
+        tip: 'One session isn\'t enough to confirm progress, but this is a good sign.',
+      };
+    }
+    return {
+      action: 'maintain',
+      currentWeight: 0,
+      suggestedReps: [repLo, repHi],
+      currentE1RM,
+      previousE1RM: null,
+      e1RMTrend: 'unknown',
+      confidence: 'low',
+      reasoning: `First session: ${Math.round(avgReps)} reps. Keep working toward ${repHi} clean reps before progressing. Complete a second session to get a more reliable suggestion.`,
+    };
+  }
+
+  // Weighted: RPE + rep range signal
+  if ((rpe <= 4 && avgReps > repHi) || rpe <= 3) {
+    const increment = computeIncrease(tier, currentWeight);
+    const suggested = Math.round((currentWeight + increment) * 10) / 10;
+    return {
+      action: 'increase_weight',
+      currentWeight,
+      suggestedWeight: suggested,
+      suggestedReps: [repLo, repHi],
+      currentE1RM,
+      previousE1RM: null,
+      e1RMTrend: 'unknown',
+      confidence: 'low',
+      reasoning: `First session: RPE ${rpe}/10${avgReps > repHi ? ` and ${Math.round(avgReps)} reps (above the ${repHi}-rep ceiling)` : ''}. Starting weight looks conservative — try ${suggested} kg next session.`,
+      tip: 'Low confidence: one session is not enough to confirm this. Adjust if it feels wrong.',
+    };
+  }
+
+  if (rpe >= 9) {
+    const reduced = computeDeloadWeight(tier, currentWeight);
+    return {
+      action: 'deload',
+      currentWeight,
+      suggestedWeight: reduced,
+      suggestedReps: [repLo, repHi],
+      currentE1RM,
+      previousE1RM: null,
+      e1RMTrend: 'unknown',
+      confidence: 'low',
+      reasoning: `First session: RPE ${rpe}/10 — the starting weight may be too high. Try ${reduced} kg next session to build form and confidence.`,
+      tip: 'Starting lighter is always safer than starting too heavy.',
+    };
+  }
+
+  if (avgReps > repHi && rpe <= 7) {
+    return {
+      action: 'maintain',
+      currentWeight,
+      suggestedReps: [repHi, repHi],
+      currentE1RM,
+      previousE1RM: null,
+      e1RMTrend: 'unknown',
+      confidence: 'low',
+      reasoning: `First session: ${Math.round(avgReps)} reps at ${currentWeight} kg (above target range) but RPE was ${rpe}/10. Stay at this weight and aim to hit ${repHi} reps consistently before adding load.`,
+    };
+  }
+
+  if (avgReps < repLo) {
+    return {
+      action: 'maintain',
+      currentWeight,
+      suggestedReps: [repLo, repHi],
+      currentE1RM,
+      previousE1RM: null,
+      e1RMTrend: 'unknown',
+      confidence: 'low',
+      reasoning: `First session: ${Math.round(avgReps)} reps — below the ${repLo}–${repHi} target. Focus on hitting ${repLo} clean reps before adding weight. Complete a second session for a better suggestion.`,
+    };
+  }
+
+  // In range and moderate RPE — textbook first session
+  return {
+    action: 'maintain',
+    currentWeight,
+    suggestedReps: [repLo, repHi],
+    currentE1RM,
+    previousE1RM: null,
+    e1RMTrend: 'unknown',
+    confidence: 'low',
+    reasoning: `First session: ${Math.round(avgReps)} reps at ${currentWeight} kg (RPE ${rpe}/10) — right in the target range. Complete a second session at the same weight to confirm before progressing.`,
+    tip: 'Good first session. One more at this weight and the engine will have enough data to make a confident recommendation.',
+  };
+}
+
 export function computeSuggestion(
   exerciseName: string,
   sessions: SessionData[],
@@ -181,6 +318,11 @@ export function computeSuggestion(
   const tooHard        = lastRPE >= 9;
   const stalling       = sessions.length >= 3 && isStalling(allE1RMs, 3);
   const regressedBadly = previousE1RM !== null && currentE1RM < previousE1RM * 0.93;
+
+  // FIX #4: delegate single-session path to the new directional helper
+  if (sessions.length === 1) {
+    return buildOneSuggestion(exerciseName, lastSession);
+  }
 
   if (regressedBadly && sessions.length >= 2) {
     return {
@@ -242,19 +384,6 @@ export function computeSuggestion(
   const hitUpper    = avgReps >= repHi;
   const withinRange = avgReps >= repLo && avgReps < repHi;
   const belowRange  = avgReps < repLo;
-
-  if (sessions.length < 2) {
-    return {
-      action: 'maintain',
-      currentWeight,
-      suggestedReps: [repLo, repHi],
-      currentE1RM,
-      previousE1RM: null,
-      e1RMTrend: 'unknown',
-      confidence: 'low',
-      reasoning: `Only one session logged. Complete another session at ${currentWeight} kg to establish a baseline.`,
-    };
-  }
 
   if (hitUpper && !tooHard) {
     const increment = computeIncrease(tier, currentWeight);
@@ -364,19 +493,9 @@ export interface WorkoutLog {
     reps: number;
   }>;
   perceivedEffort?: number;
-  // FIX #2: rpeCorrections is now part of WorkoutLog so computeAllSuggestions
-  // can apply first-session calibrations before the engine takes over.
   rpeCorrections?: Record<string, number>;
 }
 
-/**
- * Given the full workout history, returns a map of exerciseId → suggestion.
- *
- * FIX #2: When only one session exists for an exercise AND rpeCorrections
- * contains an entry for that exercise, the corrected weight is used as the
- * starting point for the suggestion instead of the raw logged weight.
- * This ensures the preview shown on the feedback screen is actually honoured.
- */
 export function computeAllSuggestions(
   workoutHistory: WorkoutLog[],
 ): Record<string, ProgressionSuggestion> {
@@ -401,7 +520,6 @@ export function computeAllSuggestions(
         sets,
         perceivedEffort: log.perceivedEffort,
       });
-      // Capture the RPE correction from the session it was logged with
       if (log.rpeCorrections?.[key] !== undefined) {
         byExercise[key].rpeCorrection = log.rpeCorrections[key];
       }
@@ -413,9 +531,7 @@ export function computeAllSuggestions(
   for (const [key, { name, sessions, rpeCorrection }] of Object.entries(byExercise)) {
     const suggestion = computeSuggestion(name, sessions);
 
-    // FIX #2: If there is only one session and a first-session RPE correction
-    // was saved, override the suggestion to use the corrected weight.
-    // The engine will take full control from session 2 onward.
+    // RPE correction override: one session + saved correction → use corrected weight
     if (
       sessions.length === 1 &&
       rpeCorrection !== undefined &&

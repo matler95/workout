@@ -396,13 +396,22 @@ app.get("/make-server-975f4bc8/progress/volume", async (c) => {
   if (!auth) return c.json({ error: 'Unauthorized' }, 401);
 
   try {
-    const oneWeekAgoDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    // Compute the Monday of the current ISO week in UTC.
+    // new Date() gives today; getUTCDay() returns 0=Sun…6=Sat.
+    // Subtracting (day + 6) % 7 days always lands on Monday.
+    const now = new Date();
+    const dayOfWeek = now.getUTCDay(); // 0 = Sun
+    const daysToMonday = (dayOfWeek + 6) % 7;
+    const weekStart = new Date(now);
+    weekStart.setUTCDate(now.getUTCDate() - daysToMonday);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const weekStartDate = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD
 
     const { data, error } = await auth.db
       .from('weekly_volume')
       .select('*')
       .eq('user_id', auth.user.id)
-      .gte('week_start', oneWeekAgoDate)
+      .gte('week_start', weekStartDate)
       .order('total_sets', { ascending: false });
 
     if (error) return c.json({ error: error.message }, 500);
