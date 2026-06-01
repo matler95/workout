@@ -531,9 +531,11 @@ export function computeAllSuggestions(
   for (const [key, { name, sessions, rpeCorrection }] of Object.entries(byExercise)) {
     const suggestion = computeSuggestion(name, sessions);
 
-    // RPE correction override: one session + saved correction → use corrected weight
+    // RPE correction override: if a saved rpeCorrection exists for this
+    // exercise, use it as the suggested weight regardless of session count.
+    // Previously this only fired for sessions.length === 1, silently
+    // ignoring corrections logged across multiple sessions.
     if (
-      sessions.length === 1 &&
       rpeCorrection !== undefined &&
       rpeCorrection > 0 &&
       suggestion.action !== 'insufficient_data'
@@ -544,8 +546,10 @@ export function computeAllSuggestions(
           ...suggestion,
           action: rpeCorrection !== suggestion.currentWeight ? 'increase_weight' : 'maintain',
           suggestedWeight: rpeCorrection,
-          reasoning: `Starting weight adjusted to ${rpeCorrection} kg based on your effort rating from the first session. Complete another session to refine further.`,
-          confidence: 'medium',
+          reasoning: sessions.length <= 1
+            ? `Starting weight adjusted to ${rpeCorrection} kg based on your effort rating from the first session. Complete another session to refine further.`
+            : `Weight adjusted to ${rpeCorrection} kg based on your RPE calibration. The progressive override from your initial calibration is being applied.`,
+          confidence: sessions.length <= 1 ? 'medium' : suggestion.confidence,
         };
         continue;
       }

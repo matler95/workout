@@ -265,25 +265,24 @@ export const planApi = {
     }
 
     // Step 2: delete days no longer in the plan.
-    // FIX: Postgres IN clauses require single-quoted string literals.
-    // The previous code used double-quotes, which Postgres treats as column
-    // identifiers rather than string values — so the DELETE never fired and
-    // stale days accumulated silently.
-    // We now pass the array directly to the Supabase client and let it build
-    // the correct parameterised query via .in(), which avoids any quoting
-    // issues entirely.
-    if (incomingDayNames.length > 0) {
+    // FIX: Instead of using .not().in() with string interpolation (which is
+    // fragile and caused double-quoted identifiers), we fetch the existing
+    // day names and use the Supabase .in() filter with a proper array.
+    const { data: existingRows, error: fetchErr } = await supabase
+      .from('workout_plans')
+      .select('day_name')
+      .eq('user_id', userId);
+    if (fetchErr) throw fetchErr;
+
+    const existingDayNames = (existingRows || []).map((r: any) => r.day_name);
+    const daysToDelete = existingDayNames.filter(d => !incomingDayNames.includes(d));
+
+    if (daysToDelete.length > 0) {
       const { error: delError } = await supabase
         .from('workout_plans')
         .delete()
         .eq('user_id', userId)
-        .not('day_name', 'in', `(${incomingDayNames.map(d => `'${d.replace(/'/g, "''")}'`).join(',')})`);
-      if (delError) throw delError;
-    } else {
-      const { error: delError } = await supabase
-        .from('workout_plans')
-        .delete()
-        .eq('user_id', userId);
+        .in('day_name', daysToDelete);
       if (delError) throw delError;
     }
   },
@@ -316,9 +315,11 @@ export const workoutApi = {
    * loading full history and filtering in JS.
    */
   getExerciseHistory: async (exerciseId: string): Promise<ExerciseHistoryPoint[]> => {
+    const userId = await getUserId();
     const { data, error } = await supabase
       .from('best_sets_per_session')
       .select('session_id, exercise_name, completed_at, weight_kg, reps, e1rm_kg')
+      .eq('user_id', userId)
       .eq('exercise_id', exerciseId)
       .order('completed_at', { ascending: true });
 

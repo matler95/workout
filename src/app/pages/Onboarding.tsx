@@ -355,10 +355,10 @@ export function Onboarding() {
                   <Slider
                     value={[data.sessionLength]}
                     onValueChange={([v]) => setData({ ...data, sessionLength: v })}
-                    min={30} max={120} step={15}
+                    min={15} max={120} step={15}
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>30 min</span><span>120 min</span>
+                    <span>15 min</span><span>120 min</span>
                   </div>
                 </div>
               </div>
