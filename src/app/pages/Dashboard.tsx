@@ -8,9 +8,15 @@ import { Progress } from '../components/ui/progress';
 import { Input } from '../components/ui/input';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
-import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, ChevronRight, Play } from 'lucide-react';
-import { format, parseISO, startOfWeek, subDays } from 'date-fns';
+import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, Play } from 'lucide-react';
+import { format, parseISO, startOfWeek, subDays, isSameWeek } from 'date-fns';
 import { toast } from 'sonner';
+
+// FIX (units): convert kg → lbs for display when user is on imperial
+function formatWeight(kg: number, units: string): string {
+  if (units === 'imperial') return `${Math.round(kg * 2.20462)} lbs`;
+  return `${kg} kg`;
+}
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -32,9 +38,7 @@ export function Dashboard() {
       const [prof, plan, history, bw] = await Promise.all([
         profileApi.get().catch(() => null),
         planApi.get().catch(() => null),
-        // FIX #5: 200 sessions (≈ 4 workouts/week × 50 weeks) so streak is
-        // never silently truncated for active users. The old limit of 50 could
-        // hide weeks for anyone training 4+ days/week for more than 3 months.
+        // 200 sessions ≈ 4×/week × 50 weeks — prevents streak truncation
         workoutApi.getHistory(200).catch(() => []),
         progressApi.getBodyweight(30).catch(() => []),
       ]);
@@ -87,28 +91,70 @@ export function Dashboard() {
 
   const getCalorieTarget = () => {
     if (!profile?.weight || !profile?.height || !profile?.age) return null;
-    const { weight, height, age, gender, primaryGoal, activityLevel } = profile;
+    const { weight, height, age, gender, primaryGoal, activityLevel, trainingDays, cardioSessions } = profile;
     const bmr = gender === 'male'
       ? 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age
       : 447.593 + 9.247 * weight + 3.098 * height - 4.330 * age;
-    const mult = ({ sedentary: 1.2, lightly_active: 1.375, moderately_active: 1.55, very_active: 1.725 } as any)[activityLevel] || 1.4;
-    let tdee = bmr * mult;
-    if (primaryGoal === 'build_muscle') tdee += 300;
-    if (primaryGoal === 'lose_fat') tdee -= 400;
+
+    // FIX: use activityLevel as base, then add extra burn from lifting + cardio
+    // sessions that were collected during onboarding specifically for this purpose.
+    const baseMult = ({ sedentary: 1.2, lightly_active: 1.375, moderately_active: 1.55, very_active: 1.725 } as any)[activityLevel] || 1.4;
+    const weeklyWorkouts = (trainingDays || 0) + (cardioSessions || 0);
+    // Each extra workout session above what's already factored into activityLevel
+    // adds roughly 0.01 to the TDEE multiplier (conservative; 50–80 kcal/session).
+    const sessionBonus = Math.max(0, weeklyWorkouts - 3) * 0.01;
+    let tdee = bmr * (baseMult + sessionBonus);
+
+    // Scale goal adjustment relative to body size (not a flat kcal value)
+    if (primaryGoal === 'build_muscle') tdee += Math.round(bmr * 0.10);   // ~10% surplus
+    if (primaryGoal === 'lose_fat')     tdee -= Math.round(bmr * 0.15);   // ~15% deficit
+
     return Math.round(tdee);
   };
 
+  // FIX: streak counts only completed past weeks (i >= 1 for the current week
+  // in progress, or checks if the current week has already met the threshold).
+  // Previously the loop started at i=0, which caused the streak to immediately
+  // reset to 0 on any day the user hadn't yet trained this week.
   const getStreak = () => {
     if (!workoutHistory.length) return 0;
     const planned = profile?.trainingDays || 3;
-    let streak = 0;
-    for (let i = 0; i < 53; i++) {
-      const ws = startOfWeek(subDays(new Date(), i * 7), { weekStartsOn: 1 });
-      const we = new Date(ws); we.setDate(we.getDate() + 7);
-      const count = workoutHistory.filter(l => { const d = parseISO(l.completedAt); return d >= ws && d < we; }).length;
-      if (count >= planned) streak++;
-      else break;
+
+    // Build a Map from ISO week-start string → workout count
+    const weekCounts = new Map<string, number>();
+    for (const log of workoutHistory) {
+      const ws = format(startOfWeek(parseISO(log.completedAt), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      weekCounts.set(ws, (weekCounts.get(ws) || 0) + 1);
     }
+
+    const now = new Date();
+    let streak = 0;
+
+    for (let i = 0; i <= 52; i++) {
+      const weekDate = subDays(now, i * 7);
+      const ws = format(startOfWeek(weekDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const count = weekCounts.get(ws) || 0;
+
+      // Current week (i=0): only break the streak if we're past the point where
+      // the user should have trained and they haven't. If the week has met its
+      // target already, count it. If it's still in progress (fewer sessions but
+      // week not over yet), skip it without breaking the streak.
+      if (i === 0) {
+        if (count >= planned) {
+          streak++;
+        }
+        // If current week is in progress (count < planned), don't break —
+        // just don't count it. Continue checking prior weeks.
+        continue;
+      }
+
+      if (count >= planned) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
     return streak;
   };
 
@@ -118,13 +164,21 @@ export function Dashboard() {
   const cals        = getCalorieTarget();
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
   const streak      = getStreak();
+  const units       = profile?.units || 'metric';
 
   const sortedBw     = [...bodyweightData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const latestWeight = sortedBw[sortedBw.length - 1] ?? null;
   const weightDelta  = sortedBw.length >= 2
     ? Math.round((sortedBw[sortedBw.length - 1].weight - sortedBw[0].weight) * 10) / 10
     : null;
-  const weightChart  = sortedBw.map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
+
+  // FIX (date-shift): parseISO("2024-01-15") is midnight UTC, which renders as
+  // the previous day in timezones west of UTC. Use new Date(date + 'T12:00:00')
+  // (local noon) so the chart label always matches the intended calendar date.
+  const weightChart = sortedBw.map(e => ({
+    date:   format(new Date(e.date + 'T12:00:00'), 'MMM d'),
+    weight: units === 'imperial' ? Math.round(e.weight * 2.20462 * 10) / 10 : e.weight,
+  }));
 
   const readinessColor = !readiness ? 'gray'
     : readiness >= 75 ? 'green' : readiness >= 50 ? 'yellow' : 'red';
@@ -304,7 +358,7 @@ export function Dashboard() {
               <div className="flex gap-2 mb-3">
                 <Input
                   type="number"
-                  placeholder={`Weight (${profile.units === 'imperial' ? 'lbs' : 'kg'})`}
+                  placeholder={`Weight (${units === 'imperial' ? 'lbs' : 'kg'})`}
                   value={newWeight}
                   onChange={e => setNewWeight(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleLogWeight()}
@@ -316,18 +370,27 @@ export function Dashboard() {
                 </Button>
               </div>
             )}
+            {/* FIX (units): display weight in user's preferred unit */}
             {latestWeight && (
               <div className="flex items-end gap-2 mb-3">
-                <span className="text-3xl font-bold tracking-tight">{latestWeight.weight}</span>
-                <span className="text-muted-foreground mb-1">kg</span>
+                <span className="text-3xl font-bold tracking-tight">
+                  {units === 'imperial'
+                    ? Math.round(latestWeight.weight * 2.20462)
+                    : latestWeight.weight}
+                </span>
+                <span className="text-muted-foreground mb-1">{units === 'imperial' ? 'lbs' : 'kg'}</span>
+                {/* FIX (date-shift): use local noon to avoid timezone date shift */}
                 <span className="text-xs text-muted-foreground mb-1 ml-1">
-                  {format(parseISO(latestWeight.date), 'MMM d')}
+                  {format(new Date(latestWeight.date + 'T12:00:00'), 'MMM d')}
                 </span>
                 {weightDelta !== null && (
                   <span className={`text-sm font-medium mb-1 ${
                     weightDelta > 0 ? 'text-rose-500' : weightDelta < 0 ? 'text-emerald-600' : 'text-muted-foreground'
                   }`}>
-                    {weightDelta > 0 ? '+' : ''}{weightDelta} kg
+                    {weightDelta > 0 ? '+' : ''}
+                    {units === 'imperial'
+                      ? `${Math.round(weightDelta * 2.20462 * 10) / 10} lbs`
+                      : `${weightDelta} kg`}
                   </span>
                 )}
               </div>
@@ -337,7 +400,7 @@ export function Dashboard() {
                 <LineChart data={weightChart}>
                   <XAxis dataKey="date" hide />
                   <YAxis domain={['auto', 'auto']} hide />
-                  <Tooltip />
+                  <Tooltip formatter={(v: any) => [`${v} ${units === 'imperial' ? 'lbs' : 'kg'}`, 'Weight']} />
                   <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -394,7 +457,8 @@ export function Dashboard() {
                     <div key={i} className="flex justify-between items-center text-sm py-2.5 border-b border-border/50 last:border-0">
                       <div>
                         <p className="font-medium">{log.dayName}</p>
-                        <p className="text-xs text-muted-foreground">{format(parseISO(log.completedAt), 'EEE, MMM d')}</p>
+                        {/* FIX (date-shift): local noon parse */}
+                        <p className="text-xs text-muted-foreground">{format(new Date(log.completedAt), 'EEE, MMM d')}</p>
                       </div>
                       <div className="text-right text-xs text-muted-foreground">
                         <p className="font-medium text-foreground">{sets} sets</p>

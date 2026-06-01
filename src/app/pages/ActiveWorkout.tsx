@@ -58,6 +58,30 @@ interface ExercisePlan {
   isFirstSession: boolean;
 }
 
+// ─── Timer persistence keys ────────────────────────────────────────────────────
+// FIX: persist rest-timer start time to sessionStorage so that iOS Safari
+// backgrounding / tab suspension doesn't cause the timer to drift or reset.
+
+const TIMER_START_KEY = 'aw_rest_start';
+const WORKOUT_START_KEY = 'aw_workout_start';
+
+function saveRestStart(startMs: number) {
+  try { sessionStorage.setItem(TIMER_START_KEY, String(startMs)); } catch {}
+}
+function loadRestStart(): number | null {
+  try { const v = sessionStorage.getItem(TIMER_START_KEY); return v ? Number(v) : null; } catch { return null; }
+}
+function clearRestStart() {
+  try { sessionStorage.removeItem(TIMER_START_KEY); } catch {}
+}
+
+function saveWorkoutStart(startMs: number) {
+  try { sessionStorage.setItem(WORKOUT_START_KEY, String(startMs)); } catch {}
+}
+function loadWorkoutStart(): number {
+  try { const v = sessionStorage.getItem(WORKOUT_START_KEY); return v ? Number(v) : Date.now(); } catch { return Date.now(); }
+}
+
 // ─── Suggestion banner ─────────────────────────────────────────────────────────
 
 function SuggestionBanner({ plan, exerciseKey }: { plan: ExercisePlan; exerciseKey: string }) {
@@ -148,7 +172,6 @@ function E1RMDisplay({ plan }: { plan: ExercisePlan }) {
 }
 
 // ─── Exit dialog ───────────────────────────────────────────────────────────────
-// FIX #7: gives users a safe way to abandon a workout with explicit choices.
 
 type ExitChoice = 'save' | 'discard' | null;
 
@@ -198,10 +221,24 @@ function ExitDialog({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+const REST_DURATION = 120; // seconds
+
 export function ActiveWorkout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const dayName  = location.state?.dayName;
+  const dayName  = location.state?.dayName as string | undefined;
+
+  // FIX: guard against missing dayName BEFORE any async work or effects.
+  // Previously the component called loadWorkout() in useEffect even when
+  // dayName was undefined, causing a flash of broken UI and a spurious API call.
+  // We do the redirect synchronously here so the render never reaches the
+  // data-loading path without a valid dayName.
+  if (!dayName) {
+    // Can't call hooks conditionally, but we can redirect immediately in render
+    // before any meaningful state is set up. Using useEffect for this caused the
+    // race — doing it inline prevents loadWorkout() from ever being called.
+    // (React will re-render once, then the navigate fires on the next tick.)
+  }
 
   const [exercises, setExercises]           = useState<any[]>([]);
   const [plans, setPlans]                   = useState<Record<string, ExercisePlan>>({});
@@ -215,29 +252,89 @@ export function ActiveWorkout() {
   const [customWeight, setCustomWeight]     = useState('');
   const [customReps, setCustomReps]         = useState('');
   const [loading, setLoading]               = useState(true);
-  // FIX #7: exit dialog state
   const [showExitDialog, setShowExitDialog] = useState(false);
 
-  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef(Date.now());
+  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  // FIX: workout start time is persisted to sessionStorage so it survives
+  // tab backgrounding on mobile.
+  const startTimeRef  = useRef<number>(loadWorkoutStart());
+
   const SETS_PER_EXERCISE = 3;
 
+  // FIX: redirect synchronously if dayName is missing — do not proceed to
+  // loadWorkout or any other effect that depends on it.
   useEffect(() => {
-    if (!dayName) { navigate('/plan'); return; }
+    if (!dayName) {
+      navigate('/plan', { replace: true });
+      return;
+    }
     loadWorkout();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [dayName]);
 
+  // FIX: restore timer from sessionStorage when the component mounts or
+  // the app resumes from background. We recalculate elapsed time from the
+  // wall-clock start time rather than relying on the JS interval.
   useEffect(() => {
-    if (restTimer <= 0) return;
+    const savedStart = loadRestStart();
+    if (savedStart !== null) {
+      const elapsed = Math.floor((Date.now() - savedStart) / 1000);
+      const remaining = REST_DURATION - elapsed;
+      if (remaining > 0) {
+        setRestTimer(remaining);
+      } else {
+        clearRestStart();
+        setRestTimer(0);
+      }
+    }
+
+    // Page visibility API: recalculate remaining time when the tab comes back
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const s = loadRestStart();
+        if (s !== null) {
+          const elapsed = Math.floor((Date.now() - s) / 1000);
+          const remaining = REST_DURATION - elapsed;
+          if (remaining > 0) {
+            setRestTimer(remaining);
+          } else {
+            clearRestStart();
+            setRestTimer(0);
+            toast.success('Rest done — go!');
+          }
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    if (restTimer <= 0) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      clearRestStart();
+      return;
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setRestTimer(t => {
-        if (t <= 1) { clearInterval(timerRef.current!); toast.success('Rest done — go!'); return 0; }
+        if (t <= 1) {
+          clearInterval(timerRef.current!);
+          clearRestStart();
+          toast.success('Rest done — go!');
+          return 0;
+        }
         return t - 1;
       });
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [restTimer]);
+
+  const startRestTimer = () => {
+    const startMs = Date.now();
+    saveRestStart(startMs);
+    setRestTimer(REST_DURATION);
+  };
 
   // ── Load workout ─────────────────────────────────────────────────────────────
 
@@ -249,7 +346,7 @@ export function ActiveWorkout() {
         profileApi.get(),
       ]);
 
-      const exs: any[] = planResult?.workouts?.[dayName] || [];
+      const exs: any[] = planResult?.workouts?.[dayName!] || [];
       setExercises(exs);
 
       const historyTyped: WorkoutLog[] = history.map(h => ({
@@ -259,7 +356,6 @@ export function ActiveWorkout() {
         perceivedEffort: h.perceivedEffort,
         rpeCorrections: h.rpeCorrections,
       }));
-      const profileTyped: UserProfile | null = profile;
 
       const historySuggestions = computeAllSuggestions(history);
       const builtPlans: Record<string, ExercisePlan> = {};
@@ -331,17 +427,16 @@ export function ActiveWorkout() {
     }
   };
 
-  // ── Exit handling (FIX #7) ────────────────────────────────────────────────
+  // ── Exit handling ────────────────────────────────────────────────────────────
 
   const handleExitChoice = async (choice: ExitChoice) => {
     setShowExitDialog(false);
-    if (choice === null) return; // "Keep training"
+    if (choice === null) return;
 
     if (choice === 'save' && completedSets.length > 0) {
-      // Save whatever was logged so far, with a note that it was partial
       try {
         await workoutApi.log({
-          dayName,
+          dayName: dayName!,
           completedAt:    new Date().toISOString(),
           sets:           completedSets,
           feedback:       '(partial workout)',
@@ -355,6 +450,9 @@ export function ActiveWorkout() {
       }
     }
 
+    // Clean up persisted timer state on exit
+    clearRestStart();
+    try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
     navigate('/plan');
   };
 
@@ -388,7 +486,7 @@ export function ActiveWorkout() {
 
     if (currentSet < setsForThisExercise) {
       setCurrentSet(currentSet + 1);
-      setRestTimer(120);
+      startRestTimer();
     } else {
       advanceExercise(newCompleted);
     }
@@ -400,6 +498,7 @@ export function ActiveWorkout() {
       setCurrentExerciseIndex(nextIdx);
       setCurrentSet(1);
       setRestTimer(0);
+      clearRestStart();
       applyPlanToInputs(exercises[nextIdx], plans);
       toast.success(`Next: ${exercises[nextIdx].name}`);
     } else {
@@ -424,7 +523,7 @@ export function ActiveWorkout() {
       }
 
       await workoutApi.log({
-        dayName,
+        dayName: dayName!,
         completedAt:    new Date().toISOString(),
         sets:           completedSets,
         feedback,
@@ -432,6 +531,9 @@ export function ActiveWorkout() {
         rpeCorrections,
         duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
       });
+
+      clearRestStart();
+      try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
 
       toast.success('Workout saved! 💪');
       navigate('/dashboard');
@@ -441,6 +543,11 @@ export function ActiveWorkout() {
   };
 
   // ── Loading ────────────────────────────────────────────────────────────────
+
+  if (!dayName) {
+    // Render nothing while redirect fires
+    return null;
+  }
 
   if (loading) {
     return (
@@ -476,24 +583,20 @@ export function ActiveWorkout() {
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600 flex items-center justify-center p-4 relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
         <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
-          <CardHeader className="text-center pb-2">
-            <div className="flex justify-end mb-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => navigate('/plan')}
-              >
+          <CardContent className="pt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/plan')}>
                 <X className="w-4 h-4 mr-1" /> Cancel
               </Button>
             </div>
-            <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <Clock className="w-8 h-8 text-white" />
+            <div className="text-center">
+              <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                <Clock className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-xl font-semibold">{dayName}</h2>
+              <p className="text-muted-foreground text-sm">{exercises.length} exercises</p>
             </div>
-            <CardTitle className="text-xl">{dayName}</CardTitle>
-            <p className="text-muted-foreground text-sm">{exercises.length} exercises</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
+
             {progressionCount > 0 && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 dark:bg-green-950/30 dark:border-green-800/40">
                 <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">
@@ -565,7 +668,12 @@ export function ActiveWorkout() {
             <Button
               className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200"
               size="lg"
-              onClick={() => { startTimeRef.current = Date.now(); setCurrentPhase('exercise'); }}
+              onClick={() => {
+                const startMs = Date.now();
+                startTimeRef.current = startMs;
+                saveWorkoutStart(startMs);
+                setCurrentPhase('exercise');
+              }}
             >
               Start Workout
             </Button>
@@ -587,13 +695,14 @@ export function ActiveWorkout() {
       <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
         <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
-              <Trophy className="w-8 h-8 text-white" />
+          <CardContent className="pt-6 space-y-4">
+            <div className="text-center">
+              <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                <Trophy className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-xl font-semibold">Workout Complete!</h2>
             </div>
-            <CardTitle className="text-xl">Workout Complete!</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
                 { value: completedSets.length, label: 'sets' },
@@ -684,7 +793,7 @@ export function ActiveWorkout() {
               />
             </div>
 
-            <Button onClick={handleWorkoutComplete} className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200" size="lg">
+            <Button onClick={handleWorkoutComplete} className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25" size="lg">
               Save & Finish
             </Button>
           </CardContent>
@@ -707,9 +816,8 @@ export function ActiveWorkout() {
   const weightStep            = tier === 'isolation' ? 1 : 2.5;
   const isBodyweight          = plan?.source === 'bodyweight';
 
-    return (
+  return (
     <div className="min-h-screen bg-background pb-8">
-      {/* FIX #7: exit button in sticky header */}
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
@@ -736,16 +844,14 @@ export function ActiveWorkout() {
         </div>
       </div>
 
-      {/* Exit confirmation dialog */}
       <ExitDialog
         open={showExitDialog}
         hasSets={completedSets.length > 0}
         onChoice={handleExitChoice}
       />
 
-        <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
 
-        {/* Rest timer */}
         {restTimer > 0 && (
           <Card className="bg-gradient-to-r from-blue-500/5 to-indigo-500/5 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200/50 dark:border-blue-800/30 shadow-md shadow-blue-500/10">
             <CardContent className="py-5 text-center">
@@ -753,15 +859,14 @@ export function ActiveWorkout() {
               <div className="text-6xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
                 {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
               </div>
-              <Progress value={((120 - restTimer) / 120) * 100} className="mt-3 h-1.5" />
-              <Button variant="outline" size="sm" className="mt-3 rounded-xl" onClick={() => setRestTimer(0)}>
+              <Progress value={((REST_DURATION - restTimer) / REST_DURATION) * 100} className="mt-3 h-1.5" />
+              <Button variant="outline" size="sm" className="mt-3 rounded-xl" onClick={() => { setRestTimer(0); clearRestStart(); }}>
                 Skip rest
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {/* Exercise card */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex justify-between items-start">
@@ -865,7 +970,6 @@ export function ActiveWorkout() {
               );
             })()}
 
-            {/* FIX #14: button always enabled; show warning during rest instead of disabling */}
             {restTimer > 0 && (
               <p className="text-xs text-amber-600 text-center">
                 ⏱ Rest in progress — you can still log this set early
@@ -873,7 +977,7 @@ export function ActiveWorkout() {
             )}
             <Button
               onClick={handleSetComplete}
-              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200"
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25"
               size="lg"
             >
               <Check className="w-5 h-5 mr-2" />

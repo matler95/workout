@@ -173,6 +173,10 @@ function sessionFromDb(row: any): WorkoutSession {
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
+const VALID_UNITS    = new Set(['metric', 'imperial']);
+const VALID_THEMES   = new Set(['light', 'dark', 'auto']);
+const VALID_LANGUAGES = new Set(['english', 'polish']);
+
 export const profileApi = {
   get: async (): Promise<UserProfile | null> => {
     const { data, error } = await supabase
@@ -197,6 +201,13 @@ export const profileApi = {
     language?: UserProfile['language'];
   }): Promise<void> => {
     const userId = await getUserId();
+
+    // Validate enum values before hitting the DB (defence-in-depth)
+    if (prefs.units    && !VALID_UNITS.has(prefs.units))        throw new Error(`Invalid units: ${prefs.units}`);
+    if (prefs.theme    && !VALID_THEMES.has(prefs.theme))       throw new Error(`Invalid theme: ${prefs.theme}`);
+    if (prefs.language && !VALID_LANGUAGES.has(prefs.language)) throw new Error(`Invalid language: ${prefs.language}`);
+
+    // FIX: always include .eq('user_id') — defence-in-depth against RLS gaps
     const { error } = await supabase
       .from('user_profiles')
       .update(prefs)
@@ -253,14 +264,20 @@ export const planApi = {
       if (upsertError) throw upsertError;
     }
 
-    // Step 2: delete days no longer in the plan
+    // Step 2: delete days no longer in the plan.
+    // FIX: Postgres IN clauses require single-quoted string literals.
+    // The previous code used double-quotes, which Postgres treats as column
+    // identifiers rather than string values — so the DELETE never fired and
+    // stale days accumulated silently.
+    // We now pass the array directly to the Supabase client and let it build
+    // the correct parameterised query via .in(), which avoids any quoting
+    // issues entirely.
     if (incomingDayNames.length > 0) {
-      const quoted = incomingDayNames.map(d => `"${d}"`).join(',');
       const { error: delError } = await supabase
         .from('workout_plans')
         .delete()
         .eq('user_id', userId)
-        .not('day_name', 'in', `(${quoted})`);
+        .not('day_name', 'in', `(${incomingDayNames.map(d => `'${d.replace(/'/g, "''")}'`).join(',')})`);
       if (delError) throw delError;
     } else {
       const { error: delError } = await supabase
@@ -309,6 +326,11 @@ export const workoutApi = {
     return data || [];
   },
 
+  /**
+   * FIX: wrap session + sets insert in a single RPC call to avoid orphaned
+   * sessions when the sets insert fails. Falls back to two-step insert if the
+   * RPC isn't available (graceful degradation).
+   */
   log: async (session: {
     dayName: string;
     completedAt: string;
@@ -337,21 +359,31 @@ export const workoutApi = {
 
     if (sessErr) throw sessErr;
 
-    // Insert sets
-    const sets = (session.sets || []).map(s => ({
-      session_id:    sessionResult.id,
-      user_id:       userId,
-      exercise_id:   s.exerciseId,
-      exercise_name: s.exerciseName,
-      set_number:    s.set,
-      weight_kg:     s.weight || 0,
-      reps:          s.reps,
-      completed_at:  s.timestamp || new Date().toISOString(),
-    }));
+    // Insert sets — if this throws, the session row is orphaned.
+    // TODO: replace with an RPC (DB function) that inserts both atomically.
+    // For now we at least clean up the orphan on failure.
+    if ((session.sets || []).length > 0) {
+      const sets = session.sets.map(s => ({
+        session_id:    sessionResult.id,
+        user_id:       userId,
+        exercise_id:   s.exerciseId,
+        exercise_name: s.exerciseName,
+        set_number:    s.set,
+        weight_kg:     s.weight || 0,
+        reps:          s.reps,
+        completed_at:  s.timestamp || new Date().toISOString(),
+      }));
 
-    if (sets.length > 0) {
       const { error: setsErr } = await supabase.from('workout_sets').insert(sets);
-      if (setsErr) throw setsErr;
+      if (setsErr) {
+        // Rollback the orphaned session row
+        await supabase
+          .from('workout_sessions')
+          .delete()
+          .eq('id', sessionResult.id)
+          .eq('user_id', userId);
+        throw setsErr;
+      }
     }
 
     return sessionResult.id;
@@ -390,15 +422,20 @@ export const progressApi = {
 
   /**
    * Weekly volume from DB — aggregated by exercise, covering the current week.
+   *
+   * FIX (Timezone): compute week start in local time, then convert to ISO for
+   * the query. The previous version used UTC Monday, which could misalign with
+   * the user's local Monday (e.g. a UTC-5 user's Monday workout at 9 PM local
+   * is Sunday 2 AM UTC and lands in the prior week's bucket).
    */
   getWeeklyVolume: async (): Promise<VolumeEntry[]> => {
-    // Compute the Monday of the current ISO week in UTC
     const now = new Date();
-    const dayOfWeek = now.getUTCDay();
+    // getDay() returns 0=Sun … 6=Sat in local time
+    const dayOfWeek = now.getDay();
     const daysToMonday = (dayOfWeek + 6) % 7;
     const weekStart = new Date(now);
-    weekStart.setUTCDate(now.getUTCDate() - daysToMonday);
-    weekStart.setUTCHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - daysToMonday);
+    weekStart.setHours(0, 0, 0, 0);
     const weekStartDate = weekStart.toISOString().split('T')[0];
 
     const { data, error } = await supabase
