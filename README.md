@@ -78,9 +78,25 @@ A comprehensive, mobile-first PWA for fitness tracking with smart workout planni
 - **Routing**: React Router v7
 - **Charts**: Recharts
 - **Forms**: React Hook Form
-- **Backend**: Supabase (auth + edge functions)
-- **Server**: Hono (Deno)
-- **Database**: Supabase KV Store
+- **Backend**: Supabase (Auth + PostgreSQL)
+- **Database**: Supabase PostgreSQL (relational tables with RLS)
+
+## Database Schema
+
+The app uses 5 relational tables with Row-Level Security:
+
+| Table | Purpose |
+|-------|---------|
+| `user_profiles` | Onboarding answers, preferences (units, theme, language) |
+| `workout_plans` | One row per workout day per user (exercises stored as JSONB) |
+| `workout_sessions` | One row per completed workout |
+| `workout_sets` | One row per set completed — powers strength charts & progressive overload |
+| `bodyweight_log` | Daily weight entries |
+
+Plus 3 helper views:
+- `best_sets_per_session` — best set per exercise per session
+- `weekly_volume` — weekly volume aggregated by exercise
+- `workouts_per_week` — workout counts per week per user
 
 ## Getting Started
 
@@ -91,42 +107,26 @@ A comprehensive, mobile-first PWA for fitness tracking with smart workout planni
 ### Installation
 
 1. Install dependencies:
-\`\`\`bash
+```bash
 pnpm install
-\`\`\`
+```
 
-2. The Supabase connection is already configured via the Make platform
+2. Copy the environment file and fill in your Supabase credentials:
+```bash
+cp .env.example .env.local
+# Edit .env.local and set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+```
 
-3. Deploy the Supabase edge function:
-   - Go to your Supabase project dashboard
-   - Navigate to Edge Functions
-   - Deploy the \`server\` function from \`supabase/functions/server/\`
+3. Run the database migration:
+   - Open your Supabase project dashboard
+   - Navigate to SQL Editor
+   - Paste and run the contents of `data_migration/migration.sql`
+   - This creates all tables, RLS policies, and helper views
 
-### Running the App
-
-The Vite dev server is already running in the Make environment. Access the app through the Make preview panel.
-
-## Backend API Endpoints
-
-All endpoints are prefixed with \`/make-server-975f4bc8\`:
-
-### Auth
-- \`POST /auth/signup\` - Create new user account
-- \`GET /auth/session\` - Get current session
-
-### Profile
-- \`POST /profile/onboarding\` - Save onboarding data
-- \`GET /profile\` - Get user profile
-
-### Workouts
-- \`POST /workouts/plan\` - Save workout plan
-- \`GET /workouts/plan\` - Get workout plan
-- \`POST /workouts/log\` - Log completed workout
-- \`GET /workouts/history\` - Get workout history
-
-### Progress
-- \`POST /progress/bodyweight\` - Save bodyweight entry
-- \`GET /progress/bodyweight\` - Get bodyweight history
+4. Start the development server:
+```bash
+pnpm run dev
+```
 
 ## Algorithms (To Be Enhanced)
 
@@ -144,9 +144,9 @@ These will become more sophisticated as workout data accumulates.
 ## Security & Privacy
 
 - User passwords are hashed by Supabase Auth
-- Sensitive operations require authentication tokens
+- Row-Level Security (RLS) ensures users can only access their own data
+- All database queries run with the user's authenticated session
 - PII is minimized - only data required for workout algorithms is collected
-- Make is designed for prototyping; for production, implement additional security measures
 
 ## Roadmap
 

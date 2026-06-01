@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, API_BASE } from '../utils/supabase-client';
+import { supabase } from '../utils/supabase-client';
 import type { User } from '@supabase/supabase-js';
-
-// FIX #1: Removed import of projectId from gitignored utils/supabase/info.tsx.
-// The signup URL is now derived from API_BASE (itself built from VITE_SUPABASE_URL).
 
 interface AuthContextType {
   user: User | null;
@@ -40,19 +37,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string) => {
-    // Step 1: client-side signup (works when email confirm is OFF)
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } },
     });
 
-    if (!error && data.session) {
-      // Email confirmation is OFF — session returned immediately
+    if (error) throw error;
+
+    if (data.session) {
+      // Email confirmation is disabled — session returned immediately
       return;
     }
 
-    if (!error && data?.user && !data.session) {
+    if (data?.user && !data.session) {
       // Created but needs email confirmation — try signing in anyway
       await sleep(500);
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
@@ -60,17 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Account created! Please check your email to confirm before signing in.');
     }
 
-    // Step 2: Edge function fallback (admin.createUser bypasses email confirmation)
-    // FIX #1: use API_BASE instead of constructing URL from projectId
-    const response = await fetch(`${API_BASE}/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
-    });
-    const result = await response.json();
-    if (result.error) throw new Error(result.error);
-
-    // Step 3: sign in with backoff for auth propagation
+    // Fallback: sign in with backoff for auth propagation
     let lastSignInError: any;
     for (let attempt = 0; attempt < 3; attempt++) {
       await sleep(300 + attempt * 400);
