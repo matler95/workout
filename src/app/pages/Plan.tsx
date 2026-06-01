@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
-import { apiCall } from '../../utils/supabase-client';
+import { profileApi, planApi } from '../../utils/api';
 import { Dumbbell, Clock, Edit } from 'lucide-react';
 
 export function Plan() {
@@ -18,12 +18,12 @@ export function Plan() {
 
   const loadData = async () => {
     try {
-      const [profileRes, planRes] = await Promise.all([
-        apiCall('/profile'),
-        apiCall('/workouts/plan'),
+      const [prof, plan] = await Promise.all([
+        profileApi.get(),
+        planApi.get(),
       ]);
-      setProfile(profileRes.profile);
-      setWorkoutPlan(planRes.plan);
+      setProfile(prof);
+      setWorkoutPlan(plan);
     } catch (error: any) {
       console.error('Failed to load plan:', error);
     } finally {

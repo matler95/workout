@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
-import { apiCall } from '../../utils/supabase-client';
+import { profileApi, planApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { Search, Plus, Trash2, Clock, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
@@ -72,7 +72,7 @@ export function WorkoutBuilder() {
 
   const loadProfile = async () => {
     try {
-      const { profile } = await apiCall('/profile');
+      const profile = await profileApi.get();
       setProfile(profile);
 
       // FIX #8: Fetch the existing plan first. Only call initializeDays if
@@ -80,7 +80,7 @@ export function WorkoutBuilder() {
       // unconditionally, then overwrote the empty days — causing a visible
       // flash of empty workout days before the saved plan appeared.
       try {
-        const { plan } = await apiCall('/workouts/plan');
+        const plan = await planApi.get();
         if (plan?.workouts && Object.keys(plan.workouts).length > 0) {
           setSelectedExercises(plan.workouts);
           setCurrentDay(Object.keys(plan.workouts)[0]);
@@ -164,10 +164,7 @@ export function WorkoutBuilder() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await apiCall('/workouts/plan', {
-        method: 'POST',
-        body: JSON.stringify({ workouts: selectedExercises, createdAt: new Date().toISOString() }),
-      });
+      await planApi.save(selectedExercises);
       toast.success('Workout plan saved!');
       navigate('/plan');
     } catch {

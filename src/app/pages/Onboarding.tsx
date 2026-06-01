@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
 import { Textarea } from '../components/ui/textarea';
-import { apiCall } from '../../utils/supabase-client';
+import { profileApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -117,10 +117,7 @@ export function Onboarding() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await apiCall('/profile/onboarding', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      await profileApi.saveOnboarding(data as any);
       toast.success("Profile created! Let's build your workout plan");
       navigate('/workout-builder');
     } catch (error: any) {

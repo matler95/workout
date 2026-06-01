@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { apiCall } from '../../utils/supabase-client';
+import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import {
   Clock, Check, Trophy, TrendingUp, TrendingDown,
@@ -243,17 +243,23 @@ export function ActiveWorkout() {
 
   const loadWorkout = async () => {
     try {
-      const [planRes, historyRes, profileRes] = await Promise.all([
-        apiCall('/workouts/plan'),
-        apiCall('/workouts/history'),
-        apiCall('/profile'),
+      const [planResult, history, profile] = await Promise.all([
+        planApi.get(),
+        workoutApi.getHistory(100),
+        profileApi.get(),
       ]);
 
-      const exs: any[] = planRes.plan?.workouts?.[dayName] || [];
+      const exs: any[] = planResult?.workouts?.[dayName] || [];
       setExercises(exs);
 
-      const history: WorkoutLog[] = historyRes.history || [];
-      const profile: UserProfile | null = profileRes.profile;
+      const historyTyped: WorkoutLog[] = history.map(h => ({
+        dayName: h.dayName,
+        completedAt: h.completedAt,
+        sets: h.sets.map(s => ({ exerciseId: s.exerciseId, exerciseName: s.exerciseName, weight: s.weight, reps: s.reps })),
+        perceivedEffort: h.perceivedEffort,
+        rpeCorrections: h.rpeCorrections,
+      }));
+      const profileTyped: UserProfile | null = profile;
 
       const historySuggestions = computeAllSuggestions(history);
       const builtPlans: Record<string, ExercisePlan> = {};
@@ -334,17 +340,14 @@ export function ActiveWorkout() {
     if (choice === 'save' && completedSets.length > 0) {
       // Save whatever was logged so far, with a note that it was partial
       try {
-        await apiCall('/workouts/log', {
-          method: 'POST',
-          body: JSON.stringify({
-            dayName,
-            completedAt:    new Date().toISOString(),
-            sets:           completedSets,
-            feedback:       '(partial workout)',
-            perceivedEffort,
-            rpeCorrections: {},
-            duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
-          }),
+        await workoutApi.log({
+          dayName,
+          completedAt:    new Date().toISOString(),
+          sets:           completedSets,
+          feedback:       '(partial workout)',
+          perceivedEffort,
+          rpeCorrections: {},
+          duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
         });
         toast.success('Partial workout saved');
       } catch {
@@ -420,17 +423,14 @@ export function ActiveWorkout() {
         }
       }
 
-      await apiCall('/workouts/log', {
-        method: 'POST',
-        body: JSON.stringify({
-          dayName,
-          completedAt:    new Date().toISOString(),
-          sets:           completedSets,
-          feedback,
-          perceivedEffort,
-          rpeCorrections,
-          duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
-        }),
+      await workoutApi.log({
+        dayName,
+        completedAt:    new Date().toISOString(),
+        sets:           completedSets,
+        feedback,
+        perceivedEffort,
+        rpeCorrections,
+        duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
       });
 
       toast.success('Workout saved! 💪');
