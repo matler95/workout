@@ -131,19 +131,25 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-muted border-t-primary" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading your dashboard...</p>
+        </div>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-0 shadow-lg">
           <CardContent className="pt-8 pb-8 text-center">
-            <p className="text-gray-600 mb-4">Set up your profile to get started.</p>
-            <Button onClick={() => navigate('/onboarding')}>Start Onboarding</Button>
+            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Dumbbell className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-muted-foreground mb-4">Set up your profile to get started.</p>
+            <Button onClick={() => navigate('/onboarding')} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">Start Onboarding</Button>
           </CardContent>
         </Card>
       </div>
@@ -152,11 +158,14 @@ export function Dashboard() {
 
   if (!workoutPlan) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-0 shadow-lg">
           <CardContent className="pt-8 pb-8 text-center">
-            <p className="text-gray-600 mb-4">You haven't built a workout plan yet.</p>
-            <Button onClick={() => navigate('/workout-builder')}>Build Plan</Button>
+            <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Target className="w-7 h-7 text-white" />
+            </div>
+            <p className="text-muted-foreground mb-4">You haven't built a workout plan yet.</p>
+            <Button onClick={() => navigate('/workout-builder')} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">Build Plan</Button>
           </CardContent>
         </Card>
       </div>
@@ -164,13 +173,13 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-24">
+    <div className="min-h-screen bg-background p-4 pb-24">
       <div className="max-w-xl mx-auto space-y-4">
 
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">Hey, {profile.name?.split(' ')[0]} 👋</h1>
-          <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-1.5">
+        <div className="pt-2">
+          <h1 className="text-2xl font-bold tracking-tight">Hey, {profile.name?.split(' ')[0]} 👋</h1>
+          <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5" />
             {format(new Date(), 'EEEE, MMM d')}
           </p>
@@ -178,31 +187,31 @@ export function Dashboard() {
 
         {/* This week + Readiness */}
         <div className="grid grid-cols-2 gap-3">
-          <Card>
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-200">
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">This week</p>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">This week</p>
               <div className="flex items-end gap-1 mb-2">
-                <span className="text-3xl font-bold">{weekProg.completed}</span>
-                <span className="text-gray-400 text-sm mb-1">/ {weekProg.planned}</span>
+                <span className="text-3xl font-bold tracking-tight">{weekProg.completed}</span>
+                <span className="text-muted-foreground text-sm mb-1">/ {weekProg.planned}</span>
               </div>
               <Progress value={weekProg.pct} className="h-1.5" />
-              <p className="text-xs text-gray-500 mt-1">workouts</p>
+              <p className="text-xs text-muted-foreground mt-1">workouts</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-200">
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Readiness</p>
+              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">Readiness</p>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-3xl font-bold">{readiness ?? '–'}</span>
+                <span className="text-3xl font-bold tracking-tight">{readiness ?? '–'}</span>
                 <Flame className={`w-5 h-5 ${
-                  readinessColor === 'green' ? 'text-green-500'
-                  : readinessColor === 'yellow' ? 'text-yellow-500' : 'text-red-500'
+                  readinessColor === 'green' ? 'text-emerald-500'
+                  : readinessColor === 'yellow' ? 'text-amber-500' : 'text-rose-500'
                 }`} />
               </div>
               <p className={`text-xs font-medium ${
-                readinessColor === 'green' ? 'text-green-600'
-                : readinessColor === 'yellow' ? 'text-yellow-600' : 'text-red-600'
+                readinessColor === 'green' ? 'text-emerald-600'
+                : readinessColor === 'yellow' ? 'text-amber-600' : 'text-rose-600'
               }`}>
                 {readiness && readiness >= 75 ? 'Ready to train'
                   : readiness && readiness >= 50 ? 'Train with care'
@@ -214,12 +223,14 @@ export function Dashboard() {
 
         {/* Streak */}
         {streak > 0 && (
-          <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200">
-            <CardContent className="py-3 flex items-center gap-3">
-              <Flame className="w-8 h-8 text-orange-500 flex-shrink-0" />
+          <Card className="border-0 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 shadow-md shadow-amber-500/10">
+            <CardContent className="py-4 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 flex-shrink-0">
+                <Flame className="w-6 h-6 text-white" />
+              </div>
               <div>
-                <p className="font-semibold text-orange-800">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
-                <p className="text-xs text-orange-600">Keep it going</p>
+                <p className="font-semibold text-orange-900">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
+                <p className="text-xs text-orange-600">Keep it going — you're on fire!</p>
               </div>
             </CardContent>
           </Card>
@@ -227,38 +238,44 @@ export function Dashboard() {
 
         {/* Daily targets */}
         {(cals || protein) && (
-          <Card>
+          <Card className="border-0 shadow-md">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Target className="w-4 h-4" /> Daily Targets
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Target className="w-3.5 h-3.5 text-primary" />
+                </div>
+                Daily Targets
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-1.5">
+            <CardContent className="space-y-2">
               {cals && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Calories</span>
-                  <span className="font-semibold">{cals} kcal</span>
+                  <span className="text-sm text-muted-foreground">Calories</span>
+                  <span className="font-semibold">{cals} <span className="text-xs text-muted-foreground font-normal">kcal</span></span>
                 </div>
               )}
               {protein && (
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Protein</span>
-                  <span className="font-semibold">{protein} g</span>
+                  <span className="text-sm text-muted-foreground">Protein</span>
+                  <span className="font-semibold">{protein} <span className="text-xs text-muted-foreground font-normal">g</span></span>
                 </div>
               )}
-              <p className="text-xs text-gray-400">Goal: {profile.primaryGoal?.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-muted-foreground capitalize">Goal: {profile.primaryGoal?.replace(/_/g, ' ')}</p>
             </CardContent>
           </Card>
         )}
 
         {/* Bodyweight */}
-        <Card>
+        <Card className="border-0 shadow-md">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" /> Bodyweight
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                Bodyweight
               </CardTitle>
-              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setShowWeightLog(v => !v)}>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-primary hover:text-primary/80" onClick={() => setShowWeightLog(v => !v)}>
                 <Plus className="w-3.5 h-3.5 mr-1" /> Log
               </Button>
             </div>
@@ -272,24 +289,24 @@ export function Dashboard() {
                   value={newWeight}
                   onChange={e => setNewWeight(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleLogWeight()}
-                  className="flex-1"
+                  className="flex-1 rounded-xl"
                   autoFocus
                 />
-                <Button size="sm" onClick={handleLogWeight} disabled={loggingWeight}>
+                <Button size="sm" className="rounded-xl" onClick={handleLogWeight} disabled={loggingWeight}>
                   {loggingWeight ? '…' : 'Save'}
                 </Button>
               </div>
             )}
             {latestWeight && (
               <div className="flex items-end gap-2 mb-3">
-                <span className="text-3xl font-bold">{latestWeight.weight}</span>
-                <span className="text-gray-500 mb-1">kg</span>
-                <span className="text-xs text-gray-400 mb-1 ml-1">
+                <span className="text-3xl font-bold tracking-tight">{latestWeight.weight}</span>
+                <span className="text-muted-foreground mb-1">kg</span>
+                <span className="text-xs text-muted-foreground mb-1 ml-1">
                   {format(parseISO(latestWeight.date), 'MMM d')}
                 </span>
                 {weightDelta !== null && (
                   <span className={`text-sm font-medium mb-1 ${
-                    weightDelta > 0 ? 'text-red-500' : weightDelta < 0 ? 'text-green-600' : 'text-gray-400'
+                    weightDelta > 0 ? 'text-rose-500' : weightDelta < 0 ? 'text-emerald-600' : 'text-muted-foreground'
                   }`}>
                     {weightDelta > 0 ? '+' : ''}{weightDelta} kg
                   </span>
@@ -302,20 +319,22 @@ export function Dashboard() {
                   <XAxis dataKey="date" hide />
                   <YAxis domain={['auto', 'auto']} hide />
                   <Tooltip />
-                  <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : !latestWeight ? (
-              <p className="text-sm text-gray-400 text-center py-3">Tap Log to track your weight</p>
+              <p className="text-sm text-muted-foreground text-center py-3">Tap Log to track your weight</p>
             ) : null}
           </CardContent>
         </Card>
 
         {/* Next workout */}
-        <Card>
+        <Card className="border-0 shadow-md overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Dumbbell className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Dumbbell className="w-3.5 h-3.5 text-violet-600" />
+              </div>
               {nextWorkout?.isToday ? "Today's Workout" : 'Next Workout'}
             </CardTitle>
           </CardHeader>
@@ -323,53 +342,53 @@ export function Dashboard() {
             {nextWorkout ? (
               <div className="space-y-3">
                 <div>
-                  <p className="text-xl font-bold">{nextWorkout.day}</p>
-                  <div className="flex gap-1 flex-wrap mt-1">
+                  <p className="text-xl font-bold tracking-tight">{nextWorkout.day}</p>
+                  <div className="flex gap-1.5 flex-wrap mt-2">
                     {(workoutPlan.workouts[nextWorkout.day] || []).slice(0, 4).map((ex: any, i: number) => (
-                      <span key={i} className="text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">{ex.name}</span>
+                      <span key={i} className="text-xs bg-muted text-muted-foreground rounded-lg px-2.5 py-1 font-medium">{ex.name}</span>
                     ))}
                     {(workoutPlan.workouts[nextWorkout.day] || []).length > 4 && (
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         +{(workoutPlan.workouts[nextWorkout.day] || []).length - 4} more
                       </span>
                     )}
                   </div>
                 </div>
                 <Button
-                  className="w-full"
+                  className="w-full rounded-xl h-11 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-200"
                   onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}
                 >
                   Start Workout <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No upcoming workout found</p>
+              <p className="text-sm text-muted-foreground">No upcoming workout found</p>
             )}
           </CardContent>
         </Card>
 
         {/* Recent activity */}
         {workoutHistory.length > 0 && (
-          <Card>
+          <Card className="border-0 shadow-md">
             <CardHeader className="pb-2">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-sm">Recent Activity</CardTitle>
-                <button onClick={() => navigate('/progress')} className="text-xs text-indigo-600">View all</button>
+                <button onClick={() => navigate('/progress')} className="text-xs text-primary font-semibold hover:text-primary/80 transition-colors">View all</button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {workoutHistory.slice(0, 3).map((log, i) => {
                   const sets = (log.sets || []).length;
                   const vol  = Math.round((log.sets || []).reduce((s: number, x: any) => s + x.weight * x.reps, 0) / 1000 * 10) / 10;
                   return (
-                    <div key={i} className="flex justify-between items-center text-sm py-1.5 border-b last:border-0">
+                    <div key={i} className="flex justify-between items-center text-sm py-2.5 border-b border-border/50 last:border-0">
                       <div>
                         <p className="font-medium">{log.dayName}</p>
-                        <p className="text-xs text-gray-500">{format(parseISO(log.completedAt), 'EEE, MMM d')}</p>
+                        <p className="text-xs text-muted-foreground">{format(parseISO(log.completedAt), 'EEE, MMM d')}</p>
                       </div>
-                      <div className="text-right text-xs text-gray-500">
-                        <p>{sets} sets</p>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <p className="font-medium text-foreground">{sets} sets</p>
                         <p>{vol}t vol</p>
                       </div>
                     </div>

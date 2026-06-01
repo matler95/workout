@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import { Toaster } from './components/ui/sonner';
 
 import { Login } from './pages/Login';
@@ -20,10 +21,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground animate-pulse">Loading...</p>
         </div>
       </div>
     );
@@ -140,10 +141,12 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-        <Toaster />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRoutes />
+          <Toaster />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

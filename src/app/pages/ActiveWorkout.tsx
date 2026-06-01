@@ -444,10 +444,10 @@ export function ActiveWorkout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto" />
-          <p className="mt-3 text-sm text-gray-500">Loading workout...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto" />
+          <p className="mt-3 text-sm text-muted-foreground animate-pulse">Loading workout...</p>
         </div>
       </div>
     );
@@ -455,11 +455,11 @@ export function ActiveWorkout() {
 
   if (exercises.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md text-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center border-0 shadow-lg">
           <CardContent className="pt-8 pb-8">
-            <p className="text-gray-500 mb-4">No exercises found for {dayName}</p>
-            <Button onClick={() => navigate('/workout-builder')}>Edit Workout</Button>
+            <p className="text-muted-foreground mb-4">No exercises found for {dayName}</p>
+            <Button onClick={() => navigate('/workout-builder')} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">Edit Workout</Button>
           </CardContent>
         </Card>
       </div>
@@ -473,8 +473,9 @@ export function ActiveWorkout() {
     const firstTimers      = Object.values(plans).filter(p => p.isFirstSession).length;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600 flex items-center justify-center p-4 relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
+        <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
           <CardHeader className="text-center pb-2">
             <div className="flex justify-end mb-2">
               <Button
@@ -486,7 +487,7 @@ export function ActiveWorkout() {
                 <X className="w-4 h-4 mr-1" /> Cancel
               </Button>
             </div>
-            <div className="mx-auto mb-3 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center">
+            <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
               <Clock className="w-8 h-8 text-white" />
             </div>
             <CardTitle className="text-xl">{dayName}</CardTitle>
@@ -525,19 +526,19 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            <div className="bg-white rounded-lg p-3 text-sm space-y-1 border border-gray-100">
-              <p className="font-medium text-gray-700">Warm-up first (5–10 min)</p>
-              <p className="text-gray-500">• Light cardio to raise heart rate</p>
-              <p className="text-gray-500">• Dynamic stretches for today's muscle groups</p>
-              <p className="text-gray-500">• 1–2 light warm-up sets with ~50% of working weight</p>
+            <div className="bg-card rounded-xl p-3 text-sm space-y-1 border border-border/50">
+              <p className="font-medium text-card-foreground">Warm-up first (5–10 min)</p>
+              <p className="text-muted-foreground">• Light cardio to raise heart rate</p>
+              <p className="text-muted-foreground">• Dynamic stretches for today's muscle groups</p>
+              <p className="text-muted-foreground">• 1–2 light warm-up sets with ~50% of working weight</p>
             </div>
 
             <div className="space-y-1">
               {exercises.map((ex, i) => {
                 const plan = plans[ex.id || ex.name];
                 return (
-                  <div key={i} className="flex items-center gap-2 text-sm py-1.5 border-b border-gray-100 last:border-0">
-                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs flex-shrink-0 font-medium">
+                  <div key={i} className="flex items-center gap-2 text-sm py-1.5 border-b border-border/50 last:border-0">
+                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 font-medium">
                       {i + 1}
                     </span>
                     <span className="flex-1">{ex.name}</span>
@@ -562,7 +563,7 @@ export function ActiveWorkout() {
             </div>
 
             <Button
-              className="w-full"
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200"
               size="lg"
               onClick={() => { startTimeRef.current = Date.now(); setCurrentPhase('exercise'); }}
             >
@@ -583,10 +584,11 @@ export function ActiveWorkout() {
     const firstSessionExercises = exercises.filter(ex => plans[ex.id || ex.name]?.isFirstSession);
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
+        <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-3 w-16 h-16 bg-green-600 rounded-full flex items-center justify-center">
+            <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
               <Trophy className="w-8 h-8 text-white" />
             </div>
             <CardTitle className="text-xl">Workout Complete!</CardTitle>
@@ -682,7 +684,7 @@ export function ActiveWorkout() {
               />
             </div>
 
-            <Button onClick={handleWorkoutComplete} className="w-full" size="lg">
+            <Button onClick={handleWorkoutComplete} className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200" size="lg">
               Save & Finish
             </Button>
           </CardContent>
@@ -705,10 +707,10 @@ export function ActiveWorkout() {
   const weightStep            = tier === 'isolation' ? 1 : 2.5;
   const isBodyweight          = plan?.source === 'bodyweight';
 
-  return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    return (
+    <div className="min-h-screen bg-background pb-8">
       {/* FIX #7: exit button in sticky header */}
-      <div className="bg-white border-b sticky top-0 z-10 px-4 py-2.5">
+      <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide">{dayName}</p>
@@ -741,18 +743,18 @@ export function ActiveWorkout() {
         onChoice={handleExitChoice}
       />
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+        <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
 
         {/* Rest timer */}
         {restTimer > 0 && (
-          <Card className="bg-blue-50 border-blue-200">
+          <Card className="bg-gradient-to-r from-blue-500/5 to-indigo-500/5 border border-blue-200/50 shadow-md shadow-blue-500/10">
             <CardContent className="py-5 text-center">
               <p className="text-xs font-medium text-blue-500 uppercase tracking-wider mb-1">Rest</p>
               <div className="text-6xl font-bold text-blue-700 tabular-nums">
                 {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
               </div>
               <Progress value={((120 - restTimer) / 120) * 100} className="mt-3 h-1.5" />
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => setRestTimer(0)}>
+              <Button variant="outline" size="sm" className="mt-3 rounded-xl" onClick={() => setRestTimer(0)}>
                 Skip rest
               </Button>
             </CardContent>
@@ -871,7 +873,7 @@ export function ActiveWorkout() {
             )}
             <Button
               onClick={handleSetComplete}
-              className="w-full"
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200"
               size="lg"
             >
               <Check className="w-5 h-5 mr-2" />
@@ -920,7 +922,7 @@ export function ActiveWorkout() {
                   const p = plans[ex.id || ex.name];
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-xs flex-shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0 text-muted-foreground">
                         {currentExerciseIndex + 2 + i}
                       </span>
                       <span className="flex-1">{ex.name}</span>

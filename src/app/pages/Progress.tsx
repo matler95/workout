@@ -206,16 +206,19 @@ export function Progress() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-muted border-t-primary" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading progress...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-24">
+    <div className="min-h-screen bg-background p-4 pb-24">
       <div className="max-w-4xl mx-auto space-y-4">
-        <h1 className="text-2xl font-bold">Progress</h1>
+        <h1 className="text-2xl font-bold tracking-tight pt-2">Progress</h1>
 
         <Tabs defaultValue="body" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
@@ -261,23 +264,23 @@ export function Progress() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {weightChartData.length > 1 ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={weightChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="py-8 text-center text-sm text-gray-500">
-                    {weightChartData.length === 1
-                      ? `Current: ${weightChartData[0].weight} kg — log more to see a trend`
-                      : 'No bodyweight data yet. Log from the dashboard.'}
-                  </div>
-                )}
+            {weightChartData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={weightChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                {weightChartData.length === 1
+                  ? `Current: ${weightChartData[0].weight} kg — log more to see a trend`
+                  : 'No bodyweight data yet. Log from the dashboard.'}
+              </div>
+            )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -294,10 +297,10 @@ export function Progress() {
                     <button
                       key={name}
                       onClick={() => setSelectedExercise(name)}
-                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                         activeExercise === name
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300'
+                          ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80 border border-border/50'
                       }`}
                     >
                       {name}
@@ -463,9 +466,9 @@ export function Progress() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
+                  <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
                     <span>Less</span>
-                    <div className="w-3 h-3 rounded-sm bg-gray-100" />
+                    <div className="w-3 h-3 rounded-sm bg-muted" />
                     <div className="w-3 h-3 rounded-sm bg-indigo-200" />
                     <div className="w-3 h-3 rounded-sm bg-indigo-500" />
                     <span>More</span>

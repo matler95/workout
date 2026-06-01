@@ -193,8 +193,11 @@ export function WorkoutBuilder() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-muted border-t-primary" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading builder...</p>
+        </div>
       </div>
     );
   }
@@ -215,18 +218,18 @@ export function WorkoutBuilder() {
   }[assessment.color];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-background pb-20">
       {/* Header */}
-      <div className="bg-white border-b px-4 py-3 sticky top-0 z-10">
+      <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 px-4 py-3 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="font-bold text-lg">Workout Builder</h1>
-            <p className="text-xs text-gray-500">
+            <h1 className="font-bold text-lg tracking-tight">Workout Builder</h1>
+            <p className="text-xs text-muted-foreground">
               {profile?.workoutStyle?.replace(/_/g, ' ')} · {days.length} days ·{' '}
               {setsPerExercise} sets/exercise
             </p>
           </div>
-          <Button onClick={handleSave} disabled={saving} size="sm">
+          <Button onClick={handleSave} disabled={saving} size="sm" className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">
             {saving ? 'Saving...' : 'Save Plan'}
           </Button>
         </div>
@@ -344,11 +347,11 @@ export function WorkoutBuilder() {
                           <button
                             key={muscle}
                             onClick={() => setSelectedMuscle(prev => prev === muscle ? null : muscle)}
-                            className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-                              selectedMuscle === muscle
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
+                       className={`text-xs px-2.5 py-1.5 rounded-xl font-medium transition-all duration-200 ${
+                          selectedMuscle === muscle
+                            ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
                           >
                             {muscle.replace(/_/g, ' ')}
                           </button>
@@ -360,8 +363,8 @@ export function WorkoutBuilder() {
                     <div className="max-h-[520px] overflow-y-auto">
                       {suggested.length > 0 && (
                         <>
-                          <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100">
-                            <p className="text-xs font-medium text-indigo-700">✨ Suggested for {currentDay}</p>
+                          <div className="px-4 py-2 bg-primary/5 border-b border-primary/10">
+                            <p className="text-xs font-medium text-primary">✨ Suggested for {currentDay}</p>
                           </div>
                           {suggested.map(ex => (
                             <ExerciseRow key={ex.id} ex={ex}
@@ -414,12 +417,12 @@ function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd
           }`}>{ex.difficulty}</span>
         </div>
       </div>
-      <button
-        onClick={onAdd}
-        disabled={added}
-        className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
-          added ? 'bg-gray-100 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-        }`}
+        <button
+          onClick={onAdd}
+          disabled={added}
+          className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+            added ? 'bg-muted text-muted-foreground' : 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:from-indigo-600 hover:to-violet-700 shadow-sm shadow-indigo-500/20'
+          }`}
       >
         {added ? '✓' : <Plus className="w-3.5 h-3.5" />}
       </button>

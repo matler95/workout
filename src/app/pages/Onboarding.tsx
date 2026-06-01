@@ -144,8 +144,12 @@ export function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
+
+      <Card className="w-full max-w-2xl relative z-10 border-0 shadow-2xl shadow-black/10">
         <CardHeader>
           <div className="space-y-2">
             <div className="flex justify-between items-center text-sm text-gray-600">
@@ -491,15 +495,15 @@ export function Onboarding() {
 
           {/* Navigation */}
           <div className="flex justify-between pt-4">
-            <Button variant="outline" onClick={handleBack} disabled={step === 1}>
+            <Button variant="outline" onClick={handleBack} disabled={step === 1} className="rounded-xl">
               <ChevronLeft className="w-4 h-4 mr-2" /> Back
             </Button>
             {step < totalSteps ? (
-              <Button onClick={handleNext} disabled={!canProceed()}>
+              <Button onClick={handleNext} disabled={!canProceed()} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">
                 Next <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} disabled={loading}>
+              <Button onClick={handleSubmit} disabled={loading} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">
                 {loading ? 'Saving...' : 'Complete Setup'}
               </Button>
             )}

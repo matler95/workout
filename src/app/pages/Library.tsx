@@ -23,9 +23,9 @@ export function Library() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-24">
+    <div className="min-h-screen bg-background p-4 pb-24">
       <div className="max-w-4xl mx-auto space-y-4">
-        <h1 className="text-2xl font-bold">Exercise Library</h1>
+        <h1 className="text-2xl font-bold tracking-tight pt-2">Exercise Library</h1>
 
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -75,15 +75,15 @@ export function Library() {
 
         <Accordion type="single" collapsible className="space-y-2">
           {filteredExercises.map((exercise) => (
-            <AccordionItem key={exercise.id} value={exercise.id} className="border rounded-lg bg-white px-4">
+            <AccordionItem key={exercise.id} value={exercise.id} className="border-0 bg-card rounded-2xl shadow-md px-4">
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex-1 text-left">
                   <div className="font-medium">{exercise.name}</div>
                   <div className="flex gap-2 mt-2">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs rounded-lg capitalize">
                       {exercise.category}
                     </Badge>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-xs rounded-lg capitalize">
                       {exercise.difficulty}
                     </Badge>
                   </div>
@@ -113,7 +113,7 @@ export function Library() {
 
                   <div>
                     <div className="text-sm font-medium mb-2">Instructions</div>
-                    <div className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded">
+                    <div className="text-sm text-card-foreground whitespace-pre-line bg-muted/50 p-3 rounded-xl">
                       {exercise.instructions}
                     </div>
                   </div>

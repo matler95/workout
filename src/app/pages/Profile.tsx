@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
@@ -23,6 +24,7 @@ export function Profile() {
 
   // Preferences — initialised from profile once loaded
   const [units, setUnits]         = useState<Units>('metric');
+  const { theme: activeTheme, setTheme: applyTheme } = useTheme();
   const [theme, setTheme]         = useState<Theme>('light');
   const [language, setLanguage]   = useState<Language>('english');
   const [notifWorkout, setNotifWorkout] = useState(true);
@@ -40,7 +42,9 @@ export function Profile() {
       setProfile(p);
       if (p) {
         setUnits(p.units || 'metric');
-        setTheme(p.theme || 'light');
+        const savedTheme = p.theme || 'light';
+        setTheme(savedTheme);
+        applyTheme(savedTheme);
         setLanguage(p.language || 'english');
       }
     } catch {
@@ -91,16 +95,19 @@ export function Profile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-muted border-t-primary" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading profile...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-24">
+    <div className="min-h-screen bg-background p-4 pb-24">
       <div className="max-w-2xl mx-auto space-y-4">
-        <h1 className="text-2xl font-bold">Profile & Settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight pt-2">Profile & Settings</h1>
 
         {/* ── User info ─────────────────────────────────────────────── */}
         <Card>
@@ -196,7 +203,10 @@ export function Profile() {
               </p>
               <RadioGroup
                 value={theme}
-                onValueChange={v => setTheme(v as Theme)}
+                onValueChange={v => {
+                  setTheme(v as Theme);
+                  applyTheme(v as Theme);
+                }}
                 className="flex gap-4"
               >
                 {(['light', 'dark', 'auto'] as Theme[]).map(t => (
@@ -269,14 +279,14 @@ export function Profile() {
         </Card>
 
         {/* ── Danger zone ───────────────────────────────────────────── */}
-        <Card className="border-red-200">
+        <Card className="border-0 shadow-md border-l-4 border-l-rose-500">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-red-600">
+            <CardTitle className="text-sm flex items-center gap-2 text-rose-600">
               <Trash2 className="w-4 h-4" /> Danger zone
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="bg-red-50 rounded-lg p-3 text-xs text-red-700 leading-relaxed">
+            <div className="bg-rose-50 rounded-xl p-3 text-xs text-rose-700 leading-relaxed">
               <strong>Reset workout data</strong> deletes all workout logs, bodyweight entries,
               your workout plan, and progress history. Your account and profile stay active.
               This cannot be undone.
