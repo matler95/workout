@@ -5,34 +5,46 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "./utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transform-gpu transition-transform duration-150 ease-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 focus-visible:ring-offset-2 hover:scale-105 active:scale-95",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
-        outline:
-          "border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
+        primary: "min-h-12 bg-emerald-500 text-white shadow-soft hover:shadow-glow-emerald active:shadow-inner disabled:cursor-not-allowed",
+        secondary: "min-h-12 bg-gray-100 text-emerald-600 shadow-subtle hover:bg-gray-200 active:bg-gray-300 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-emerald-400 dark:hover:bg-gray-700",
+        destructive: "min-h-12 bg-red-500 text-white shadow-subtle hover:bg-red-600 active:bg-red-700 disabled:cursor-not-allowed",
+        ghost: "text-foreground hover:bg-gray-100 active:bg-gray-200 disabled:cursor-not-allowed dark:hover:bg-gray-800 dark:active:bg-gray-700",
+        link: "text-emerald-600 underline-offset-4 hover:underline disabled:cursor-not-allowed dark:text-emerald-400",
+        outline: "border border-gray-200 bg-transparent text-foreground hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-700 dark:hover:bg-gray-900 dark:active:bg-gray-800",
       },
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        default: "h-9 px-4 py-2 has-[>svg]:px-3 text-sm",
+        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 text-xs",
+        lg: "min-h-12 px-6 py-3 text-base",
         icon: "size-9 rounded-md",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "primary",
       size: "default",
     },
   },
 );
+
+const buttonStyles = `
+  @layer components {
+    [data-slot="button"] {
+      @apply hover:scale-102 active:scale-96 transition-transform duration-100 ease-out;
+    }
+    
+    [data-slot="button"]:not(:disabled):hover {
+      transform: scale(1.02);
+    }
+    
+    [data-slot="button"]:not(:disabled):active {
+      transform: scale(0.96);
+    }
+  }
+`;
 
 function Button({
   className,

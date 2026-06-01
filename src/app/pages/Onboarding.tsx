@@ -161,12 +161,20 @@ export function Onboarding() {
 
       <Card className="w-full max-w-2xl relative z-10 border-0 shadow-2xl shadow-black/10">
         <CardHeader>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex justify-between items-center text-sm text-muted-foreground">
               <span>Step {step} of {totalSteps}</span>
               <span>{Math.round((step / totalSteps) * 100)}%</span>
             </div>
+
             <Progress value={(step / totalSteps) * 100} className="h-2" />
+
+            {/* Step badges */}
+            <div className="flex items-center gap-2 mt-2">
+              {Array.from({ length: totalSteps }, (_, i) => i + 1).map((n) => (
+                <div key={n} className={"w-2.5 h-2.5 rounded-full " + (n === step ? 'bg-emerald-600 shadow-glow-emerald' : 'bg-muted')} />
+              ))}
+            </div>
           </div>
         </CardHeader>
 
@@ -194,20 +202,27 @@ export function Onboarding() {
           {step === 2 && (
             <div className="space-y-4">
               <CardTitle>What's your primary goal?</CardTitle>
-              <RadioGroup value={data.primaryGoal} onValueChange={v => setData({ ...data, primaryGoal: v })}>
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   { value: 'build_muscle',        label: 'Build Muscle' },
                   { value: 'lose_fat',             label: 'Lose Fat' },
                   { value: 'increase_strength',    label: 'Increase Strength' },
                   { value: 'general_fitness',      label: 'General Fitness' },
                   { value: 'athletic_performance', label: 'Athletic Performance' },
-                ].map(o => (
-                  <div key={o.value} className="flex items-center space-x-2">
-                    <RadioGroupItem value={o.value} id={o.value} />
-                    <Label htmlFor={o.value}>{o.label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
+                ].map(o => {
+                  const selected = data.primaryGoal === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setData({ ...data, primaryGoal: o.value })}
+                      className={"text-left p-3 rounded-2xl border " + (selected ? 'bg-emerald-50 border-emerald-200 shadow-glow-emerald' : 'bg-card border-border')}
+                    >
+                      <div className="font-medium">{o.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -215,18 +230,25 @@ export function Onboarding() {
           {step === 3 && (
             <div className="space-y-4">
               <CardTitle>What's your experience level?</CardTitle>
-              <RadioGroup value={data.experienceLevel} onValueChange={v => setData({ ...data, experienceLevel: v })}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { value: 'beginner',     label: 'Beginner — Less than 6 months' },
                   { value: 'intermediate', label: 'Intermediate — 6 months to 2 years' },
                   { value: 'advanced',     label: 'Advanced — 2+ years' },
-                ].map(o => (
-                  <div key={o.value} className="flex items-center space-x-2">
-                    <RadioGroupItem value={o.value} id={o.value} />
-                    <Label htmlFor={o.value}>{o.label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
+                ].map(o => {
+                  const selected = data.experienceLevel === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setData({ ...data, experienceLevel: o.value })}
+                      className={"text-left p-3 rounded-2xl border " + (selected ? 'bg-emerald-50 border-emerald-200 shadow-glow-emerald' : 'bg-card border-border')}
+                    >
+                      <div className="font-medium">{o.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -302,29 +324,26 @@ export function Onboarding() {
           {step === 5 && (
             <div className="space-y-4">
               <CardTitle>What equipment do you have access to?</CardTitle>
-              <RadioGroup value={data.equipment} onValueChange={v => setData({ ...data, equipment: v })}>
-                <div className="flex items-start space-x-2">
-                  <RadioGroupItem value="full_gym" id="full_gym" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="full_gym">Full Gym Access</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Barbells, cables, machines, dumbbells</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <RadioGroupItem value="limited" id="limited" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="limited">Home / Limited Equipment</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Dumbbells, pull-up bar, resistance bands</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <RadioGroupItem value="bodyweight" id="bodyweight" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="bodyweight">Bodyweight Only</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">No equipment needed</p>
-                  </div>
-                </div>
-              </RadioGroup>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { value: 'full_gym', label: 'Full Gym Access', sub: 'Barbells, cables, machines, dumbbells' },
+                  { value: 'limited',  label: 'Home / Limited Equipment', sub: 'Dumbbells, pull-up bar, resistance bands' },
+                  { value: 'bodyweight', label: 'Bodyweight Only', sub: 'No equipment needed' },
+                ].map(o => {
+                  const selected = data.equipment === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setData({ ...data, equipment: o.value })}
+                      className={"text-left p-3 rounded-2xl border " + (selected ? 'bg-emerald-50 border-emerald-200 shadow-glow-emerald' : 'bg-card border-border')}
+                    >
+                      <div className="font-medium">{o.label}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{o.sub}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -369,22 +388,27 @@ export function Onboarding() {
           {step === 7 && (
             <div className="space-y-4">
               <CardTitle>Preferred Workout Style</CardTitle>
-              <RadioGroup value={data.workoutStyle} onValueChange={v => setData({ ...data, workoutStyle: v })}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { value: 'full_body',    label: 'Full Body',         sub: '3×/week — trains all muscles every session' },
                   { value: 'upper_lower',  label: 'Upper / Lower',     sub: '4×/week — alternates upper and lower days' },
                   { value: 'ppl',          label: 'Push / Pull / Legs',sub: '6×/week — dedicated push, pull, and leg days' },
                   { value: 'bro_split',    label: 'Bro Split',         sub: '5–6×/week — one muscle group per day' },
-                ].map(o => (
-                  <div key={o.value} className="flex items-start space-x-2">
-                    <RadioGroupItem value={o.value} id={o.value} className="mt-0.5" />
-                    <div>
-                      <Label htmlFor={o.value}>{o.label}</Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">{o.sub}</p>
-                    </div>
-                  </div>
-                ))}
-              </RadioGroup>
+                ].map(o => {
+                  const selected = data.workoutStyle === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setData({ ...data, workoutStyle: o.value })}
+                      className={"text-left p-3 rounded-2xl border " + (selected ? 'bg-emerald-50 border-emerald-200 shadow-glow-emerald' : 'bg-card border-border')}
+                    >
+                      <div className="font-medium">{o.label}</div>
+                      <p className="text-xs text-muted-foreground mt-1">{o.sub}</p>
+                    </button>
+                  );
+                })}
+              </div>
               {data.trainingDays <= 2 && data.workoutStyle !== '' && data.workoutStyle !== 'full_body' && (
                 <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
                   Full body training is usually most effective with {data.trainingDays} day{data.trainingDays > 1 ? 's' : ''}/week.

@@ -47,7 +47,6 @@ const NO_NAV_PATHS = new Set([
 
 function AppRoutes() {
   const { user } = useAuth();
-  // useLocation() is reactive — re-renders whenever the route changes
   const location = useLocation();
 
   const showBottomNav = user && !NO_NAV_PATHS.has(location.pathname);

@@ -275,6 +275,32 @@ export function Dashboard() {
           </p>
         </div>
 
+        {/* Hero: Today's Workout (peak) */}
+        <Card className="border-0 shadow-soft bg-emerald-50/50 dark:bg-emerald-900/20 overflow-hidden hover:shadow-md transition-shadow duration-200">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">Ready for</p>
+                <h2 className="text-2xl font-bold tracking-tight">{nextWorkout?.isToday ? "Today's Workout" : "Next Workout"}</h2>
+                <p className="text-sm text-muted-foreground mt-1">{nextWorkout ? `${nextWorkout.day} • ${(workoutPlan.workouts[nextWorkout.day] || []).length} exercises` : 'No workout scheduled'}</p>
+              </div>
+
+              <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-soft flex-shrink-0">
+                <Dumbbell className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+              </div>
+            </div>
+
+            {nextWorkout && (
+              <div className="mt-4">
+                <Button size="lg" className="w-full rounded-2xl" onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}>
+                  Start workout
+                  <Play className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Smart Insights */}
         <SmartInsights
           deloadSuggestion={deloadSuggestion}
@@ -342,54 +368,6 @@ export function Dashboard() {
             </CardContent>
           </Card>
         )}
-
-        {/* Next workout */}
-        <Card className="border-0 shadow-md overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                <Dumbbell className="w-3.5 h-3.5 text-violet-600" />
-              </div>
-
-              {nextWorkout?.isToday ? "Today's Workout" : "Next Workout"}
-
-              {nextWorkout && (
-                <Button
-                  className="ml-auto rounded-xl h-9 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700"
-                  onClick={() =>
-                    navigate("/active-workout", {
-                      state: { dayName: nextWorkout.day },
-                    })
-                  }
-                >
-                  Start now
-                  <Play className="w-4 h-4 ml-1" />
-                </Button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {nextWorkout ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xl font-bold tracking-tight">{nextWorkout.day}</p>
-                  <div className="flex gap-1.5 flex-wrap mt-2">
-                    {(workoutPlan.workouts[nextWorkout.day] || []).slice(0, 4).map((ex: any, i: number) => (
-                      <span key={i} className="text-xs bg-muted text-muted-foreground rounded-lg px-2.5 py-1 font-medium">{ex.name}</span>
-                    ))}
-                    {(workoutPlan.workouts[nextWorkout.day] || []).length > 4 && (
-                      <span className="text-xs text-muted-foreground">
-                        +{(workoutPlan.workouts[nextWorkout.day] || []).length - 4} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No upcoming workout found</p>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Bodyweight */}
         <Card className="border-0 shadow-md">

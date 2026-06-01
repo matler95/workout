@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -14,7 +14,7 @@ export function Plan() {
   const navigate = useNavigate();
   // FIX: track location so we can re-fetch whenever the user navigates back
   // to this page from WorkoutBuilder. React Router keeps the component alive
-  // between navigations, so useEffect([]) only fires on first mount — meaning
+  // between navigations, so useEffect([]) only fires on first mount â€” meaning
   // edits made in WorkoutBuilder are never reflected until a full page reload.
   const location = useLocation();
 
@@ -98,7 +98,7 @@ export function Plan() {
               </div>
               <div>
                 <div className="text-2xl font-bold tracking-tight capitalize">
-                  {profile?.workoutStyle?.replace(/_/g, ' ') || '—'}
+                  {profile?.workoutStyle?.replace(/_/g, ' ') || 'â€”'}
                 </div>
                 <div className="text-xs text-muted-foreground font-medium">Style</div>
               </div>
@@ -110,12 +110,23 @@ export function Plan() {
           {workoutDays.map(dayName => {
             const exercises = workoutPlan.workouts[dayName] || [];
             const estimatedMin = Math.round(10 + exercises.length * setsPerExercise * 2.75);
+
+            // Determine color theme based on first exercise primary muscle
+            const firstPrimary = exercises[0]?.primaryMuscles?.[0] || '';
+            const themeClass = firstPrimary.toLowerCase().includes('leg') ? 'bg-emerald-50 dark:bg-emerald-900/20'
+              : firstPrimary.toLowerCase().includes('chest') ? 'bg-cyan-50 dark:bg-cyan-900/20'
+              : firstPrimary.toLowerCase().includes('back') ? 'bg-purple-50 dark:bg-purple-900/20'
+              : firstPrimary.toLowerCase().includes('arm') ? 'bg-amber-50 dark:bg-amber-900/20'
+              : 'bg-card dark:bg-card';
+
+            const titleColor = themeClass === 'bg-card' ? 'text-foreground' : '';
+
             return (
-              <Card key={dayName} className="border-0 shadow-md hover:shadow-lg transition-shadow duration-200">
+              <Card key={dayName} className={`border-0 ${themeClass} shadow-soft hover:shadow-glow-emerald transition-shadow duration-200`}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle className="text-lg tracking-tight">{dayName}</CardTitle>
+                      <CardTitle className={`text-lg tracking-tight ${titleColor}`}>{dayName}</CardTitle>
                       <div className="flex gap-3 mt-2 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-md bg-violet-500/10 flex items-center justify-center">
@@ -131,19 +142,23 @@ export function Plan() {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      onClick={() => navigate('/active-workout', { state: { dayName } })}
-                      size="sm"
-                      className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20"
-                    >
-                      Start
-                    </Button>
+
+                    {/* Desktop start */}
+                    <div className="hidden sm:block">
+                      <Button
+                        onClick={() => navigate('/active-workout', { state: { dayName } })}
+                        size="lg"
+                        className="rounded-2xl bg-emerald-500 text-white hover:bg-emerald-600 shadow-soft"
+                      >
+                        Start
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {exercises.map((ex: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-2.5 bg-muted/50 rounded-xl">
+                      <div key={idx} className="flex items-center justify-between p-2 bg-muted/50 rounded-xl">
                         <div>
                           <div className="font-medium text-sm">{ex.name}</div>
                           <div className="text-xs text-muted-foreground capitalize">{ex.primaryMuscles?.join(', ')?.replace(/_/g, ' ')}</div>
@@ -153,6 +168,17 @@ export function Plan() {
                         </Badge>
                       </div>
                     ))}
+
+                    {/* Mobile start */}
+                    <div className="block sm:hidden mt-3">
+                      <Button
+                        onClick={() => navigate('/active-workout', { state: { dayName } })}
+                        size="lg"
+                        className="w-full rounded-2xl bg-emerald-500 text-white hover:bg-emerald-600 shadow-soft"
+                      >
+                        Start
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

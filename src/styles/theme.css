@@ -2,6 +2,61 @@
 
 :root {
   --font-size: 16px;
+
+  /* 60% Neutral Base — Light Theme */
+  --neutral-bg: #f8f9fa;
+  --neutral-fg: #0f1117;
+
+  /* 30% Complementary — Text Hierarchy with Opacity Variations */
+  --text-primary: #1a1d23;
+  --text-primary-100: #1a1d23;
+  --text-primary-80: rgba(26, 29, 35, 0.8);
+  --text-primary-60: rgba(26, 29, 35, 0.6);
+  --text-primary-50: rgba(26, 29, 35, 0.5);
+  --text-primary-40: rgba(26, 29, 35, 0.4);
+
+  --text-secondary: #57606a;
+  --text-secondary-100: #57606a;
+  --text-secondary-80: rgba(87, 96, 106, 0.8);
+  --text-secondary-70: rgba(87, 96, 106, 0.7);
+  --text-secondary-60: rgba(87, 96, 106, 0.67);
+  --text-secondary-50: rgba(87, 96, 106, 0.5);
+  --text-secondary-40: rgba(87, 96, 106, 0.4);
+
+  --text-muted: #8a92a2;
+  --text-muted-100: #8a92a2;
+  --text-muted-80: rgba(138, 146, 162, 0.8);
+  --text-muted-70: rgba(138, 146, 162, 0.7);
+  --text-muted-60: rgba(138, 146, 162, 0.6);
+  --text-muted-50: rgba(138, 146, 162, 0.5);
+  --text-muted-40: rgba(138, 146, 162, 0.4);
+
+  /* 10% Brand Accent Colors — Fitness Brand */
+  --color-emerald: #10b981;
+  --color-emerald-100: #10b981;
+  --color-emerald-80: rgba(16, 185, 129, 0.8);
+  --color-emerald-60: rgba(16, 185, 129, 0.6);
+  --color-emerald-40: rgba(16, 185, 129, 0.4);
+
+  --color-cyan: #06b6d4;
+  --color-cyan-100: #06b6d4;
+  --color-cyan-80: rgba(6, 182, 212, 0.8);
+  --color-cyan-60: rgba(6, 182, 212, 0.6);
+  --color-cyan-40: rgba(6, 182, 212, 0.4);
+
+  --color-amber: #f59e0b;
+  --color-amber-100: #f59e0b;
+  --color-amber-80: rgba(245, 158, 11, 0.8);
+  --color-amber-60: rgba(245, 158, 11, 0.6);
+  --color-amber-40: rgba(245, 158, 11, 0.4);
+
+  --color-red: #ef4444;
+  --color-red-100: #ef4444;
+  --color-red-80: rgba(239, 68, 68, 0.8);
+  --color-red-60: rgba(239, 68, 68, 0.6);
+  --color-red-40: rgba(239, 68, 68, 0.4);
+
+  /* Legacy/Backward Compatibility Variables */
   --background: #fafbfc;
   --foreground: #1a1d26;
   --card: #ffffff;
@@ -58,6 +113,60 @@
 }
 
 .dark {
+  /* 60% Neutral Base — Dark Theme */
+  --neutral-bg: #0f1117;
+  --neutral-fg: #f8f9fa;
+
+  /* 30% Complementary — Text Hierarchy with Opacity Variations (Dark) */
+  --text-primary: #e8eaed;
+  --text-primary-100: #e8eaed;
+  --text-primary-80: rgba(232, 234, 237, 0.8);
+  --text-primary-60: rgba(232, 234, 237, 0.6);
+  --text-primary-50: rgba(232, 234, 237, 0.5);
+  --text-primary-40: rgba(232, 234, 237, 0.4);
+
+  --text-secondary: #a8b2bf;
+  --text-secondary-100: #a8b2bf;
+  --text-secondary-80: rgba(168, 178, 191, 0.8);
+  --text-secondary-70: rgba(168, 178, 191, 0.7);
+  --text-secondary-60: rgba(168, 178, 191, 0.67);
+  --text-secondary-50: rgba(168, 178, 191, 0.5);
+  --text-secondary-40: rgba(168, 178, 191, 0.4);
+
+  --text-muted: #7a8290;
+  --text-muted-100: #7a8290;
+  --text-muted-80: rgba(122, 130, 144, 0.8);
+  --text-muted-70: rgba(122, 130, 144, 0.7);
+  --text-muted-60: rgba(122, 130, 144, 0.6);
+  --text-muted-50: rgba(122, 130, 144, 0.5);
+  --text-muted-40: rgba(122, 130, 144, 0.4);
+
+  /* 10% Brand Accent Colors — Fitness Brand (Dark Theme) */
+  --color-emerald: #10b981;
+  --color-emerald-100: #10b981;
+  --color-emerald-80: rgba(16, 185, 129, 0.8);
+  --color-emerald-60: rgba(16, 185, 129, 0.6);
+  --color-emerald-40: rgba(16, 185, 129, 0.4);
+
+  --color-cyan: #06b6d4;
+  --color-cyan-100: #06b6d4;
+  --color-cyan-80: rgba(6, 182, 212, 0.8);
+  --color-cyan-60: rgba(6, 182, 212, 0.6);
+  --color-cyan-40: rgba(6, 182, 212, 0.4);
+
+  --color-amber: #f59e0b;
+  --color-amber-100: #f59e0b;
+  --color-amber-80: rgba(245, 158, 11, 0.8);
+  --color-amber-60: rgba(245, 158, 11, 0.6);
+  --color-amber-40: rgba(245, 158, 11, 0.4);
+
+  --color-red: #ef4444;
+  --color-red-100: #ef4444;
+  --color-red-80: rgba(239, 68, 68, 0.8);
+  --color-red-60: rgba(239, 68, 68, 0.6);
+  --color-red-40: rgba(239, 68, 68, 0.4);
+
+  /* Legacy/Backward Compatibility Variables */
   --background: #0f1117;
   --foreground: #e8eaed;
   --card: #1a1d26;
@@ -123,6 +232,49 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  /* New 60/30/10 Color System */
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-fg: var(--neutral-fg);
+  --color-text-primary: var(--text-primary);
+  --color-text-primary-100: var(--text-primary-100);
+  --color-text-primary-80: var(--text-primary-80);
+  --color-text-primary-60: var(--text-primary-60);
+  --color-text-primary-50: var(--text-primary-50);
+  --color-text-primary-40: var(--text-primary-40);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-secondary-100: var(--text-secondary-100);
+  --color-text-secondary-80: var(--text-secondary-80);
+  --color-text-secondary-70: var(--text-secondary-70);
+  --color-text-secondary-60: var(--text-secondary-60);
+  --color-text-secondary-50: var(--text-secondary-50);
+  --color-text-secondary-40: var(--text-secondary-40);
+  --color-text-muted: var(--text-muted);
+  --color-text-muted-100: var(--text-muted-100);
+  --color-text-muted-80: var(--text-muted-80);
+  --color-text-muted-70: var(--text-muted-70);
+  --color-text-muted-60: var(--text-muted-60);
+  --color-text-muted-50: var(--text-muted-50);
+  --color-text-muted-40: var(--text-muted-40);
+  --color-emerald: var(--color-emerald);
+  --color-emerald-100: var(--color-emerald-100);
+  --color-emerald-80: var(--color-emerald-80);
+  --color-emerald-60: var(--color-emerald-60);
+  --color-emerald-40: var(--color-emerald-40);
+  --color-cyan: var(--color-cyan);
+  --color-cyan-100: var(--color-cyan-100);
+  --color-cyan-80: var(--color-cyan-80);
+  --color-cyan-60: var(--color-cyan-60);
+  --color-cyan-40: var(--color-cyan-40);
+  --color-amber: var(--color-amber);
+  --color-amber-100: var(--color-amber-100);
+  --color-amber-80: var(--color-amber-80);
+  --color-amber-60: var(--color-amber-60);
+  --color-amber-40: var(--color-amber-40);
+  --color-red: var(--color-red);
+  --color-red-100: var(--color-red-100);
+  --color-red-80: var(--color-red-80);
+  --color-red-60: var(--color-red-60);
+  --color-red-40: var(--color-red-40);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

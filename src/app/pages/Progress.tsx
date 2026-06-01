@@ -309,7 +309,7 @@ export function Progress() {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -359,7 +359,7 @@ export function Progress() {
                           <YAxis tick={{ fontSize: 11 }} unit="kg" domain={['auto', 'auto']} />
                           <Tooltip formatter={(v: any, n: string) => [`${Math.round(v)} kg`, n === 'e1rm' ? 'Est. 1RM' : 'Top set']} />
                           <Line type="monotone" dataKey="weight" stroke="#94a3b8" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="weight" />
-                          <Line type="monotone" dataKey="e1rm"   stroke="#6366f1" strokeWidth={2}   dot={{ r: 3 }} name="e1rm" />
+                          <Line type="monotone" dataKey="e1rm"   stroke="#10B981" strokeWidth={2}   dot={{ r: 3 }} name="e1rm" />
                         </LineChart>
                       </ResponsiveContainer>
                       <p className="text-xs text-muted-foreground text-center mt-1">— e1RM &nbsp;&nbsp; - - top set weight</p>
@@ -580,9 +580,9 @@ export function Progress() {
                     <XAxis dataKey="week" tick={{ fontSize: 10 }} interval={2} />
                     <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                     <Tooltip />
-                    <ReferenceLine y={profile?.trainingDays || 3} stroke="#6366f1" strokeDasharray="4 2"
+                    <ReferenceLine y={profile?.trainingDays || 3} stroke="#10B981" strokeDasharray="4 2"
                       label={{ value: 'target', position: 'right', fontSize: 10 }} />
-                    <Bar dataKey="workouts" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="workouts" fill="#10B981" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

@@ -38,6 +38,7 @@ import {
 } from '../../utils/startingWeights';
 import { calculateMuscleVolume } from '../../utils/volumeTracking';
 import { SmartWorkoutGuidance } from '../components/SmartWorkoutGuidance';
+import Celebration from '../components/ui/celebration';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -255,6 +256,7 @@ export function ActiveWorkout() {
   const [customReps, setCustomReps]         = useState('');
   const [loading, setLoading]               = useState(true);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   // FIX: workout start time is persisted to sessionStorage so it survives
@@ -545,7 +547,11 @@ export function ActiveWorkout() {
       try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
 
       toast.success('Workout saved! 💪');
-      navigate('/dashboard');
+      setShowConfetti(true);
+      setTimeout(() => {
+        setShowConfetti(false);
+        navigate('/dashboard');
+      }, 900);
     } catch {
       toast.error('Failed to save');
     }
@@ -675,7 +681,7 @@ export function ActiveWorkout() {
             </div>
 
             <Button
-              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200"
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200"
               size="lg"
               onClick={() => {
                 const startMs = Date.now();
@@ -703,6 +709,7 @@ export function ActiveWorkout() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
+        <Celebration show={showConfetti} />
         <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
           <CardContent className="pt-6 space-y-4">
             <div className="text-center">
@@ -992,7 +999,7 @@ export function ActiveWorkout() {
             )}
             <Button
               onClick={handleSetComplete}
-              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/25"
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25"
               size="lg"
             >
               <Check className="w-5 h-5 mr-2" />

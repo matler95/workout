@@ -116,47 +116,39 @@ export function Profile() {
               <User className="w-4 h-4" /> Account
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Name</p>
-                <p className="font-medium">{profile?.name || '—'}</p>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center shadow-soft">
+                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-emerald-600 font-bold">{(profile?.name || 'U').split(' ')[0][0] || 'U'}</div>
               </div>
-              <div>
+
+              <div className="flex-1">
+                <div className="text-sm text-muted-foreground">{profile?.name ? 'Welcome back,' : 'Hello'}</div>
+                <div className="text-lg font-semibold">{profile?.name || 'User'}</div>
+                <div className="text-xs text-muted-foreground mt-1">{profile?.primaryGoal ? profile.primaryGoal.replace(/_/g, ' ') : 'Set your goal'}</div>
+              </div>
+
+              <div className="ml-auto text-right">
                 <p className="text-xs text-muted-foreground">Email</p>
                 <p className="font-medium text-sm truncate">{user?.email}</p>
               </div>
             </div>
 
-            {profile && (
-              <div className="grid grid-cols-3 gap-3 pt-1">
-                <div>
-                   <p className="text-xs text-muted-foreground">Age</p>
-                  <p className="font-medium">{profile.age ?? '—'}</p>
-                </div>
-                <div>
-                   <p className="text-xs text-muted-foreground">Height</p>
-                  <p className="font-medium">{profile.height ? `${profile.height} cm` : '—'}</p>
-                </div>
-                <div>
-                   <p className="text-xs text-muted-foreground">Weight</p>
-                  <p className="font-medium">{profile.weight ? `${profile.weight} kg` : '—'}</p>
-                </div>
+            {/* Quick stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 bg-card rounded-2xl text-center shadow-subtle">
+                <div className="text-xs text-muted-foreground">Days / Week</div>
+                <div className="text-lg font-semibold">{profile?.trainingDays || '—'}</div>
               </div>
-            )}
-
-            {profile && (
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div>
-                   <p className="text-xs text-muted-foreground">Goal</p>
-                  <p className="font-medium capitalize">{profile.primaryGoal?.replace(/_/g, ' ')}</p>
-                </div>
-                <div>
-                   <p className="text-xs text-muted-foreground">Experience</p>
-                  <p className="font-medium capitalize">{profile.experienceLevel}</p>
-                </div>
+              <div className="p-3 bg-card rounded-2xl text-center shadow-subtle">
+                <div className="text-xs text-muted-foreground">Session (min)</div>
+                <div className="text-lg font-semibold">{profile?.sessionLength || '—'}</div>
               </div>
-            )}
+              <div className="p-3 bg-card rounded-2xl text-center shadow-subtle">
+                <div className="text-xs text-muted-foreground">Experience</div>
+                <div className="text-lg font-semibold capitalize">{profile?.experienceLevel || '—'}</div>
+              </div>
+            </div>
 
             <Button
               variant="outline"

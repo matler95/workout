@@ -15,7 +15,7 @@ export function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 safe-area-inset-bottom">
+    <div className="fixed bottom-0 left-0 right-0 z-50 safe-area-bottom">
       <div className="mx-auto max-w-xl">
         <div className="mx-3 mb-3 bg-card/80 backdrop-blur-xl border border-border/60 rounded-2xl shadow-lg shadow-black/[0.06]">
           <div className="flex justify-around items-center h-16 px-1">

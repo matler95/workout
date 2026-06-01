@@ -27,7 +27,7 @@ export function Library() {
       <div className="max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold tracking-tight pt-2">Exercise Library</h1>
 
-        <Card>
+        <Card className="border-0 shadow-md">
           <CardContent className="pt-6 space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -35,13 +35,13 @@ export function Library() {
                 placeholder="Search exercises or muscles..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 rounded-2xl"
               />
             </div>
 
             <div className="flex gap-2">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] rounded-lg border-emerald-subtle">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -54,7 +54,7 @@ export function Library() {
               </Select>
 
               <Select value={equipmentFilter} onValueChange={setEquipmentFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] rounded-lg border-emerald-subtle">
                   <SelectValue placeholder="Equipment" />
                 </SelectTrigger>
                 <SelectContent>
@@ -65,6 +65,11 @@ export function Library() {
                   <SelectItem value="bodyweight">Bodyweight</SelectItem>
                 </SelectContent>
               </Select>
+
+              <div className="ml-auto flex items-center gap-2">
+                <div className="text-sm text-muted-foreground">Showing</div>
+                <div className="text-sm font-semibold">{filteredExercises.length}</div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -75,12 +80,12 @@ export function Library() {
 
         <Accordion type="single" collapsible className="space-y-2">
           {filteredExercises.map((exercise) => (
-            <AccordionItem key={exercise.id} value={exercise.id} className="border-0 bg-card rounded-2xl shadow-md px-4">
+            <AccordionItem key={exercise.id} value={exercise.id} className="border-0 bg-card rounded-2xl shadow-soft px-4">
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex-1 text-left">
-                  <div className="font-medium">{exercise.name}</div>
+                  <div className="font-medium text-foreground">{exercise.name}</div>
                   <div className="flex gap-2 mt-2">
-                    <Badge variant="outline" className="text-xs rounded-lg capitalize">
+                    <Badge variant="muted" className="text-xs rounded-lg capitalize">
                       {exercise.category}
                     </Badge>
                     <Badge variant="secondary" className="text-xs rounded-lg capitalize">
@@ -93,9 +98,9 @@ export function Library() {
                 <div className="space-y-3">
                   <div>
                     <div className="text-sm font-medium mb-1">Primary Muscles</div>
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-2">
                       {exercise.primaryMuscles.map((muscle) => (
-                        <Badge key={muscle} className="text-xs">{muscle}</Badge>
+                        <Badge key={muscle} className="text-xs" variant="primary">{muscle}</Badge>
                       ))}
                     </div>
                   </div>
@@ -103,7 +108,7 @@ export function Library() {
                   {exercise.secondaryMuscles.length > 0 && (
                     <div>
                       <div className="text-sm font-medium mb-1">Secondary Muscles</div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-2">
                         {exercise.secondaryMuscles.map((muscle) => (
                           <Badge key={muscle} variant="secondary" className="text-xs">{muscle}</Badge>
                         ))}
@@ -113,7 +118,7 @@ export function Library() {
 
                   <div>
                     <div className="text-sm font-medium mb-2">Instructions</div>
-                    <div className="text-sm text-card-foreground whitespace-pre-line bg-muted/50 p-3 rounded-xl">
+                    <div className="text-sm text-card-foreground whitespace-pre-line bg-muted/50 p-4 rounded-2xl">
                       {exercise.instructions}
                     </div>
                   </div>

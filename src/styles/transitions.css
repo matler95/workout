@@ -1,0 +1,38 @@
+/* Page transitions and motion utilities */
+
+.page-transition {
+  transition: transform 260ms cubic-bezier(.2,.9,.2,1), opacity 260ms cubic-bezier(.2,.9,.2,1);
+  will-change: transform, opacity;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-transition.enter {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-transition.enter-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition.exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition.exit-active {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .page-transition.enter-active,
+  .page-transition.exit-active {
+    transition: none !important;
+    transform: none !important;
+  }
+}
