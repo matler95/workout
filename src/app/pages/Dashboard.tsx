@@ -8,7 +8,7 @@ import { Progress } from '../components/ui/progress';
 import { Input } from '../components/ui/input';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
-import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, ChevronRight } from 'lucide-react';
+import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, ChevronRight, Play } from 'lucide-react';
 import { format, parseISO, startOfWeek, subDays } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -236,34 +236,53 @@ export function Dashboard() {
           </Card>
         )}
 
-        {/* Daily targets */}
-        {(cals || protein) && (
-          <Card className="border-0 shadow-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Target className="w-3.5 h-3.5 text-primary" />
-                </div>
-                Daily Targets
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {cals && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Calories</span>
-                  <span className="font-semibold">{cals} <span className="text-xs text-muted-foreground font-normal">kcal</span></span>
-                </div>
+        {/* Next workout */}
+        <Card className="border-0 shadow-md overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Dumbbell className="w-3.5 h-3.5 text-violet-600" />
+              </div>
+
+              {nextWorkout?.isToday ? "Today's Workout" : "Next Workout"}
+
+              {nextWorkout && (
+                <Button
+                  className="ml-auto rounded-xl h-9 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700"
+                  onClick={() =>
+                    navigate("/active-workout", {
+                      state: { dayName: nextWorkout.day },
+                    })
+                  }
+                >
+                  Start now
+                  <Play className="w-4 h-4 ml-1" />
+                </Button>
               )}
-              {protein && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Protein</span>
-                  <span className="font-semibold">{protein} <span className="text-xs text-muted-foreground font-normal">g</span></span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {nextWorkout ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xl font-bold tracking-tight">{nextWorkout.day}</p>
+                  <div className="flex gap-1.5 flex-wrap mt-2">
+                    {(workoutPlan.workouts[nextWorkout.day] || []).slice(0, 4).map((ex: any, i: number) => (
+                      <span key={i} className="text-xs bg-muted text-muted-foreground rounded-lg px-2.5 py-1 font-medium">{ex.name}</span>
+                    ))}
+                    {(workoutPlan.workouts[nextWorkout.day] || []).length > 4 && (
+                      <span className="text-xs text-muted-foreground">
+                        +{(workoutPlan.workouts[nextWorkout.day] || []).length - 4} more
+                      </span>
+                    )}
+                  </div>
                 </div>
-              )}
-              <p className="text-xs text-muted-foreground capitalize">Goal: {profile.primaryGoal?.replace(/_/g, ' ')}</p>
-            </CardContent>
-          </Card>
-        )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No upcoming workout found</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Bodyweight */}
         <Card className="border-0 shadow-md">
@@ -328,44 +347,34 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Next workout */}
-        <Card className="border-0 shadow-md overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                <Dumbbell className="w-3.5 h-3.5 text-violet-600" />
-              </div>
-              {nextWorkout?.isToday ? "Today's Workout" : 'Next Workout'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {nextWorkout ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xl font-bold tracking-tight">{nextWorkout.day}</p>
-                  <div className="flex gap-1.5 flex-wrap mt-2">
-                    {(workoutPlan.workouts[nextWorkout.day] || []).slice(0, 4).map((ex: any, i: number) => (
-                      <span key={i} className="text-xs bg-muted text-muted-foreground rounded-lg px-2.5 py-1 font-medium">{ex.name}</span>
-                    ))}
-                    {(workoutPlan.workouts[nextWorkout.day] || []).length > 4 && (
-                      <span className="text-xs text-muted-foreground">
-                        +{(workoutPlan.workouts[nextWorkout.day] || []).length - 4} more
-                      </span>
-                    )}
-                  </div>
+        {/* Daily targets */}
+        {(cals || protein) && (
+          <Card className="border-0 shadow-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Target className="w-3.5 h-3.5 text-primary" />
                 </div>
-                <Button
-                  className="w-full rounded-xl h-11 font-semibold bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-200"
-                  onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}
-                >
-                  Start Workout <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No upcoming workout found</p>
-            )}
-          </CardContent>
-        </Card>
+                Daily Targets
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {cals && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Calories</span>
+                  <span className="font-semibold">{cals} <span className="text-xs text-muted-foreground font-normal">kcal</span></span>
+                </div>
+              )}
+              {protein && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Protein</span>
+                  <span className="font-semibold">{protein} <span className="text-xs text-muted-foreground font-normal">g</span></span>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground capitalize">Goal: {profile.primaryGoal?.replace(/_/g, ' ')}</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Recent activity */}
         {workoutHistory.length > 0 && (
