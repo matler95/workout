@@ -37,6 +37,7 @@ import {
   type StartingWeightResult,
 } from '../../utils/startingWeights';
 import { calculateMuscleVolume } from '../../utils/volumeTracking';
+import { SmartWorkoutGuidance } from '../components/SmartWorkoutGuidance';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -909,6 +910,12 @@ export function ActiveWorkout() {
           <CardContent className="space-y-4">
             {plan && <SuggestionBanner plan={plan} exerciseKey={exerciseKey} />}
             {plan && <E1RMDisplay plan={plan} />}
+
+            <SmartWorkoutGuidance 
+              currentExercise={currentExercise}
+              suggestedReps={[repLo, repHi]}
+              exerciseHistory={exerciseSets}
+            />
 
             <div className={`grid gap-3 ${isBodyweight ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {!isBodyweight && (

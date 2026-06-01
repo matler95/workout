@@ -6,10 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
-import { profileApi, planApi } from '../../utils/api';
+import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { Search, Plus, Trash2, Clock, AlertTriangle, CheckCircle, Info, Zap } from 'lucide-react';
 import { selectPeriodization, type PeriodizationModel } from '../../utils/periodization';
+import { WorkoutBuilderInsights } from '../components/WorkoutBuilderInsights';
+import {
+  estimateSessionDuration,
+  checkFatigueWarnings,
+} from '../../utils/smartAlgorithms';
 
 const MUSCLE_TARGETS: Record<string, string[]> = {
   push: ['chest', 'front_delts', 'side_delts', 'triceps'],
@@ -84,6 +89,7 @@ export function WorkoutBuilder() {
   const [loading, setLoading]                     = useState(true);
   const [saving, setSaving]                       = useState(false);
   const [selectedMuscle, setSelectedMuscle]       = useState<string | null>(null);
+  const [workoutHistory, setWorkoutHistory]       = useState<any[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => { loadProfile(); }, []);
@@ -92,6 +98,10 @@ export function WorkoutBuilder() {
     try {
       const profile = await profileApi.get();
       setProfile(profile);
+
+      // Fetch workout history for smart warnings
+      const history = await workoutApi.getHistory(50).catch(() => []);
+      setWorkoutHistory(history);
 
       // FIX #8: Fetch the existing plan first. Only call initializeDays if
       // there is no saved plan yet. The previous code called initializeDays
@@ -290,6 +300,12 @@ export function WorkoutBuilder() {
             </Card>
           );
         })()}
+
+        <WorkoutBuilderInsights 
+          currentExercises={currentExercises}
+          currentDay={currentDay}
+          workoutHistory={workoutHistory}
+        />
 
         <Tabs value={currentDay} onValueChange={(day) => { setCurrentDay(day); setSelectedMuscle(null); }}>
           <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">

@@ -11,6 +11,7 @@ import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
 import { inferMuscleGroup } from '../../utils/inferMuscleGroup';
 import { ProgressionInsights } from '../components/ProgressionInsights';
+import { ProgressInsights } from '../components/ProgressInsights';
 import {
   computeAllSuggestions,
   type WorkoutLog as EngineWorkoutLog,
@@ -22,6 +23,11 @@ import {
   isVolumeInsufficient,
   VOLUME_LANDMARKS,
 } from '../../utils/volumeTracking';
+import {
+  predictBodyweightTrend,
+  calculateWorkCapacity,
+  calculateMuscleBalance,
+} from '../../utils/smartAlgorithms';
 
 // ─── Local types ───────────────────────────────────────────────────────────────
 
@@ -66,6 +72,9 @@ export function Progress() {
   const [profile, setProfile]                   = useState<any>(null);
   const [loading, setLoading]                   = useState(true);
   const [selectedExercise, setSelectedExercise] = useState('');
+  const [bodyweightPrediction, setBodyweightPrediction] = useState<any>(null);
+  const [workCapacity, setWorkCapacity] = useState<any>(null);
+  const [muscleBalance, setMuscleBalance] = useState<any>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -81,6 +90,20 @@ export function Progress() {
       setWorkoutHistory(history as WorkoutLog[]);
       setDbVolumeData(vol);
       setProfile(prof);
+
+      // Compute smart insights
+      if (bw.length >= 4) {
+        const prediction = predictBodyweightTrend(bw, 60);
+        setBodyweightPrediction(prediction);
+      }
+
+      if (vol.length > 0 && bw.length > 0) {
+        const capacity = calculateWorkCapacity(vol, vol.slice(0, Math.min(8, vol.length)));
+        setWorkCapacity(capacity);
+
+        const balance = calculateMuscleBalance(vol);
+        setMuscleBalance(balance);
+      }
     } catch (e) {
       console.error('Failed to load progress:', e);
     } finally {
@@ -226,6 +249,14 @@ export function Progress() {
     <div className="min-h-screen bg-background p-4 pb-24">
       <div className="max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold tracking-tight pt-2">Progress</h1>
+
+        {/* Smart Insights */}
+        <ProgressInsights
+          bodyweightPrediction={bodyweightPrediction}
+          workCapacity={workCapacity}
+          muscleBalance={muscleBalance}
+          units={profile?.units || 'metric'}
+        />
 
         <Tabs defaultValue="body" className="w-full">
           <TabsList className="grid w-full grid-cols-4">

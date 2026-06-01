@@ -11,6 +11,15 @@ import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
 import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, Play } from 'lucide-react';
 import { format, parseISO, startOfWeek, subDays, isSameWeek } from 'date-fns';
 import { toast } from 'sonner';
+import { SmartInsights } from '../components/SmartInsights';
+import { InjuryRiskAlerts } from '../components/InjuryRiskAlerts';
+import {
+  suggestDeload,
+  calculateRecoveryScore,
+  suggestProgression,
+  checkFatigueWarnings,
+} from '../../utils/smartAlgorithms';
+import { exerciseDatabase } from '../../data/exercises';
 
 // FIX (units): convert kg → lbs for display when user is on imperial
 function formatWeight(kg: number, units: string): string {
@@ -30,22 +39,49 @@ export function Dashboard() {
   const [newWeight, setNewWeight]           = useState('');
   const [loggingWeight, setLoggingWeight]   = useState(false);
   const [loading, setLoading]               = useState(true);
+  const [volumeData, setVolumeData]         = useState<any[]>([]);
+  const [deloadSuggestion, setDeloadSuggestion] = useState<any>(null);
+  const [recoveryScore, setRecoveryScore] = useState<any>(null);
+  const [fatigueWarnings, setFatigueWarnings] = useState<any[]>([]);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
-      const [prof, plan, history, bw] = await Promise.all([
+      const [prof, plan, history, bw, vol] = await Promise.all([
         profileApi.get().catch(() => null),
         planApi.get().catch(() => null),
         // 200 sessions ≈ 4×/week × 50 weeks — prevents streak truncation
         workoutApi.getHistory(200).catch(() => []),
         progressApi.getBodyweight(30).catch(() => []),
+        progressApi.getWeeklyVolume().catch(() => []),
       ]);
       setProfile(prof);
       setWorkoutPlan(plan);
       setWorkoutHistory(history);
       setBodyweightData(bw);
+      setVolumeData(vol);
+
+      // Compute smart insights
+      if (prof && history.length > 0 && vol.length > 0) {
+        const deload = suggestDeload(vol, history, prof);
+        setDeloadSuggestion(deload);
+
+        const recovery = calculateRecoveryScore(prof, history);
+        setRecoveryScore(recovery);
+
+        const nextDay = plan?.workouts ? Object.keys(plan.workouts)[0] : null;
+        if (nextDay) {
+          const nextDayExercises = (plan.workouts[nextDay] || []).map((ex: any) => ({
+            id: ex.id,
+            name: ex.name,
+            primaryMuscles: ex.primaryMuscles || [],
+            secondaryMuscles: ex.secondaryMuscles || [],
+          }));
+          const warnings = checkFatigueWarnings(nextDayExercises, prof, history);
+          setFatigueWarnings(warnings);
+        }
+      }
     } catch (e) {
       console.error('Dashboard load error:', e);
     } finally {
@@ -238,6 +274,23 @@ export function Dashboard() {
             {format(new Date(), 'EEEE, MMM d')}
           </p>
         </div>
+
+        {/* Smart Insights */}
+        <SmartInsights
+          deloadSuggestion={deloadSuggestion}
+          recoveryScore={recoveryScore}
+          fatigueWarnings={fatigueWarnings}
+          onViewProgress={() => navigate('/progress')}
+          onGeneratePlan={() => navigate('/workout-builder')}
+        />
+
+        {/* Injury Risk Alerts */}
+        {workoutHistory.length > 0 && (
+          <InjuryRiskAlerts
+            workoutHistory={workoutHistory}
+            exercises={exerciseDatabase}
+          />
+        )}
 
         {/* This week + Readiness */}
         <div className="grid grid-cols-2 gap-3">

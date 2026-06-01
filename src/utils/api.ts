@@ -312,21 +312,59 @@ export type WorkoutLogPayload = {
 export const workoutApi = {
   /** Full history — newest first. Use limit to cap payload. */
   getHistory: async (limit = 50): Promise<WorkoutSession[]> => {
-    const { data, error } = await supabase
+    const userId = await getUserId();
+    
+    // Fetch sessions without nested select (simpler, more reliable)
+    const { data: sessions, error: sessionsError } = await supabase
       .from('workout_sessions')
       .select(`
         id, day_name, completed_at, duration_minutes,
-        perceived_effort, feedback, rpe_corrections, muscle_volume,
-        workout_sets (
-          exercise_id, exercise_name, set_number,
-          weight_kg, reps, e1rm_kg, completed_at
-        )
+        perceived_effort, feedback, rpe_corrections, muscle_volume
       `)
+      .eq('user_id', userId)
       .order('completed_at', { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
-    return (data || []).map(sessionFromDb);
+    if (sessionsError) throw sessionsError;
+
+    // Fetch all sets for these sessions
+    if (!sessions || sessions.length === 0) return [];
+
+    const sessionIds = sessions.map(s => s.id);
+    const { data: sets, error: setsError } = await supabase
+      .from('workout_sets')
+      .select('*')
+      .in('session_id', sessionIds)
+      .order('created_at', { ascending: true });
+
+    if (setsError) throw setsError;
+
+    // Map sets to their sessions
+    const setsBySessionId = (sets || []).reduce((acc: any, set: any) => {
+      if (!acc[set.session_id]) acc[set.session_id] = [];
+      acc[set.session_id].push(set);
+      return acc;
+    }, {});
+
+    return (sessions || []).map(row => ({
+      id: row.id,
+      dayName: row.day_name,
+      completedAt: row.completed_at,
+      duration: row.duration_minutes,
+      perceivedEffort: row.perceived_effort,
+      feedback: row.feedback,
+      rpeCorrections: row.rpe_corrections,
+      muscleVolume: row.muscle_volume,
+      sets: (setsBySessionId[row.id] || []).map((s: any) => ({
+        exerciseId: s.exercise_id,
+        exerciseName: s.exercise_name,
+        set: s.set_number,
+        weight: parseFloat(s.weight_kg || 0),
+        reps: s.reps,
+        e1rm: s.e1rm_kg ? parseFloat(s.e1rm_kg) : null,
+        timestamp: s.completed_at,
+      })),
+    }));
   },
 
   /**
