@@ -3903,7 +3903,7 @@ export const exerciseDatabase: Exercise[] = [
   {
     id: 'thighabductor',
     name: 'Thigh Abductor',
-    category: 'push',
+    category: 'legs',
     primaryMuscles: ["abductors"],
     secondaryMuscles: ["glutes"],
     equipment: 'full_gym',
@@ -3913,7 +3913,7 @@ export const exerciseDatabase: Exercise[] = [
   {
     id: 'thighadductor',
     name: 'Thigh Adductor',
-    category: 'pull',
+    category: 'legs',
     primaryMuscles: ["adductors"],
     secondaryMuscles: ["glutes", "hamstrings"],
     equipment: 'full_gym',

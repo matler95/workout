@@ -28,6 +28,22 @@ function getDayType(dayName: string): string {
   return 'full';
 }
 
+function getAvailableMuscles(dayType: string): string[] {
+  const categoryMap: Record<string, string[]> = {
+    push:  ['push'],
+    pull:  ['pull'],
+    legs:  ['legs'],
+    upper: ['push', 'pull'],
+    lower: ['legs'],
+  };
+  const categories = categoryMap[dayType]; // undefined → full / bro_split → all
+  const muscles = new Set<string>();
+  exerciseDatabase
+    .filter(ex => !categories || categories.includes(ex.category))
+    .forEach(ex => ex.primaryMuscles.forEach(m => muscles.add(m)));
+  return [...muscles].sort();
+}
+
 function assessWorkout(exercises: Exercise[], dayName: string) {
   if (exercises.length === 0) {
     return { score: 0, label: 'Empty', color: 'gray', missing: [], tips: ['Add exercises to get started'] };
@@ -66,6 +82,7 @@ export function WorkoutBuilder() {
   const [currentDay, setCurrentDay]               = useState('');
   const [loading, setLoading]                     = useState(true);
   const [saving, setSaving]                       = useState(false);
+  const [selectedMuscle, setSelectedMuscle]       = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => { loadProfile(); }, []);
@@ -121,7 +138,7 @@ export function WorkoutBuilder() {
         return ex.name.toLowerCase().includes(q) || ex.primaryMuscles.some(m => m.toLowerCase().includes(q));
       }
       return true;
-    });
+    }).filter(ex => !selectedMuscle || ex.primaryMuscles.includes(selectedMuscle) || ex.secondaryMuscles.includes(selectedMuscle));
 
     const dayType = getDayType(currentDay);
     const suggested = all.filter(ex => {
@@ -188,6 +205,7 @@ export function WorkoutBuilder() {
   const sessionLen       = getSessionLength(currentExercises);
   const targetLen        = profile?.sessionLength || 60;
   const assessment       = assessWorkout(currentExercises, currentDay);
+  const availableMuscles = getAvailableMuscles(getDayType(currentDay));
 
   const assessmentColorClass = {
     green: 'bg-green-50 border-green-200 text-green-800',
@@ -215,7 +233,7 @@ export function WorkoutBuilder() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        <Tabs value={currentDay} onValueChange={setCurrentDay}>
+        <Tabs value={currentDay} onValueChange={(day) => { setCurrentDay(day); setSelectedMuscle(null); }}>
           <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
             {days.map(day => (
               <TabsTrigger key={day} value={day} className="flex-shrink-0">
@@ -309,7 +327,7 @@ export function WorkoutBuilder() {
 
                 {/* RIGHT — exercise library */}
                 <Card>
-                  <CardHeader className="pb-2">
+                  <CardHeader className="pb-2 ">
                     <CardTitle className="text-sm">Exercise Library</CardTitle>
                     <div className="relative mt-2">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -320,6 +338,23 @@ export function WorkoutBuilder() {
                         className="pl-9 h-8 text-sm"
                       />
                     </div>
+                    {availableMuscles.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {availableMuscles.map(muscle => (
+                          <button
+                            key={muscle}
+                            onClick={() => setSelectedMuscle(prev => prev === muscle ? null : muscle)}
+                            className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                              selectedMuscle === muscle
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {muscle.replace(/_/g, ' ')}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="max-h-[520px] overflow-y-auto">
@@ -371,6 +406,7 @@ function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd
         <p className="font-medium text-sm truncate">{ex.name}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs text-gray-500">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
+          <span className="text-xs text-gray-500">{ex.category}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded ${
             ex.difficulty === 'beginner'     ? 'bg-green-100 text-green-700' :
             ex.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
