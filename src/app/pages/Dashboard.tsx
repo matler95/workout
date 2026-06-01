@@ -223,14 +223,14 @@ export function Dashboard() {
 
         {/* Streak */}
         {streak > 0 && (
-          <Card className="border-0 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 shadow-md shadow-amber-500/10">
+          <Card className="border-0 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-amber-950/30 shadow-md shadow-amber-500/10">
             <CardContent className="py-4 flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 flex-shrink-0">
                 <Flame className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-orange-900">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
-                <p className="text-xs text-orange-600">Keep it going — you're on fire!</p>
+                <p className="font-semibold text-orange-900 dark:text-orange-200">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400">Keep it going — you're on fire!</p>
               </div>
             </CardContent>
           </Card>

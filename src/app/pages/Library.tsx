@@ -30,7 +30,7 @@ export function Library() {
         <Card>
           <CardContent className="pt-6 space-y-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search exercises or muscles..."
                 value={searchQuery}
@@ -69,7 +69,7 @@ export function Library() {
           </CardContent>
         </Card>
 
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-muted-foreground">
           Showing {filteredExercises.length} exercise{filteredExercises.length !== 1 ? 's' : ''}
         </div>
 
@@ -118,7 +118,7 @@ export function Library() {
                     </div>
                   </div>
 
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-muted-foreground">
                     Equipment: {exercise.equipment.replace('_', ' ')}
                   </div>
                 </div>
@@ -130,7 +130,7 @@ export function Library() {
         {filteredExercises.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-gray-600">No exercises found matching your criteria</p>
+              <p className="text-muted-foreground">No exercises found matching your criteria</p>
             </CardContent>
           </Card>
         )}

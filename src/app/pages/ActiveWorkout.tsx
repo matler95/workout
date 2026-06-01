@@ -73,8 +73,8 @@ function SuggestionBanner({ plan, exerciseKey }: { plan: ExercisePlan; exerciseK
       bodyweight: 'bodyweight',
     };
     return (
-      <div className="border rounded-lg p-3 bg-indigo-50 border-indigo-200">
-        <div className="flex items-start gap-2 text-indigo-800">
+      <div className="border rounded-lg p-3 bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800/40">
+        <div className="flex items-start gap-2 text-indigo-800 dark:text-indigo-200">
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium">Estimated starting weight</p>
@@ -97,14 +97,14 @@ function SuggestionBanner({ plan, exerciseKey }: { plan: ExercisePlan; exerciseK
   if (s.action === 'insufficient_data') return null;
 
   const config = {
-    increase_weight: { icon: <ArrowUp className="w-4 h-4 flex-shrink-0" />, bg: 'bg-green-50 border-green-200', text: 'text-green-800', label: `Increase to ${s.suggestedWeight} kg` },
-    increase_reps:   { icon: <TrendingUp className="w-4 h-4 flex-shrink-0" />, bg: 'bg-green-50 border-green-200', text: 'text-green-800', label: `Target ${s.suggestedReps?.[0]}–${s.suggestedReps?.[1]} reps` },
-    maintain:        { icon: <Info className="w-4 h-4 flex-shrink-0" />, bg: 'bg-blue-50 border-blue-200', text: 'text-blue-800', label: `Stay at ${s.currentWeight} kg` },
-    deload:          { icon: <AlertTriangle className="w-4 h-4 flex-shrink-0" />, bg: 'bg-amber-50 border-amber-200', text: 'text-amber-800', label: `Reduce to ${s.suggestedWeight} kg` },
-    insufficient_data: { icon: <Info className="w-4 h-4 flex-shrink-0" />, bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700', label: '' },
+    increase_weight: { icon: <ArrowUp className="w-4 h-4 flex-shrink-0" />, bg: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800/40', text: 'text-green-800 dark:text-green-200', label: `Increase to ${s.suggestedWeight} kg` },
+    increase_reps:   { icon: <TrendingUp className="w-4 h-4 flex-shrink-0" />, bg: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800/40', text: 'text-green-800 dark:text-green-200', label: `Target ${s.suggestedReps?.[0]}–${s.suggestedReps?.[1]} reps` },
+    maintain:        { icon: <Info className="w-4 h-4 flex-shrink-0" />, bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800/40', text: 'text-blue-800 dark:text-blue-200', label: `Stay at ${s.currentWeight} kg` },
+    deload:          { icon: <AlertTriangle className="w-4 h-4 flex-shrink-0" />, bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/40', text: 'text-amber-800 dark:text-amber-200', label: `Reduce to ${s.suggestedWeight} kg` },
+    insufficient_data: { icon: <Info className="w-4 h-4 flex-shrink-0" />, bg: 'bg-muted border-border', text: 'text-muted-foreground', label: '' },
   }[s.action];
 
-  const confidenceDot = { high: 'bg-green-400', medium: 'bg-yellow-400', low: 'bg-gray-400' }[s.confidence];
+  const confidenceDot = { high: 'bg-green-400', medium: 'bg-yellow-400', low: 'bg-muted-foreground' }[s.confidence];
 
   return (
     <div className={`border rounded-lg p-3 ${config.bg}`}>
@@ -135,10 +135,10 @@ function E1RMDisplay({ plan }: { plan: ExercisePlan }) {
     ? Math.round((s.currentE1RM - s.previousE1RM) * 10) / 10
     : null;
   return (
-    <div className="flex items-center gap-3 text-xs text-gray-500 px-1">
-      <span>Est. 1RM: <strong className="text-gray-700">{Math.round(s.currentE1RM)} kg</strong></span>
+    <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
+      <span>Est. 1RM: <strong className="text-foreground">{Math.round(s.currentE1RM)} kg</strong></span>
       {diff !== null && (
-        <span className={`flex items-center gap-0.5 ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+        <span className={`flex items-center gap-0.5 ${diff > 0 ? 'text-green-600 dark:text-green-400' : diff < 0 ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground'}`}>
           {diff > 0 ? <TrendingUp className="w-3 h-3" /> : diff < 0 ? <TrendingDown className="w-3 h-3" /> : <MinusIcon className="w-3 h-3" />}
           {diff > 0 ? '+' : ''}{diff} kg vs last
         </span>
@@ -481,7 +481,7 @@ export function ActiveWorkout() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-gray-400 hover:text-gray-600"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => navigate('/plan')}
               >
                 <X className="w-4 h-4 mr-1" /> Cancel
@@ -491,12 +491,12 @@ export function ActiveWorkout() {
               <Clock className="w-8 h-8 text-white" />
             </div>
             <CardTitle className="text-xl">{dayName}</CardTitle>
-            <p className="text-gray-400 text-sm">{exercises.length} exercises</p>
+            <p className="text-muted-foreground text-sm">{exercises.length} exercises</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {progressionCount > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-sm font-medium text-green-800 mb-2">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 dark:bg-green-950/30 dark:border-green-800/40">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">
                   🎯 {progressionCount} exercise{progressionCount > 1 ? 's' : ''} ready to go heavier:
                 </p>
                 {exercises
@@ -504,7 +504,7 @@ export function ActiveWorkout() {
                   .map(ex => {
                     const plan = plans[ex.id || ex.name];
                     return (
-                      <div key={ex.id} className="text-xs text-green-700 flex justify-between py-0.5">
+                      <div key={ex.id} className="text-xs text-green-700 dark:text-green-300 flex justify-between py-0.5">
                         <span>{ex.name}</span>
                         <span className="font-medium">
                           {plan.suggestion?.currentWeight} → {plan.suggestedWeight} kg
@@ -516,11 +516,11 @@ export function ActiveWorkout() {
             )}
 
             {firstTimers > 0 && progressionCount === 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-                <p className="text-sm font-medium text-indigo-800">
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 dark:bg-indigo-950/30 dark:border-indigo-800/40">
+                <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
                   ✨ Starting weights estimated for {firstTimers} exercise{firstTimers > 1 ? 's' : ''}
                 </p>
-                <p className="text-xs text-indigo-600 mt-1">
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
                   Based on your bodyweight, experience, and goal. Adjust freely — the app calibrates after your first session.
                 </p>
               </div>
@@ -543,19 +543,19 @@ export function ActiveWorkout() {
                     </span>
                     <span className="flex-1">{ex.name}</span>
                     {plan?.source === 'history' && plan.suggestion?.action === 'increase_weight' && (
-                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">↑ {plan.suggestedWeight} kg</span>
+                      <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-1.5 py-0.5 rounded font-medium">↑ {plan.suggestedWeight} kg</span>
                     )}
                     {plan?.source === 'history' && plan.suggestion?.action === 'deload' && (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">↓ deload</span>
+                      <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded">↓ deload</span>
                     )}
                     {plan?.source === 'estimated' && (
-                      <span className="text-xs text-gray-400">{plan.suggestedWeight} kg est.</span>
+                      <span className="text-xs text-muted-foreground">{plan.suggestedWeight} kg est.</span>
                     )}
                     {plan?.source === 'history' && plan.suggestion?.action === 'maintain' && (
-                      <span className="text-xs text-gray-400">{plan.suggestedWeight} kg</span>
+                      <span className="text-xs text-muted-foreground">{plan.suggestedWeight} kg</span>
                     )}
                     {plan?.source === 'bodyweight' && (
-                      <span className="text-xs text-gray-400">{plan.suggestedReps[0]}–{plan.suggestedReps[1]} reps</span>
+                      <span className="text-xs text-muted-foreground">{plan.suggestedReps[0]}–{plan.suggestedReps[1]} reps</span>
                     )}
                   </div>
                 );
@@ -600,19 +600,19 @@ export function ActiveWorkout() {
                 { value: uniqueExercises,      label: 'exercises' },
                 { value: `${durationMin}m`,    label: 'duration' },
               ].map(({ value, label }) => (
-                <div key={label} className="bg-green-50 rounded-lg py-3">
-                  <div className="text-xl font-bold text-green-700">{value}</div>
-                  <div className="text-xs text-gray-500">{label}</div>
+                <div key={label} className="bg-green-50 dark:bg-green-950/30 rounded-lg py-3">
+                  <div className="text-xl font-bold text-green-700 dark:text-green-300">{value}</div>
+                  <div className="text-xs text-muted-foreground">{label}</div>
                 </div>
               ))}
             </div>
 
             {totalVolume > 0 && (
-              <div className="bg-gray-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-gray-500">Total volume</p>
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground">Total volume</p>
                 <p className="text-2xl font-bold">
                   {Math.round(totalVolume / 1000 * 10) / 10}
-                  <span className="text-sm text-gray-500 ml-1">tonnes</span>
+                  <span className="text-sm text-muted-foreground ml-1">tonnes</span>
                 </p>
               </div>
             )}
@@ -620,7 +620,7 @@ export function ActiveWorkout() {
             <div>
               <label className="text-sm font-medium mb-2 block">Overall effort (RPE 1–10)</label>
               {firstSessionExercises.length > 0 && (
-                <p className="text-xs text-indigo-600 mb-2 leading-relaxed">
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-2 leading-relaxed">
                   ℹ️ This rating also calibrates starting weights for your {firstSessionExercises.length} new exercise{firstSessionExercises.length > 1 ? 's' : ''} — be honest!
                 </p>
               )}
@@ -634,14 +634,14 @@ export function ActiveWorkout() {
                         ? n <= 4 ? 'bg-green-500 text-white'
                           : n <= 7 ? 'bg-indigo-600 text-white'
                           : 'bg-red-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     }`}
                   >
                     {n}
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-1.5">
+              <p className="text-xs text-muted-foreground mt-1.5">
                 {perceivedEffort <= 3 ? '😴 Too easy — weights will be increased next session'
                   : perceivedEffort <= 5 ? '🙂 Slightly easy — minor adjustment'
                   : perceivedEffort <= 7 ? '💪 Perfect effort — right in the zone'
@@ -651,8 +651,8 @@ export function ActiveWorkout() {
             </div>
 
             {firstSessionExercises.length > 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-                <p className="text-xs font-medium text-indigo-800 mb-2">Next session adjustments (based on RPE {perceivedEffort}):</p>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 dark:bg-indigo-950/30 dark:border-indigo-800/40">
+                <p className="text-xs font-medium text-indigo-800 dark:text-indigo-200 mb-2">Next session adjustments (based on RPE {perceivedEffort}):</p>
                 {firstSessionExercises.map(ex => {
                   const plan = plans[ex.id || ex.name];
                   if (!plan || plan.source !== 'estimated') return null;
@@ -662,7 +662,7 @@ export function ActiveWorkout() {
                     classifyExercise(ex.name),
                   );
                   return (
-                    <div key={ex.id} className="text-xs text-indigo-700 flex justify-between py-0.5">
+                    <div key={ex.id} className="text-xs text-indigo-700 dark:text-indigo-300 flex justify-between py-0.5">
                       <span className="truncate pr-2">{ex.name}</span>
                       <span className="font-medium flex-shrink-0">
                         {plan.suggestedWeight} → {newWeight} kg
@@ -713,20 +713,20 @@ export function ActiveWorkout() {
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">{dayName}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{dayName}</p>
             <p className="font-semibold text-sm">
               Ex. {currentExerciseIndex + 1}/{exercises.length} · Set {currentSet}/{setsForThisExercise}
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <p className="text-xs text-gray-400">{progressPct}%</p>
+              <p className="text-xs text-muted-foreground">{progressPct}%</p>
               <Progress value={progressPct} className="w-20 h-1.5 mt-0.5" />
             </div>
             <Button
               variant="ghost"
               size="sm"
-              className="text-gray-400 hover:text-red-500 h-8 px-2"
+              className="text-muted-foreground hover:text-red-500 h-8 px-2"
               onClick={() => setShowExitDialog(true)}
               title="End workout"
             >
@@ -747,10 +747,10 @@ export function ActiveWorkout() {
 
         {/* Rest timer */}
         {restTimer > 0 && (
-          <Card className="bg-gradient-to-r from-blue-500/5 to-indigo-500/5 border border-blue-200/50 shadow-md shadow-blue-500/10">
+          <Card className="bg-gradient-to-r from-blue-500/5 to-indigo-500/5 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200/50 dark:border-blue-800/30 shadow-md shadow-blue-500/10">
             <CardContent className="py-5 text-center">
-              <p className="text-xs font-medium text-blue-500 uppercase tracking-wider mb-1">Rest</p>
-              <div className="text-6xl font-bold text-blue-700 tabular-nums">
+              <p className="text-xs font-medium text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-1">Rest</p>
+              <div className="text-6xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
                 {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
               </div>
               <Progress value={((120 - restTimer) / 120) * 100} className="mt-3 h-1.5" />
@@ -776,9 +776,9 @@ export function ActiveWorkout() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <p className="text-xs text-gray-400">Target: {repLo}–{repHi} reps</p>
+                  <p className="text-xs text-muted-foreground">Target: {repLo}–{repHi} reps</p>
                   {plan?.isFirstSession && (
-                    <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">First time</span>
+                    <span className="text-xs bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400 px-1.5 py-0.5 rounded">First time</span>
                   )}
                 </div>
               </div>
@@ -786,7 +786,7 @@ export function ActiveWorkout() {
                 variant="ghost"
                 size="sm"
                 onClick={() => advanceExercise(completedSets)}
-                className="text-gray-400 flex-shrink-0"
+                className="text-muted-foreground flex-shrink-0"
               >
                 <SkipForward className="w-4 h-4" />
               </Button>
@@ -822,7 +822,7 @@ export function ActiveWorkout() {
                       <Plus className="w-3 h-3" />
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1 text-center">±{weightStep} kg</p>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">±{weightStep} kg</p>
                 </div>
               )}
               <div>
@@ -854,9 +854,9 @@ export function ActiveWorkout() {
               const above   = reps > repHi;
               return (
                 <div className={`text-xs px-3 py-1.5 rounded ${
-                  inRange ? 'bg-green-50 text-green-700'
-                  : above  ? 'bg-blue-50 text-blue-700'
-                  : 'bg-gray-50 text-gray-500'
+                  inRange ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300'
+                  : above  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+                  : 'bg-muted text-muted-foreground'
                 }`}>
                   {inRange && `✓ In target range (${repLo}–${repHi})`}
                   {above   && `↑ ${reps - repHi} above target — consider more weight next set`}
@@ -882,17 +882,17 @@ export function ActiveWorkout() {
 
             {exerciseSets.length > 0 && (
               <div className="border-t pt-3">
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">This exercise</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">This exercise</p>
                 <div className="space-y-1">
                   {exerciseSets.map((s, i) => {
                     const e1rm = s.weight > 0 ? Math.round(s.weight * (1 + s.reps / 30)) : null;
                     return (
-                      <div key={i} className="flex justify-between items-center text-sm bg-gray-50 rounded px-3 py-1.5">
-                        <span className="text-gray-400">Set {s.set}</span>
+                      <div key={i} className="flex justify-between items-center text-sm bg-muted/50 rounded px-3 py-1.5">
+                        <span className="text-muted-foreground">Set {s.set}</span>
                         <span className="font-medium">
                           {s.weight > 0 ? `${s.weight} kg × ${s.reps}` : `${s.reps} reps`}
                         </span>
-                        {e1rm && <span className="text-xs text-gray-400">~{e1rm} kg 1RM</span>}
+                        {e1rm && <span className="text-xs text-muted-foreground">~{e1rm} kg 1RM</span>}
                       </div>
                     );
                   })}
@@ -905,8 +905,8 @@ export function ActiveWorkout() {
         {currentExercise.instructions && (
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">How to perform</p>
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">How to perform</p>
+              <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
                 {currentExercise.instructions}
               </p>
             </CardContent>
@@ -916,21 +916,21 @@ export function ActiveWorkout() {
         {currentExerciseIndex < exercises.length - 1 && (
           <Card>
             <CardContent className="pt-3 pb-3">
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Up next</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Up next</p>
               <div className="space-y-1.5">
                 {exercises.slice(currentExerciseIndex + 1, currentExerciseIndex + 4).map((ex, i) => {
                   const p = plans[ex.id || ex.name];
                   return (
-                    <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
+                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0 text-muted-foreground">
                         {currentExerciseIndex + 2 + i}
                       </span>
                       <span className="flex-1">{ex.name}</span>
                       {p?.suggestion?.action === 'increase_weight' && (
-                        <span className="text-xs text-green-600">↑ {p.suggestedWeight} kg</span>
+                        <span className="text-xs text-green-600 dark:text-green-400">↑ {p.suggestedWeight} kg</span>
                       )}
                       {p?.source === 'estimated' && (
-                        <span className="text-xs text-gray-400">{p.suggestedWeight} kg est.</span>
+                        <span className="text-xs text-muted-foreground">{p.suggestedWeight} kg est.</span>
                       )}
                     </div>
                   );

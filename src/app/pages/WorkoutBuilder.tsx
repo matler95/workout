@@ -211,10 +211,10 @@ export function WorkoutBuilder() {
   const availableMuscles = getAvailableMuscles(getDayType(currentDay));
 
   const assessmentColorClass = {
-    green: 'bg-green-50 border-green-200 text-green-800',
-    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    red:   'bg-red-50 border-red-200 text-red-800',
-    gray:  'bg-gray-50 border-gray-200 text-gray-600',
+    green: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800/40 dark:text-green-200',
+    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950/30 dark:border-yellow-800/40 dark:text-yellow-200',
+    red:   'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-800/40 dark:text-red-200',
+    gray:  'bg-muted border-border text-muted-foreground',
   }[assessment.color];
 
   return (
@@ -254,9 +254,9 @@ export function WorkoutBuilder() {
                 <div className="space-y-3">
                   <div className="flex gap-2 flex-wrap">
                     <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border ${
-                      sessionLen > targetLen + 15 ? 'bg-red-50 border-red-200 text-red-700' :
-                      sessionLen < targetLen - 20 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
-                      'bg-green-50 border-green-200 text-green-700'
+                      sessionLen > targetLen + 15 ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800/40 dark:text-red-300' :
+                      sessionLen < targetLen - 20 ? 'bg-yellow-50 border-yellow-200 text-yellow-700 dark:bg-yellow-950/30 dark:border-yellow-800/40 dark:text-yellow-300' :
+                      'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800/40 dark:text-green-300'
                     }`}>
                       <Clock className="w-3.5 h-3.5" />
                       <span>~{sessionLen} min</span>
@@ -279,29 +279,29 @@ export function WorkoutBuilder() {
 
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-gray-600">Selected ({currentExercises.length})</CardTitle>
+                      <CardTitle className="text-sm text-muted-foreground">Selected ({currentExercises.length})</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {currentExercises.length === 0 ? (
-                        <p className="text-sm text-gray-400 py-4 text-center">No exercises yet — add from the library →</p>
+                        <p className="text-sm text-muted-foreground py-4 text-center">No exercises yet — add from the library →</p>
                       ) : (
                         currentExercises.map((ex, idx) => (
-                          <div key={idx} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg group">
+                          <div key={idx} className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg group">
                             <div className="flex flex-col gap-0.5">
                               <button onClick={() => moveExercise(day, idx, -1)} disabled={idx === 0}
-                                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs leading-none">▲</button>
+                                className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none">▲</button>
                               <button onClick={() => moveExercise(day, idx, 1)} disabled={idx === currentExercises.length - 1}
-                                className="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs leading-none">▼</button>
+                                className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none">▼</button>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm truncate">{ex.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{ex.primaryMuscles.join(', ')}</p>
+                              <p className="text-xs text-muted-foreground truncate">{ex.primaryMuscles.join(', ')}</p>
                             </div>
                             <Badge variant="outline" className="text-xs flex-shrink-0">
                               {setsPerExercise} sets
                             </Badge>
                             <button onClick={() => removeExercise(day, idx)}
-                              className="text-gray-300 hover:text-red-500 transition-colors p-1 flex-shrink-0">
+                              className="text-muted-foreground/50 hover:text-red-500 transition-colors p-1 flex-shrink-0">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -333,7 +333,7 @@ export function WorkoutBuilder() {
                   <CardHeader className="pb-2 ">
                     <CardTitle className="text-sm">Exercise Library</CardTitle>
                     <div className="relative mt-2">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <Input
                         placeholder="Search..."
                         value={searchQuery}
@@ -376,8 +376,8 @@ export function WorkoutBuilder() {
                       {rest.length > 0 && (
                         <>
                           {suggested.length > 0 && (
-                            <div className="px-4 py-2 bg-gray-50 border-y">
-                              <p className="text-xs text-gray-500">Other exercises</p>
+                            <div className="px-4 py-2 bg-muted/50 border-y">
+                              <p className="text-xs text-muted-foreground">Other exercises</p>
                             </div>
                           )}
                           {rest.map(ex => (
@@ -388,7 +388,7 @@ export function WorkoutBuilder() {
                         </>
                       )}
                       {suggested.length === 0 && rest.length === 0 && (
-                        <p className="text-sm text-gray-400 text-center py-8">No exercises match your search</p>
+                        <p className="text-sm text-muted-foreground text-center py-8">No exercises match your search</p>
                       )}
                     </div>
                   </CardContent>
@@ -404,16 +404,16 @@ export function WorkoutBuilder() {
 
 function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd: () => void }) {
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-gray-50 transition-colors ${added ? 'opacity-50' : ''}`}>
+    <div className={`flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-muted/50 transition-colors ${added ? 'opacity-50' : ''}`}>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">{ex.name}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs text-gray-500">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
-          <span className="text-xs text-gray-500">{ex.category}</span>
+          <span className="text-xs text-muted-foreground">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
+          <span className="text-xs text-muted-foreground">{ex.category}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded ${
-            ex.difficulty === 'beginner'     ? 'bg-green-100 text-green-700' :
-            ex.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
-                                               'bg-red-100 text-red-700'
+            ex.difficulty === 'beginner'     ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
+            ex.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' :
+                                               'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
           }`}>{ex.difficulty}</span>
         </div>
       </div>

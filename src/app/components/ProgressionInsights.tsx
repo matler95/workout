@@ -21,21 +21,21 @@ type FilterKey = 'all' | 'increase' | 'maintain' | 'deload';
 
 function ActionIcon({ action }: { action: ProgressionSuggestion['action'] }) {
   switch (action) {
-    case 'increase_weight': return <ArrowUp className="w-4 h-4 text-green-600" />;
-    case 'increase_reps':   return <TrendingUp className="w-4 h-4 text-green-600" />;
-    case 'deload':          return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-    case 'maintain':        return <Minus className="w-4 h-4 text-blue-500" />;
-    default:                return <Info className="w-4 h-4 text-gray-400" />;
+    case 'increase_weight': return <ArrowUp className="w-4 h-4 text-green-600 dark:text-green-400" />;
+    case 'increase_reps':   return <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />;
+    case 'deload':          return <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400" />;
+    case 'maintain':        return <Minus className="w-4 h-4 text-blue-500 dark:text-blue-400" />;
+    default:                return <Info className="w-4 h-4 text-muted-foreground" />;
   }
 }
 
 function ActionBadge({ action }: { action: ProgressionSuggestion['action'] }) {
   const map: Record<ProgressionSuggestion['action'], { label: string; cls: string }> = {
-    increase_weight:   { label: 'Increase weight', cls: 'bg-green-100 text-green-800' },
-    increase_reps:     { label: 'Increase reps',   cls: 'bg-green-100 text-green-800' },
-    deload:            { label: 'Deload',           cls: 'bg-amber-100 text-amber-800' },
-    maintain:          { label: 'Keep weight',      cls: 'bg-blue-100 text-blue-800' },
-    insufficient_data: { label: 'Need more data',   cls: 'bg-gray-100 text-gray-600' },
+    increase_weight:   { label: 'Increase weight', cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' },
+    increase_reps:     { label: 'Increase reps',   cls: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' },
+    deload:            { label: 'Deload',           cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' },
+    maintain:          { label: 'Keep weight',      cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200' },
+    insufficient_data: { label: 'Need more data',   cls: 'bg-muted text-muted-foreground' },
   };
   const { label, cls } = map[action];
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{label}</span>;
@@ -59,8 +59,8 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
     isolation: 'Isolation', bodyweight: 'Bodyweight',
   };
 
-  const trendColor = suggestion.e1RMTrend === 'up' ? 'text-green-600'
-    : suggestion.e1RMTrend === 'down' ? 'text-red-500' : 'text-gray-400';
+  const trendColor = suggestion.e1RMTrend === 'up' ? 'text-green-600 dark:text-green-400'
+    : suggestion.e1RMTrend === 'down' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground';
   const TrendIcon = suggestion.e1RMTrend === 'up' ? TrendingUp
     : suggestion.e1RMTrend === 'down' ? TrendingDown : Minus;
 
@@ -81,7 +81,7 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
 
   return (
     <Card
-      className={`cursor-pointer transition-colors ${expanded ? 'border-indigo-300' : 'hover:border-gray-300'}`}
+      className={`cursor-pointer transition-colors ${expanded ? 'border-primary' : 'hover:border-border'}`}
       onClick={onClick}
     >
       <CardContent className="pt-4 pb-4">
@@ -91,17 +91,17 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
             <div className="flex items-center gap-2 flex-wrap">
               <ActionIcon action={suggestion.action} />
               <span className="font-medium text-sm truncate">{exerciseKey}</span>
-              <span className="text-xs text-gray-400">{tierLabel[tier]}</span>
+              <span className="text-xs text-muted-foreground">{tierLabel[tier]}</span>
             </div>
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               <ActionBadge action={suggestion.action} />
               {(suggestion.action === 'increase_weight' || suggestion.action === 'deload') && (
-                <span className={`text-sm font-semibold ${suggestion.action === 'deload' ? 'text-amber-700' : 'text-green-700'}`}>
+                <span className={`text-sm font-semibold ${suggestion.action === 'deload' ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-300'}`}>
                   {suggestion.currentWeight} → {suggestion.suggestedWeight} kg
                 </span>
               )}
               {suggestion.action === 'maintain' && suggestion.currentWeight > 0 && (
-                <span className="text-sm text-gray-600">{suggestion.currentWeight} kg</span>
+                <span className="text-sm text-muted-foreground">{suggestion.currentWeight} kg</span>
               )}
             </div>
           </div>
@@ -110,11 +110,11 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
             <div className="text-right flex-shrink-0">
               <div className="flex items-center gap-1 justify-end">
                 <TrendIcon className={`w-3.5 h-3.5 ${trendColor}`} />
-                <span className="text-xs text-gray-500">e1RM</span>
+                <span className="text-xs text-muted-foreground">e1RM</span>
               </div>
               <span className="font-bold text-base">
                 {Math.round(suggestion.currentE1RM)}
-                <span className="text-xs text-gray-400 ml-0.5">kg</span>
+                <span className="text-xs text-muted-foreground ml-0.5">kg</span>
               </span>
               {suggestion.previousE1RM !== null && (
                 <div className={`text-xs ${trendColor}`}>
@@ -129,17 +129,17 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
         {/* Expanded detail */}
         {expanded && (
           <div className="mt-4 space-y-3 border-t pt-3" onClick={e => e.stopPropagation()}>
-            <p className="text-sm text-gray-600 leading-relaxed">{suggestion.reasoning}</p>
-            {suggestion.tip && <p className="text-xs text-gray-400 italic">{suggestion.tip}</p>}
+            <p className="text-sm text-muted-foreground leading-relaxed">{suggestion.reasoning}</p>
+            {suggestion.tip && <p className="text-xs text-muted-foreground italic">{suggestion.tip}</p>}
 
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Target:</span>
-              <span className="font-medium text-gray-700">{repLo}–{repHi} reps</span>
-              <span className="text-gray-400">({tierLabel[tier]})</span>
+              <span className="font-medium text-foreground">{repLo}–{repHi} reps</span>
+              <span className="text-muted-foreground">({tierLabel[tier]})</span>
             </div>
 
             <div>
-              <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide">Estimated 1RM history</p>
+              <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Estimated 1RM history</p>
               {loadingChart ? (
                 <div className="h-32 flex items-center justify-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-400" />
@@ -148,7 +148,7 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
                 <>
                   <ResponsiveContainer width="100%" height={130}>
                     <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} unit="kg" domain={['auto', 'auto']} width={40} />
                       <Tooltip formatter={(v: any, name: string) => [
@@ -159,18 +159,18 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
                       <Line type="monotone" dataKey="weight" stroke="#94a3b8" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 2" name="weight" />
                     </LineChart>
                   </ResponsiveContainer>
-                  <p className="text-xs text-gray-400 text-center mt-1">— e1RM &nbsp;&nbsp; - - top set weight</p>
+                  <p className="text-xs text-muted-foreground text-center mt-1">— e1RM &nbsp;&nbsp; - - top set weight</p>
                 </>
               ) : (
-                <p className="text-xs text-gray-400 py-4 text-center">Need at least 2 sessions for a chart</p>
+                <p className="text-xs text-muted-foreground py-4 text-center">Need at least 2 sessions for a chart</p>
               )}
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-400">Confidence:</span>
+              <span className="text-muted-foreground">Confidence:</span>
               <span className={`font-medium ${
-                suggestion.confidence === 'high'   ? 'text-green-600' :
-                suggestion.confidence === 'medium' ? 'text-yellow-600' : 'text-gray-500'
+                suggestion.confidence === 'high'   ? 'text-green-600 dark:text-green-400' :
+                suggestion.confidence === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-muted-foreground'
               }`}>{suggestion.confidence}</span>
             </div>
           </div>
@@ -240,7 +240,7 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
@@ -249,9 +249,9 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
     return (
       <Card>
         <CardContent className="py-12 text-center">
-          <TrendingUp className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-          <p className="font-medium text-gray-600">No progression data yet</p>
-          <p className="text-sm text-gray-400 mt-1">Complete workouts to see weight suggestions here</p>
+          <TrendingUp className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="font-medium text-muted-foreground">No progression data yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Complete workouts to see weight suggestions here</p>
         </CardContent>
       </Card>
     );
@@ -262,9 +262,9 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
       {/* Summary filter buttons */}
       <div className="grid grid-cols-3 gap-2">
         {([
-          { key: 'increase' as FilterKey, count: counts.increase, label: 'Ready to progress', bg: 'bg-green-50 border-green-100', activeBg: 'bg-green-100 border-green-300', text: 'text-green-700' },
-          { key: 'maintain' as FilterKey, count: counts.maintain, label: 'Keep weight',        bg: 'bg-blue-50 border-blue-100',  activeBg: 'bg-blue-100 border-blue-300',  text: 'text-blue-700' },
-          { key: 'deload'   as FilterKey, count: counts.deload,   label: 'Deload',             bg: 'bg-amber-50 border-amber-100',activeBg: 'bg-amber-100 border-amber-300',text: 'text-amber-700' },
+          { key: 'increase' as FilterKey, count: counts.increase, label: 'Ready to progress', bg: 'bg-green-50 border-green-100 dark:bg-green-950/30 dark:border-green-800/30', activeBg: 'bg-green-100 border-green-300 dark:bg-green-900/50 dark:border-green-700/50', text: 'text-green-700 dark:text-green-300' },
+          { key: 'maintain' as FilterKey, count: counts.maintain, label: 'Keep weight',        bg: 'bg-blue-50 border-blue-100 dark:bg-blue-950/30 dark:border-blue-800/30',  activeBg: 'bg-blue-100 border-blue-300 dark:bg-blue-900/50 dark:border-blue-700/50',  text: 'text-blue-700 dark:text-blue-300' },
+          { key: 'deload'   as FilterKey, count: counts.deload,   label: 'Deload',             bg: 'bg-amber-50 border-amber-100 dark:bg-amber-950/30 dark:border-amber-800/30',activeBg: 'bg-amber-100 border-amber-300 dark:bg-amber-900/50 dark:border-amber-700/50',text: 'text-amber-700 dark:text-amber-300' },
         ] as const).map(({ key, count, label, bg, activeBg, text }) => (
           <button
             key={key}
@@ -278,9 +278,9 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
       </div>
 
       {/* How it works */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-        <p className="text-xs text-gray-500 leading-relaxed">
-          <strong className="text-gray-700">How this works:</strong> Uses your rep history and
+      <div className="bg-muted/50 border border-border rounded-lg p-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          <strong className="text-foreground">How this works:</strong> Uses your rep history and
           the Epley formula (weight × (1 + reps/30)) to estimate your 1-rep max over time.
           Barbell movements get flat +2.5 kg; isolation and machines use 5% of current weight.
           Suggestions are suppressed when RPE was ≥9 or strength is declining.
@@ -290,7 +290,7 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
       {/* Exercise cards */}
       {filtered.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-gray-500">
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
             No exercises match this filter
           </CardContent>
         </Card>

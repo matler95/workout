@@ -162,7 +162,7 @@ export function Onboarding() {
       <Card className="w-full max-w-2xl relative z-10 border-0 shadow-2xl shadow-black/10">
         <CardHeader>
           <div className="space-y-2">
-            <div className="flex justify-between items-center text-sm text-gray-600">
+            <div className="flex justify-between items-center text-sm text-muted-foreground">
               <span>Step {step} of {totalSteps}</span>
               <span>{Math.round((step / totalSteps) * 100)}%</span>
             </div>
@@ -265,7 +265,7 @@ export function Onboarding() {
                       onChange={e => setData({ ...data, age: e.target.value })}
                       placeholder="25"
                     />
-                    <p className="text-xs text-gray-400">13–100</p>
+                    <p className="text-xs text-muted-foreground">13–100</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="height">Height (cm)</Label>
@@ -278,7 +278,7 @@ export function Onboarding() {
                       onChange={e => setData({ ...data, height: e.target.value })}
                       placeholder="175"
                     />
-                    <p className="text-xs text-gray-400">100–250 cm</p>
+                    <p className="text-xs text-muted-foreground">100–250 cm</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="weight">Weight (kg)</Label>
@@ -291,7 +291,7 @@ export function Onboarding() {
                       onChange={e => setData({ ...data, weight: e.target.value })}
                       placeholder="70"
                     />
-                    <p className="text-xs text-gray-400">30–300 kg</p>
+                    <p className="text-xs text-muted-foreground">30–300 kg</p>
                   </div>
                 </div>
               </div>
@@ -307,21 +307,21 @@ export function Onboarding() {
                   <RadioGroupItem value="full_gym" id="full_gym" className="mt-0.5" />
                   <div>
                     <Label htmlFor="full_gym">Full Gym Access</Label>
-                    <p className="text-xs text-gray-500 mt-0.5">Barbells, cables, machines, dumbbells</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Barbells, cables, machines, dumbbells</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
                   <RadioGroupItem value="limited" id="limited" className="mt-0.5" />
                   <div>
                     <Label htmlFor="limited">Home / Limited Equipment</Label>
-                    <p className="text-xs text-gray-500 mt-0.5">Dumbbells, pull-up bar, resistance bands</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Dumbbells, pull-up bar, resistance bands</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
                   <RadioGroupItem value="bodyweight" id="bodyweight" className="mt-0.5" />
                   <div>
                     <Label htmlFor="bodyweight">Bodyweight Only</Label>
-                    <p className="text-xs text-gray-500 mt-0.5">No equipment needed</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">No equipment needed</p>
                   </div>
                 </div>
               </RadioGroup>
@@ -341,7 +341,7 @@ export function Onboarding() {
                     onValueChange={([v]) => setData({ ...data, trainingDays: v })}
                     min={1} max={7} step={1}
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>1 day</span><span>7 days</span>
                   </div>
                   {data.trainingDays === 1 && (
@@ -357,7 +357,7 @@ export function Onboarding() {
                     onValueChange={([v]) => setData({ ...data, sessionLength: v })}
                     min={30} max={120} step={15}
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>30 min</span><span>120 min</span>
                   </div>
                 </div>
@@ -380,7 +380,7 @@ export function Onboarding() {
                     <RadioGroupItem value={o.value} id={o.value} className="mt-0.5" />
                     <div>
                       <Label htmlFor={o.value}>{o.label}</Label>
-                      <p className="text-xs text-gray-500 mt-0.5">{o.sub}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{o.sub}</p>
                     </div>
                   </div>
                 ))}
@@ -424,7 +424,7 @@ export function Onboarding() {
                     onValueChange={([v]) => setData({ ...data, avgSleep: v })}
                     min={4} max={10} step={0.5}
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>4h</span><span>10h</span>
                   </div>
                 </div>
@@ -451,7 +451,7 @@ export function Onboarding() {
                     onValueChange={([v]) => setData({ ...data, stressLevel: v })}
                     min={1} max={10} step={1}
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Low stress</span><span>High stress</span>
                   </div>
                 </div>
@@ -477,7 +477,7 @@ export function Onboarding() {
                     onValueChange={([v]) => setData({ ...data, cardioSessions: v })}
                     min={0} max={7} step={1}
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>0</span><span>7</span>
                   </div>
                 </div>

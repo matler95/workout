@@ -119,11 +119,11 @@ export function Profile() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-xs text-gray-500">Name</p>
+                <p className="text-xs text-muted-foreground">Name</p>
                 <p className="font-medium">{profile?.name || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Email</p>
+                <p className="text-xs text-muted-foreground">Email</p>
                 <p className="font-medium text-sm truncate">{user?.email}</p>
               </div>
             </div>
@@ -131,15 +131,15 @@ export function Profile() {
             {profile && (
               <div className="grid grid-cols-3 gap-3 pt-1">
                 <div>
-                  <p className="text-xs text-gray-500">Age</p>
+                   <p className="text-xs text-muted-foreground">Age</p>
                   <p className="font-medium">{profile.age ?? '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Height</p>
+                   <p className="text-xs text-muted-foreground">Height</p>
                   <p className="font-medium">{profile.height ? `${profile.height} cm` : '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Weight</p>
+                   <p className="text-xs text-muted-foreground">Weight</p>
                   <p className="font-medium">{profile.weight ? `${profile.weight} kg` : '—'}</p>
                 </div>
               </div>
@@ -148,11 +148,11 @@ export function Profile() {
             {profile && (
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
-                  <p className="text-xs text-gray-500">Goal</p>
+                   <p className="text-xs text-muted-foreground">Goal</p>
                   <p className="font-medium capitalize">{profile.primaryGoal?.replace(/_/g, ' ')}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Experience</p>
+                   <p className="text-xs text-muted-foreground">Experience</p>
                   <p className="font-medium capitalize">{profile.experienceLevel}</p>
                 </div>
               </div>
@@ -261,18 +261,18 @@ export function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Workout reminders</p>
-                <p className="text-xs text-gray-500">Before scheduled workouts</p>
+                <p className="text-xs text-muted-foreground">Before scheduled workouts</p>
               </div>
               <Switch checked={notifWorkout} onCheckedChange={setNotifWorkout} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Weekly progress summary</p>
-                <p className="text-xs text-gray-500">Every Monday morning</p>
+                <p className="text-xs text-muted-foreground">Every Monday morning</p>
               </div>
               <Switch checked={notifProgress} onCheckedChange={setNotifProgress} />
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               Notification delivery requires the app to be installed as a PWA.
             </p>
           </CardContent>
@@ -286,7 +286,7 @@ export function Profile() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="bg-rose-50 rounded-xl p-3 text-xs text-rose-700 leading-relaxed">
+            <div className="bg-rose-50 dark:bg-rose-950/30 rounded-xl p-3 text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
               <strong>Reset workout data</strong> deletes all workout logs, bodyweight entries,
               your workout plan, and progress history. Your account and profile stay active.
               This cannot be undone.
