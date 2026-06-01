@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { Skeleton } from '../components/ui/skeleton';
 import { apiCall } from '../../utils/supabase-client';
 import { Dumbbell, Clock, Edit } from 'lucide-react';
 
 export function Plan() {
-  const [profile, setProfile]       = useState<any>(null);
+  const [profile, setProfile]         = useState<any>(null);
   const [workoutPlan, setWorkoutPlan] = useState<any>(null);
+  // FIX #4: track loading state to prevent the "No Workout Plan" flash
+  const [loading, setLoading]         = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => { loadData(); }, []);
@@ -23,8 +26,29 @@ export function Plan() {
       setWorkoutPlan(planRes.plan);
     } catch (error: any) {
       console.error('Failed to load plan:', error);
+    } finally {
+      // FIX #4: always clear loading, even on error
+      setLoading(false);
     }
   };
+
+  // FIX #4: show a spinner while data is in-flight
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 pb-24">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="flex justify-between items-center">
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+          <Skeleton className="h-24 w-full rounded-xl" />
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-40 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (!workoutPlan) {
     return (
@@ -42,7 +66,6 @@ export function Plan() {
     );
   }
 
-  // Mirrors startingWeights.ts: beginners get 2 sets, everyone else 3
   const setsPerExercise = profile?.experienceLevel === 'beginner' ? 2 : 3;
   const workoutDays     = Object.keys(workoutPlan.workouts || {});
 

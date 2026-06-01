@@ -21,10 +21,10 @@ const MUSCLE_TARGETS: Record<string, string[]> = {
 
 function getDayType(dayName: string): string {
   const n = dayName.toLowerCase();
-  if (n.includes('push'))             return 'push';
-  if (n.includes('pull'))             return 'pull';
+  if (n.includes('push'))                       return 'push';
+  if (n.includes('pull'))                       return 'pull';
   if (n.includes('leg') || n.includes('lower')) return 'legs';
-  if (n.includes('upper'))            return 'upper';
+  if (n.includes('upper'))                      return 'upper';
   return 'full';
 }
 
@@ -60,12 +60,12 @@ function assessWorkout(exercises: Exercise[], dayName: string) {
 }
 
 export function WorkoutBuilder() {
-  const [profile, setProfile]                 = useState<any>(null);
+  const [profile, setProfile]                     = useState<any>(null);
   const [selectedExercises, setSelectedExercises] = useState<{ [key: string]: Exercise[] }>({});
-  const [searchQuery, setSearchQuery]         = useState('');
-  const [currentDay, setCurrentDay]           = useState('');
-  const [loading, setLoading]                 = useState(true);
-  const [saving, setSaving]                   = useState(false);
+  const [searchQuery, setSearchQuery]             = useState('');
+  const [currentDay, setCurrentDay]               = useState('');
+  const [loading, setLoading]                     = useState(true);
+  const [saving, setSaving]                       = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => { loadProfile(); }, []);
@@ -74,16 +74,24 @@ export function WorkoutBuilder() {
     try {
       const { profile } = await apiCall('/profile');
       setProfile(profile);
-      initializeDays(profile);
 
+      // FIX #8: Fetch the existing plan first. Only call initializeDays if
+      // there is no saved plan yet. The previous code called initializeDays
+      // unconditionally, then overwrote the empty days — causing a visible
+      // flash of empty workout days before the saved plan appeared.
       try {
         const { plan } = await apiCall('/workouts/plan');
-        if (plan?.workouts) {
+        if (plan?.workouts && Object.keys(plan.workouts).length > 0) {
           setSelectedExercises(plan.workouts);
-          setCurrentDay(Object.keys(plan.workouts)[0] || '');
-          return;
+          setCurrentDay(Object.keys(plan.workouts)[0]);
+          return; // ← exit early; don't call initializeDays
         }
-      } catch { /* no plan yet — use freshly initialised days */ }
+      } catch {
+        // No plan saved yet — fall through to initializeDays
+      }
+
+      // Only reached when there is no existing plan
+      initializeDays(profile);
     } catch {
       toast.error('Failed to load profile');
     } finally {
@@ -94,11 +102,11 @@ export function WorkoutBuilder() {
   const initializeDays = (prof: any) => {
     const days: { [key: string]: Exercise[] } = {};
     const style = prof?.workoutStyle;
-    if      (style === 'full_body')    ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
-    else if (style === 'upper_lower')  ['Upper A', 'Lower A', 'Upper B', 'Lower B'].forEach(d => (days[d] = []));
-    else if (style === 'ppl')          ['Push', 'Pull', 'Legs'].forEach(d => (days[d] = []));
-    else if (style === 'bro_split')    ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs'].forEach(d => (days[d] = []));
-    else                               ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
+    if      (style === 'full_body')   ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
+    else if (style === 'upper_lower') ['Upper A', 'Lower A', 'Upper B', 'Lower B'].forEach(d => (days[d] = []));
+    else if (style === 'ppl')         ['Push', 'Pull', 'Legs'].forEach(d => (days[d] = []));
+    else if (style === 'bro_split')   ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs'].forEach(d => (days[d] = []));
+    else                              ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
     setSelectedExercises(days);
     setCurrentDay(Object.keys(days)[0]);
   };
@@ -145,11 +153,10 @@ export function WorkoutBuilder() {
     setSelectedExercises(prev => ({ ...prev, [day]: exs }));
   };
 
-  // Sets per exercise depends on experience level — mirrors startingWeights.ts logic
   const setsPerExercise = profile?.experienceLevel === 'beginner' ? 2 : 3;
 
   const getSessionLength = (exercises: Exercise[]): number => {
-    const restMinutes   = 2;
+    const restMinutes    = 2;
     const setTimeMinutes = 0.75;
     return Math.round(10 + exercises.length * setsPerExercise * (restMinutes + setTimeMinutes));
   };
@@ -227,7 +234,6 @@ export function WorkoutBuilder() {
 
                 {/* LEFT — selected exercises */}
                 <div className="space-y-3">
-                  {/* Session stats */}
                   <div className="flex gap-2 flex-wrap">
                     <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border ${
                       sessionLen > targetLen + 15 ? 'bg-red-50 border-red-200 text-red-700' :
@@ -244,7 +250,6 @@ export function WorkoutBuilder() {
                     </div>
                   </div>
 
-                  {/* Assessment feedback */}
                   {(assessment.missing.length > 0 || assessment.tips.length > 0) && (
                     <div className={`p-3 rounded-lg border text-sm space-y-1 ${assessmentColorClass}`}>
                       {assessment.missing.length > 0 && (
@@ -287,7 +292,6 @@ export function WorkoutBuilder() {
                     </CardContent>
                   </Card>
 
-                  {/* Trained muscles */}
                   {currentExercises.length > 0 && (() => {
                     const allMuscles = new Map<string, 'primary' | 'secondary'>();
                     currentExercises.forEach(ex => {

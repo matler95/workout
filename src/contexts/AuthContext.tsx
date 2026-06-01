@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../utils/supabase-client';
-import { projectId } from '../../utils/supabase/info';
+import { supabase, API_BASE } from '../utils/supabase-client';
 import type { User } from '@supabase/supabase-js';
+
+// FIX #1: Removed import of projectId from gitignored utils/supabase/info.tsx.
+// The signup URL is now derived from API_BASE (itself built from VITE_SUPABASE_URL).
 
 interface AuthContextType {
   user: User | null;
@@ -52,29 +54,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && data?.user && !data.session) {
       // Created but needs email confirmation — try signing in anyway
-      // (some projects auto-confirm via triggers)
-      await sleep(500); // brief pause for auth propagation
+      await sleep(500);
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (!signInError) return;
       throw new Error('Account created! Please check your email to confirm before signing in.');
     }
 
     // Step 2: Edge function fallback (admin.createUser bypasses email confirmation)
-    const response = await fetch(
-      `https://${projectId}.supabase.co/functions/v1/make-server-975f4bc8/auth/signup`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
-      }
-    );
+    // FIX #1: use API_BASE instead of constructing URL from projectId
+    const response = await fetch(`${API_BASE}/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name }),
+    });
     const result = await response.json();
     if (result.error) throw new Error(result.error);
 
-    // Step 3: sign in — retry up to 3 times with backoff for auth propagation
+    // Step 3: sign in with backoff for auth propagation
     let lastSignInError: any;
     for (let attempt = 0; attempt < 3; attempt++) {
-      await sleep(300 + attempt * 400); // 300ms, 700ms, 1100ms
+      await sleep(300 + attempt * 400);
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (!signInError) return;
       lastSignInError = signInError;

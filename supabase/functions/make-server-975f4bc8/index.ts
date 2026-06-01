@@ -24,17 +24,11 @@ app.use("/*", cors({
   maxAge: 600,
 }));
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
-// FIX #6: removed redundant c.status(401) calls inside requireAuth;
-// the caller owns the response.
-
 async function requireAuth(c: any): Promise<{ user: any; db: any } | null> {
   const token = c.req.header('Authorization')?.split(' ')[1];
   if (!token) return null;
-
   const { data: { user }, error } = await serviceClient().auth.getUser(token);
   if (error || !user) return null;
-
   return { user, db: userClient(token) };
 }
 
@@ -154,6 +148,14 @@ app.patch("/make-server-975f4bc8/profile/preferences", async (c) => {
 });
 
 // ── Workout Plan: Save ────────────────────────────────────────────────────────
+//
+// FIX #3: Replace the non-atomic DELETE + INSERT pattern with a safe sequence:
+//   1. UPSERT all incoming days (inserts new, updates existing)
+//   2. DELETE only rows whose day_name is no longer in the new plan
+//
+// This means if the INSERT fails partway through, the previous plan is still
+// intact. The only window of data loss is during step 2, which only removes
+// days explicitly absent from the new plan.
 
 app.post("/make-server-975f4bc8/workouts/plan", async (c) => {
   const auth = await requireAuth(c);
@@ -163,22 +165,39 @@ app.post("/make-server-975f4bc8/workouts/plan", async (c) => {
     const { workouts } = await c.req.json();
     const { user, db } = auth;
 
-    const { error: delError } = await db
-      .from('workout_plans')
-      .delete()
-      .eq('user_id', user.id);
-    if (delError) return c.json({ error: delError.message }, 500);
+    const incomingDayNames = Object.keys(workouts);
 
-    const days = Object.entries(workouts).map(([day_name, exercises], idx) => ({
+    // Step 1: upsert all incoming days
+    const days = incomingDayNames.map((day_name, idx) => ({
       user_id:    user.id,
       day_name,
       sort_order: idx,
-      exercises,
+      exercises:  workouts[day_name],
     }));
 
     if (days.length > 0) {
-      const { error: insError } = await db.from('workout_plans').insert(days);
-      if (insError) return c.json({ error: insError.message }, 500);
+      const { error: upsertError } = await db
+        .from('workout_plans')
+        .upsert(days, { onConflict: 'user_id,day_name' });
+      if (upsertError) return c.json({ error: upsertError.message }, 500);
+    }
+
+    // Step 2: delete days that are no longer in the plan
+    // Only runs after the upsert succeeded, so the plan is never left empty.
+    if (incomingDayNames.length > 0) {
+      const { error: delError } = await db
+        .from('workout_plans')
+        .delete()
+        .eq('user_id', user.id)
+        .not('day_name', 'in', `(${incomingDayNames.map(d => `"${d}"`).join(',')})`);
+      if (delError) return c.json({ error: delError.message }, 500);
+    } else {
+      // Empty plan — delete everything (user intentionally cleared it)
+      const { error: delError } = await db
+        .from('workout_plans')
+        .delete()
+        .eq('user_id', user.id);
+      if (delError) return c.json({ error: delError.message }, 500);
     }
 
     return c.json({ success: true });
@@ -214,8 +233,6 @@ app.get("/make-server-975f4bc8/workouts/plan", async (c) => {
 });
 
 // ── Workout Log: Save ─────────────────────────────────────────────────────────
-// FIX #3: always use s.exerciseId as the canonical key; never fall back to
-// s.exerciseName so that the progression engine sees consistent IDs.
 
 app.post("/make-server-975f4bc8/workouts/log", async (c) => {
   const auth = await requireAuth(c);
@@ -241,13 +258,10 @@ app.post("/make-server-975f4bc8/workouts/log", async (c) => {
 
     if (sessErr) return c.json({ error: sessErr.message }, 500);
 
-    // FIX #3: exercise_id must always be the stable DB id (ex.id), never the
-    // display name. ActiveWorkout.tsx sets exerciseId: ex.id — trust that value
-    // and do NOT fall back to exerciseName if exerciseId is present.
     const sets = (body.sets || []).map((s: any) => ({
       session_id:    session.id,
       user_id:       user.id,
-      exercise_id:   s.exerciseId,   // ← was: s.exerciseId || s.exerciseName
+      exercise_id:   s.exerciseId,
       exercise_name: s.exerciseName,
       set_number:    s.set,
       weight_kg:     s.weight || 0,
@@ -267,8 +281,6 @@ app.post("/make-server-975f4bc8/workouts/log", async (c) => {
 });
 
 // ── Workout History: Get ──────────────────────────────────────────────────────
-// FIX #2: removed the dead exercise_id query parameter (was declared but never
-// used). The per-exercise endpoint below handles filtered lookups.
 
 app.get("/make-server-975f4bc8/workouts/history", async (c) => {
   const auth = await requireAuth(c);
@@ -301,7 +313,6 @@ app.get("/make-server-975f4bc8/workouts/history", async (c) => {
 });
 
 // ── Exercise strength history ─────────────────────────────────────────────────
-// FIX #5: now queries consistently by exercise_id (the stable DB id).
 
 app.get("/make-server-975f4bc8/workouts/exercise-history", async (c) => {
   const auth = await requireAuth(c);
@@ -379,8 +390,6 @@ app.get("/make-server-975f4bc8/progress/bodyweight", async (c) => {
 });
 
 // ── Weekly volume summary ─────────────────────────────────────────────────────
-// FIX #1: use DATE string (split('T')[0]) instead of full ISO timestamp so the
-// comparison against the DATE column week_start works correctly.
 
 app.get("/make-server-975f4bc8/progress/volume", async (c) => {
   const auth = await requireAuth(c);
@@ -393,7 +402,7 @@ app.get("/make-server-975f4bc8/progress/volume", async (c) => {
       .from('weekly_volume')
       .select('*')
       .eq('user_id', auth.user.id)
-      .gte('week_start', oneWeekAgoDate)   // ← was: full ISO timestamp
+      .gte('week_start', oneWeekAgoDate)
       .order('total_sets', { ascending: false });
 
     if (error) return c.json({ error: error.message }, 500);
@@ -459,6 +468,7 @@ function mapSessionToClient(row: any) {
     duration:        row.duration_minutes,
     perceivedEffort: row.perceived_effort,
     feedback:        row.feedback,
+    // FIX #2: rpeCorrections is passed through so the engine can use it
     rpeCorrections:  row.rpe_corrections,
     sets: (row.workout_sets || []).map((s: any) => ({
       exerciseId:   s.exercise_id,

@@ -26,13 +26,15 @@ export function Dashboard() {
 
   useEffect(() => { loadData(); }, []);
 
-  // FIX #12: every request has its own catch so a single failure can't blank the dashboard.
   const loadData = async () => {
     try {
       const [prof, plan, history, bw] = await Promise.all([
         profileApi.get().catch(() => null),
         planApi.get().catch(() => null),
-        workoutApi.getHistory(50).catch(() => []),
+        // FIX #5: 200 sessions (≈ 4 workouts/week × 50 weeks) so streak is
+        // never silently truncated for active users. The old limit of 50 could
+        // hide weeks for anyone training 4+ days/week for more than 3 months.
+        workoutApi.getHistory(200).catch(() => []),
         progressApi.getBodyweight(30).catch(() => []),
       ]);
       setProfile(prof);
@@ -226,7 +228,6 @@ export function Dashboard() {
             <CardContent className="py-3 flex items-center gap-3">
               <Flame className="w-8 h-8 text-orange-500 flex-shrink-0" />
               <div>
-                {/* FIX #15: renamed to "weeks on target" to avoid confusion with daily streaks */}
                 <p className="font-semibold text-orange-800">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
                 <p className="text-xs text-orange-600">Keep it going</p>
               </div>

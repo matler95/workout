@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
@@ -15,7 +15,7 @@ import {
   type WorkoutLog as EngineWorkoutLog,
 } from '../../../utils/progressiveOverload';
 
-// ─── Local types (match what the API returns) ──────────────────────────────────
+// ─── Local types ───────────────────────────────────────────────────────────────
 
 interface SetLog {
   exerciseId: string;
@@ -33,15 +33,15 @@ interface WorkoutLog {
   completedAt: string;
   sets: SetLog[];
   perceivedEffort?: number;
+  rpeCorrections?: Record<string, number>;
 }
 
-// FIX #17: explicit mapper instead of `as unknown as EngineWorkoutLog[]`.
-// The engine only needs { dayName, completedAt, sets[{exerciseId, exerciseName, weight, reps}], perceivedEffort }.
 function toEngineHistory(logs: WorkoutLog[]): EngineWorkoutLog[] {
   return logs.map(log => ({
     dayName:         log.dayName,
     completedAt:     log.completedAt,
     perceivedEffort: log.perceivedEffort,
+    rpeCorrections:  log.rpeCorrections,
     sets: (log.sets || []).map(s => ({
       exerciseId:   s.exerciseId,
       exerciseName: s.exerciseName,
@@ -52,11 +52,11 @@ function toEngineHistory(logs: WorkoutLog[]): EngineWorkoutLog[] {
 }
 
 export function Progress() {
-  const [bodyweightData, setBodyweightData]   = useState<{ date: string; weight: number }[]>([]);
-  const [workoutHistory, setWorkoutHistory]   = useState<WorkoutLog[]>([]);
-  const [dbVolumeData, setDbVolumeData]       = useState<VolumeEntry[]>([]);
-  const [profile, setProfile]                 = useState<any>(null);
-  const [loading, setLoading]                 = useState(true);
+  const [bodyweightData, setBodyweightData]     = useState<{ date: string; weight: number }[]>([]);
+  const [workoutHistory, setWorkoutHistory]     = useState<WorkoutLog[]>([]);
+  const [dbVolumeData, setDbVolumeData]         = useState<VolumeEntry[]>([]);
+  const [profile, setProfile]                   = useState<any>(null);
+  const [loading, setLoading]                   = useState(true);
   const [selectedExercise, setSelectedExercise] = useState('');
 
   useEffect(() => { loadData(); }, []);
@@ -79,6 +79,15 @@ export function Progress() {
       setLoading(false);
     }
   };
+
+  // FIX #4 (infinite re-render): memoize the mapped array so its reference
+  // stays stable between renders. Without this, toEngineHistory() creates a
+  // new array on every render, which causes ProgressionInsights' useEffect
+  // (which depends on the history prop) to re-fire indefinitely.
+  const engineHistory = useMemo(
+    () => toEngineHistory(workoutHistory),
+    [workoutHistory],
+  );
 
   // ── Strength chart data ────────────────────────────────────────────────────
 
@@ -231,9 +240,9 @@ export function Progress() {
           <TabsContent value="body" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: bmi ?? '–',                  label: 'BMI',           sub: bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null },
+                { value: bmi ?? '–',                          label: 'BMI',           sub: bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null },
                 { value: estBodyFat ? `${estBodyFat}%` : '–', label: 'Est. Body Fat', sub: 'approx.' },
-                { value: leanMass ?? '–',              label: 'Lean kg',       sub: 'estimated' },
+                { value: leanMass ?? '–',                     label: 'Lean kg',       sub: 'estimated' },
               ].map(({ value, label, sub }) => (
                 <Card key={label}>
                   <CardContent className="pt-4 pb-4 text-center">
@@ -245,7 +254,6 @@ export function Progress() {
               ))}
             </div>
 
-            {/* FIX #16: body composition disclaimer */}
             {(estBodyFat !== null || bmi !== null) && (
               <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500">
                 <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-gray-400" />
@@ -287,8 +295,8 @@ export function Progress() {
 
           {/* ── Strength ──────────────────────────────────────────────────── */}
           <TabsContent value="strength" className="space-y-4">
-            {/* FIX #17: use explicit mapper instead of `as unknown as EngineWorkoutLog[]` */}
-            <ProgressionInsights history={toEngineHistory(workoutHistory)} />
+            {/* FIX #4: pass the memoized engineHistory instead of a new array each render */}
+            <ProgressionInsights history={engineHistory} />
 
             {exerciseNames.length > 0 && (
               <>
@@ -419,10 +427,10 @@ export function Progress() {
           <TabsContent value="streaks" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: streakInfo.current,              label: 'Weeks on target', sub: 'consecutive', icon: <Flame className="w-5 h-5 text-orange-500" /> },
-                { value: streakInfo.longest,              label: 'Best streak',    sub: 'weeks' },
-                { value: `${streakInfo.consistency}%`,   label: 'Consistency',    sub: 'last 30 days' },
-              ].map(({ value, label, sub, icon }) => (
+                { value: streakInfo.current,            label: 'Weeks on target', sub: 'consecutive', icon: <Flame className="w-5 h-5 text-orange-500" /> },
+                { value: streakInfo.longest,            label: 'Best streak',     sub: 'weeks' },
+                { value: `${streakInfo.consistency}%`, label: 'Consistency',     sub: 'last 30 days' },
+              ].map(({ value, label, sub, icon }: any) => (
                 <Card key={label}>
                   <CardContent className="pt-4 pb-4 text-center">
                     {icon ? (
@@ -439,7 +447,6 @@ export function Progress() {
               ))}
             </div>
 
-            {/* FIX #15: brief note explaining what "weeks on target" means */}
             <p className="text-xs text-gray-400 px-1">
               A week counts as "on target" when you complete at least {profile?.trainingDays ?? 3} workouts in that calendar week.
             </p>
