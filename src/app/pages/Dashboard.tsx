@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getNextWorkout } from '../../utils/getNextWorkout';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -84,17 +85,6 @@ export function Dashboard() {
     return Math.round(sleepScore + stressScore + recoveryScore);
   };
 
-  const getNextWorkout = () => {
-    if (!workoutPlan?.workouts) return null;
-    const days = Object.keys(workoutPlan.workouts);
-    if (!days.length) return null;
-    if (!workoutHistory.length) return { day: days[0], isToday: true };
-    const lastDayName = workoutHistory[0].dayName;
-    const lastIdx = days.indexOf(lastDayName);
-    const nextIdx = lastIdx === -1 ? 0 : (lastIdx + 1) % days.length;
-    return { day: days[nextIdx], isToday: false };
-  };
-
   const getCalorieTarget = () => {
     if (!profile?.weight || !profile?.height || !profile?.age) return null;
     const { weight, height, age, gender, primaryGoal, activityLevel } = profile;
@@ -124,7 +114,7 @@ export function Dashboard() {
 
   const weekProg    = getWeeklyProgress();
   const readiness   = getReadinessScore();
-  const nextWorkout = getNextWorkout();
+  const nextWorkout = getNextWorkout(workoutPlan, workoutHistory);
   const cals        = getCalorieTarget();
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
   const streak      = getStreak();

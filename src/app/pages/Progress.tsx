@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { TrendingUp, Activity, Calendar, Flame, Info } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
+import { inferMuscleGroup } from '../../utils/inferMuscleGroup';
 import { ProgressionInsights } from '../components/ProgressionInsights';
 import {
   computeAllSuggestions,
@@ -115,7 +116,7 @@ export function Progress() {
   const getVolumeData = () => {
     const muscleVolume: Record<string, number> = {};
     for (const row of dbVolumeData) {
-      const muscles = inferMuscleGroup(row.exercise_name.toLowerCase());
+      const muscles = inferMuscleGroup(row.exercise_id, row.exercise_name);
       for (const m of muscles) muscleVolume[m] = (muscleVolume[m] || 0) + row.total_reps;
     }
     const order  = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
@@ -124,22 +125,10 @@ export function Progress() {
       muscle: m,
       reps:   muscleVolume[m] || 0,
       sets:   dbVolumeData
-        .filter(r => inferMuscleGroup(r.exercise_name.toLowerCase()).includes(m))
+        .filter(r => inferMuscleGroup(r.exercise_id, r.exercise_name).includes(m))
         .reduce((s, r) => s + r.total_sets, 0),
       pct: Math.round(((muscleVolume[m] || 0) / maxVol) * 100),
     }));
-  };
-
-  const inferMuscleGroup = (name: string): string[] => {
-    if (name.includes('bench') || name.includes('chest') || name.includes('push-up') || name.includes('pushup') || name.includes('dip') || name.includes('fly')) return ['Chest', 'Triceps'];
-    if (name.includes('row') || name.includes('pull') || name.includes('lat') || name.includes('deadlift')) return ['Back', 'Biceps'];
-    if (name.includes('squat') || name.includes('leg press') || name.includes('lunge')) return ['Quads', 'Hamstrings'];
-    if (name.includes('romanian') || name.includes('hamstring') || name.includes('leg curl')) return ['Hamstrings'];
-    if (name.includes('press') || name.includes('delt') || name.includes('shoulder') || name.includes('overhead')) return ['Shoulders', 'Triceps'];
-    if (name.includes('curl') || name.includes('bicep')) return ['Biceps'];
-    if (name.includes('tricep') || name.includes('extension') || name.includes('pushdown') || name.includes('kickback')) return ['Triceps'];
-    if (name.includes('plank') || name.includes('crunch') || name.includes('ab') || name.includes('core') || name.includes('hanging')) return ['Core'];
-    return [];
   };
 
   // ── Streaks ────────────────────────────────────────────────────────────────
