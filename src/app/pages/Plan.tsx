@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -10,13 +10,16 @@ import { Dumbbell, Clock, Edit } from 'lucide-react';
 export function Plan() {
   const [profile, setProfile]         = useState<any>(null);
   const [workoutPlan, setWorkoutPlan] = useState<any>(null);
-  // FIX #4: track loading state to prevent the "No Workout Plan" flash
   const [loading, setLoading]         = useState(true);
   const navigate = useNavigate();
+  // FIX: track location so we can re-fetch whenever the user navigates back
+  // to this page from WorkoutBuilder. React Router keeps the component alive
+  // between navigations, so useEffect([]) only fires on first mount — meaning
+  // edits made in WorkoutBuilder are never reflected until a full page reload.
+  const location = useLocation();
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
       const [prof, plan] = await Promise.all([
         profileApi.get(),
@@ -27,12 +30,15 @@ export function Plan() {
     } catch (error: any) {
       console.error('Failed to load plan:', error);
     } finally {
-      // FIX #4: always clear loading, even on error
       setLoading(false);
     }
-  };
+  }, []);
 
-  // FIX #4: show a spinner while data is in-flight
+  // Re-fetch every time this route becomes active (including back-navigation)
+  useEffect(() => {
+    loadData();
+  }, [location.key, loadData]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background p-4 pb-24">
