@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
 import { profileApi, planApi } from '../../utils/api';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, Clock, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { Search, Plus, Trash2, Clock, AlertTriangle, CheckCircle, Info, Zap } from 'lucide-react';
+import { selectPeriodization, type PeriodizationModel } from '../../utils/periodization';
 
 const MUSCLE_TARGETS: Record<string, string[]> = {
   push: ['chest', 'front_delts', 'side_delts', 'triceps'],
@@ -181,8 +182,28 @@ export function WorkoutBuilder() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // NEW: Select and store periodization model
+      const periodization = selectPeriodization(
+        profile.primaryGoal,
+        profile.experienceLevel,
+        profile.trainingDays,
+        profile.stressLevel
+      );
+
       await planApi.save(selectedExercises);
-      toast.success('Workout plan saved!');
+      
+      // Store periodization in localStorage
+      localStorage.setItem(
+        'periodizationModel',
+        JSON.stringify({
+          type: periodization.type,
+          phases: periodization.phases,
+          totalWeeks: periodization.totalWeeks,
+          description: periodization.description,
+        })
+      );
+
+      toast.success(`Plan saved with ${periodization.type} periodization! 🎯`);
       navigate('/plan');
     } catch {
       toast.error('Failed to save');
@@ -236,6 +257,40 @@ export function WorkoutBuilder() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+        {/* NEW: Periodization Info */}
+        {(() => {
+          const periodization = selectPeriodization(
+            profile.primaryGoal,
+            profile.experienceLevel,
+            profile.trainingDays,
+            profile.stressLevel
+          );
+          return (
+            <Card className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800/50">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <Zap className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-sm text-indigo-900 dark:text-indigo-100">
+                      {periodization.type.charAt(0).toUpperCase() + periodization.type.slice(1)} Periodization
+                    </p>
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1">
+                      {periodization.description}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {periodization.phases.map((phase, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                          {phase.name}: {phase.repRange[0]}-{phase.repRange[1]} reps
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         <Tabs value={currentDay} onValueChange={(day) => { setCurrentDay(day); setSelectedMuscle(null); }}>
           <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
             {days.map(day => (

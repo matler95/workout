@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { Badge } from '../components/ui/badge';
-import { TrendingUp, Activity, Calendar, Flame, Info } from 'lucide-react';
+import { TrendingUp, Activity, Calendar, Flame, Info, AlertTriangle } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
 import { inferMuscleGroup } from '../../utils/inferMuscleGroup';
@@ -15,6 +15,13 @@ import {
   computeAllSuggestions,
   type WorkoutLog as EngineWorkoutLog,
 } from '../../../utils/progressiveOverload';
+import {
+  calculateMuscleVolume,
+  aggregateVolume,
+  isVolumeExcessive,
+  isVolumeInsufficient,
+  VOLUME_LANDMARKS,
+} from '../../utils/volumeTracking';
 
 // ─── Local types ───────────────────────────────────────────────────────────────
 
@@ -361,6 +368,62 @@ export function Progress() {
 
           {/* ── Volume ────────────────────────────────────────────────────── */}
           <TabsContent value="volume" className="space-y-4">
+            {/* NEW: Volume Status Warnings */}
+            {(() => {
+              const warnings: string[] = [];
+              const excessive: string[] = [];
+              const insufficient: string[] = [];
+              
+              for (const { muscle, sets } of volumeData) {
+                if (isVolumeExcessive(muscle, sets)) {
+                  excessive.push(`${muscle} (${sets} sets > ${VOLUME_LANDMARKS[muscle]?.MRV} MRV)`);
+                } else if (isVolumeInsufficient(muscle, sets)) {
+                  insufficient.push(`${muscle} (${sets} sets < ${VOLUME_LANDMARKS[muscle]?.MEV} MEV)`);
+                }
+              }
+
+              if (excessive.length > 0) {
+                return (
+                  <Card className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50">
+                    <CardContent className="pt-4">
+                      <div className="flex gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-sm text-red-900 dark:text-red-200">Volume Alert: Overtraining Risk</p>
+                          <ul className="text-xs text-red-700 dark:text-red-300 mt-2 space-y-1">
+                            {excessive.map((w, i) => <li key={i}>• {w}</li>)}
+                          </ul>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                            Consider a deload week or reducing volume for these muscle groups.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              if (insufficient.length > 0 && volumeData.some(d => d.sets > 0)) {
+                return (
+                  <Card className="bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/50">
+                    <CardContent className="pt-4">
+                      <div className="flex gap-3">
+                        <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-sm text-yellow-900 dark:text-yellow-200">Volume Note: Below Targets</p>
+                          <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 space-y-1">
+                            {insufficient.map((w, i) => <li key={i}>• {w}</li>)}
+                          </ul>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return null;
+            })()}
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">

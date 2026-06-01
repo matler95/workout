@@ -36,6 +36,7 @@ import {
   type UserProfile,
   type StartingWeightResult,
 } from '../../utils/startingWeights';
+import { calculateMuscleVolume } from '../../utils/volumeTracking';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -522,6 +523,12 @@ export function ActiveWorkout() {
         }
       }
 
+      // NEW: Calculate muscle volume for this session
+      const muscleVolume = calculateMuscleVolume(completedSets);
+
+      // Log volume info for debugging
+      console.log('Session muscle volume:', muscleVolume);
+
       await workoutApi.log({
         dayName: dayName!,
         completedAt:    new Date().toISOString(),
@@ -530,6 +537,7 @@ export function ActiveWorkout() {
         perceivedEffort,
         rpeCorrections,
         duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
+        muscleVolume,   // NEW: attach volume data
       });
 
       clearRestStart();

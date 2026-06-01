@@ -47,6 +47,12 @@ export interface WorkoutSet {
   timestamp: string;
 }
 
+export interface MuscleVolumeEntry {
+  sets: number;
+  reps: number;
+  volumeKg: number;
+}
+
 export interface WorkoutSession {
   id?: string;
   dayName: string;
@@ -56,6 +62,7 @@ export interface WorkoutSession {
   feedback?: string;
   rpeCorrections?: Record<string, number>;
   sets: WorkoutSet[];
+  muscleVolume?: Record<string, MuscleVolumeEntry>; // muscle group → aggregate metrics
 }
 
 export interface WorkoutPlan {
@@ -159,6 +166,7 @@ function sessionFromDb(row: any): WorkoutSession {
     perceivedEffort: row.perceived_effort,
     feedback:        row.feedback,
     rpeCorrections:  row.rpe_corrections,
+    muscleVolume:    row.muscle_volume,
     sets: (row.workout_sets || []).map((s: any) => ({
       exerciseId:   s.exercise_id,
       exerciseName: s.exercise_name,
@@ -290,6 +298,17 @@ export const planApi = {
 
 // ─── Workout sessions ─────────────────────────────────────────────────────────
 
+export type WorkoutLogPayload = {
+  dayName: string;
+  completedAt: string;
+  sets: WorkoutSet[];
+  perceivedEffort?: number;
+  feedback?: string;
+  rpeCorrections?: Record<string, number>;
+  duration?: number;
+  muscleVolume?: Record<string, MuscleVolumeEntry>;
+};
+
 export const workoutApi = {
   /** Full history — newest first. Use limit to cap payload. */
   getHistory: async (limit = 50): Promise<WorkoutSession[]> => {
@@ -297,7 +316,7 @@ export const workoutApi = {
       .from('workout_sessions')
       .select(`
         id, day_name, completed_at, duration_minutes,
-        perceived_effort, feedback, rpe_corrections,
+        perceived_effort, feedback, rpe_corrections, muscle_volume,
         workout_sets (
           exercise_id, exercise_name, set_number,
           weight_kg, reps, e1rm_kg, completed_at
@@ -340,6 +359,7 @@ export const workoutApi = {
     feedback?: string;
     rpeCorrections?: Record<string, number>;
     duration?: number;
+    muscleVolume?: Record<string, MuscleVolumeEntry>;
   }): Promise<string> => {
     const userId = await getUserId();
 
@@ -354,6 +374,7 @@ export const workoutApi = {
         perceived_effort: session.perceivedEffort || null,
         feedback:         session.feedback || '',
         rpe_corrections:  session.rpeCorrections || {},
+        muscle_volume:    session.muscleVolume || null,
       })
       .select('id')
       .single();

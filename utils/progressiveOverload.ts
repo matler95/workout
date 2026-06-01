@@ -110,6 +110,52 @@ export function avgRepsAtTopWeight(sets: SessionSetData[]): number {
   return topHalf.reduce((sum, s) => sum + s.reps, 0) / topHalf.length;
 }
 
+/**
+ * Intra-session fatigue detection
+ *
+ * Detects if the user got significantly fatigued DURING the session
+ * by checking if rep count dropped >20% from first to last set at the same weight.
+ *
+ * Returns: { fatigued: boolean, decline: number (0-1), firstSetReps: number, lastSetReps: number }
+ *
+ * High fatigue during session = needs deload soon
+ */
+export function detectIntraSessionFatigue(sets: SessionSetData[]): {
+  fatigued: boolean;
+  decline: number;
+  firstSetReps: number;
+  lastSetReps: number;
+} {
+  if (sets.length < 2) {
+    return { fatigued: false, decline: 0, firstSetReps: 0, lastSetReps: 0 };
+  }
+
+  // Sort by weight descending, then by order (earlier sets first)
+  const sorted = [...sets].sort((a, b) => {
+    if (b.weight !== a.weight) return b.weight - a.weight;
+    return 0; // maintain insertion order for same weight
+  });
+
+  // Compare top-weight sets: first to last
+  const topWeight = sorted[0].weight;
+  const topWeightSets = sorted.filter(s => s.weight === topWeight);
+
+  if (topWeightSets.length < 2) {
+    return { fatigued: false, decline: 0, firstSetReps: 0, lastSetReps: 0 };
+  }
+
+  const firstSetReps = topWeightSets[0].reps;
+  const lastSetReps = topWeightSets[topWeightSets.length - 1].reps;
+
+  // Decline as a fraction: (first - last) / first
+  const decline = (firstSetReps - lastSetReps) / firstSetReps;
+
+  // Threshold: >20% decline = fatigued
+  const fatigued = decline > 0.2;
+
+  return { fatigued, decline, firstSetReps, lastSetReps };
+}
+
 export function computeIncrease(tier: ExerciseTier, currentWeight: number): number {
   switch (tier) {
     case 'heavy_barbell':
@@ -308,6 +354,10 @@ export function computeSuggestion(
   const avgReps       = avgRepsAtTopWeight(lastSession.sets);
   const lastRPE       = lastSession.perceivedEffort ?? 5;
 
+  // FIX #4.1: Detect intra-session fatigue (new)
+  const fatigueMeasure = detectIntraSessionFatigue(lastSession.sets);
+  const highIntraSessionFatigue = fatigueMeasure.fatigued;
+
   const e1RMTrend: ProgressionSuggestion['e1RMTrend'] =
     previousE1RM === null ? 'unknown' :
     currentE1RM > previousE1RM * 1.005 ? 'up' :
@@ -322,6 +372,24 @@ export function computeSuggestion(
   // FIX #4: delegate single-session path to the new directional helper
   if (sessions.length === 1) {
     return buildOneSuggestion(exerciseName, lastSession);
+  }
+
+  // NEW: High intra-session fatigue is a strong deload signal
+  if (highIntraSessionFatigue && lastRPE >= 7) {
+    const pctDecline = Math.round(fatigueMeasure.decline * 100);
+    const reduced = computeDeloadWeight(tier, currentWeight);
+    return {
+      action: 'deload',
+      currentWeight,
+      suggestedWeight: reduced,
+      suggestedReps: [repLo, repHi],
+      currentE1RM,
+      previousE1RM,
+      e1RMTrend,
+      confidence: 'high',
+      reasoning: `You had significant fatigue during the session — reps dropped ${pctDecline}% from first to last set (${fatigueMeasure.firstSetReps} → ${fatigueMeasure.lastSetReps}). A deload will help you recover.`,
+      tip: 'When reps drop mid-session, your body is signaling it needs recovery.',
+    };
   }
 
   if (regressedBadly && sessions.length >= 2) {
