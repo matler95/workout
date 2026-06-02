@@ -82,7 +82,7 @@ export function Progress() {
     try {
       const [bw, history, vol, prof] = await Promise.all([
         progressApi.getBodyweight(90).catch(() => []),
-        workoutApi.getHistory(100).catch(() => []),
+        workoutApi.getHistory(200).catch(() => []),
         progressApi.getWeeklyVolume().catch(() => []),
         profileApi.get().catch(() => null),
       ]);
@@ -246,7 +246,7 @@ export function Progress() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 pb-24">
+    <div className="min-h-screen bg-background p-4 pb-page">
       <div className="max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold tracking-tight pt-2">Progress</h1>
 
@@ -306,10 +306,14 @@ export function Progress() {
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={weightChartData}>
                   <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} domain={['auto', 'auto']} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
+                    labelStyle={{ color: 'var(--foreground)' }}
+                    itemStyle={{ color: 'var(--muted-foreground)' }}
+                    />
+                    <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -354,10 +358,15 @@ export function Progress() {
                     <CardContent>
                       <ResponsiveContainer width="100%" height={200}>
                         <LineChart data={strengthData[activeExercise]}>
-                          <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                          <YAxis tick={{ fontSize: 11 }} unit="kg" domain={['auto', 'auto']} />
-                          <Tooltip formatter={(v: any, n: string) => [`${Math.round(v)} kg`, n === 'e1rm' ? 'Est. 1RM' : 'Top set']} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                          <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} unit="kg" domain={['auto', 'auto']} />
+                          <Tooltip
+                            formatter={(v: any, n: string) => [`${Math.round(v)} kg`, n === 'e1rm' ? 'Est. 1RM' : 'Top set']}
+                            contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
+                            labelStyle={{ color: 'var(--foreground)' }}
+                            itemStyle={{ color: 'var(--muted-foreground)' }}
+                          />
                           <Line type="monotone" dataKey="weight" stroke="#94a3b8" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="weight" />
                           <Line type="monotone" dataKey="e1rm"   stroke="#10B981" strokeWidth={2}   dot={{ r: 3 }} name="e1rm" />
                         </LineChart>
@@ -576,10 +585,14 @@ export function Progress() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={weeklyBars} barSize={16}>
-                    <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
-                    <XAxis dataKey="week" tick={{ fontSize: 10 }} interval={2} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+                    <XAxis dataKey="week" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} interval={2} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
+                      labelStyle={{ color: 'var(--foreground)' }}
+                      itemStyle={{ color: 'var(--muted-foreground)' }}
+                    />
                     <ReferenceLine y={profile?.trainingDays || 3} stroke="#10B981" strokeDasharray="4 2"
                       label={{ value: 'target', position: 'right', fontSize: 10 }} />
                     <Bar dataKey="workouts" fill="#10B981" radius={[3, 3, 0, 0]} />

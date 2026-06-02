@@ -833,7 +833,7 @@ export function ActiveWorkout() {
   const isBodyweight          = plan?.source === 'bodyweight';
 
   return (
-    <div className="min-h-screen bg-background pb-8">
+    <div className="min-h-screen bg-background pb-page">
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
@@ -866,21 +866,35 @@ export function ActiveWorkout() {
         onChoice={handleExitChoice}
       />
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
-
+      <div className={`max-w-2xl mx-auto px-4 space-y-4 ${restTimer > 0 ? 'pt-16' : 'pt-4'}`}>
         {restTimer > 0 && (
-          <Card className="bg-gradient-to-r from-blue-500/5 to-indigo-500/5 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200/50 dark:border-blue-800/30 shadow-md shadow-blue-500/10">
-            <CardContent className="py-5 text-center">
-              <p className="text-xs font-medium text-blue-500 dark:text-blue-400 uppercase tracking-wider mb-1">Rest</p>
-              <div className="text-6xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
+          <div className="sticky top-[57px] z-10 bg-blue-600 dark:bg-blue-700">
+            <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-white text-xs font-semibold uppercase tracking-wide opacity-80">
+                  Rest
+                </span>
+                <span className="text-white text-xl font-bold tabular-nums">
+                  {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
+                </span>
               </div>
-              <Progress value={((REST_DURATION - restTimer) / REST_DURATION) * 100} className="mt-3 h-1.5" />
-              <Button variant="outline" size="sm" className="mt-3 rounded-xl" onClick={() => { setRestTimer(0); clearRestStart(); }}>
-                Skip rest
-              </Button>
-            </CardContent>
-          </Card>
+              <div className="flex items-center gap-3">
+                {/* Mini progress pill */}
+                <div className="w-20 h-1.5 bg-white/30 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-white rounded-full transition-all"
+                    style={{ width: `${((REST_DURATION - restTimer) / REST_DURATION) * 100}%` }}
+                  />
+                </div>
+                <button
+                  onClick={() => { setRestTimer(0); clearRestStart(); }}
+                  className="text-white/80 hover:text-white text-xs font-medium py-1 px-2 rounded bg-white/20 hover:bg-white/30 transition-colors"
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         <Card>
@@ -992,11 +1006,6 @@ export function ActiveWorkout() {
               );
             })()}
 
-            {restTimer > 0 && (
-              <p className="text-xs text-amber-600 text-center">
-                ⏱ Rest in progress — you can still log this set early
-              </p>
-            )}
             <Button
               onClick={handleSetComplete}
               className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25"

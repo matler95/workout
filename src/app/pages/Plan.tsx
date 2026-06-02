@@ -119,7 +119,7 @@ export function Plan() {
               : firstPrimary.toLowerCase().includes('arm') ? 'bg-amber-50 dark:bg-amber-900/20'
               : 'bg-card dark:bg-card';
 
-            const titleColor = themeClass === 'bg-card' ? 'text-foreground' : '';
+            const titleColor = themeClass === 'bg-card dark:bg-card' ? 'text-foreground' : '';
 
             return (
               <Card key={dayName} className={`border-0 ${themeClass} shadow-soft hover:shadow-glow-emerald transition-shadow duration-200`}>

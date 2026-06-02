@@ -175,3 +175,57 @@
   }
 }
 
+/* ============================================================
+   Additions to src/styles/globals.css
+   Apply these at the end of the file
+   ============================================================ */
+
+@layer utilities {
+  /* Safe-area-aware page bottom padding.
+     Use pb-page on every scrollable page container instead of pb-24.
+     Gives 96px base + the iPhone home indicator clearance. */
+  .pb-page {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Hide scrollbar cross-browser while keeping scroll functionality.
+     Used by the WorkoutBuilder tab list. */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Recharts dark mode fixes ────────────────────────────────────────────────
+   Recharts hardcodes #666 for axis tick text and white for tooltip backgrounds.
+   These overrides ensure charts are readable in dark mode. */
+
+.dark .recharts-cartesian-axis-tick text {
+  fill: var(--muted-foreground) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+/* Light mode tooltip consistency */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: var(--card) !important;
+  border: 0.5px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--foreground) !important;
+  font-size: 12px !important;
+}
+
+.recharts-tooltip-label {
+  color: var(--foreground) !important;
+}
+
+.recharts-tooltip-item {
+  color: var(--muted-foreground) !important;
+}

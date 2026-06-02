@@ -154,7 +154,7 @@ export function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] relative overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
@@ -281,6 +281,7 @@ export function Onboarding() {
                     <Input
                       id="age"
                       type="number"
+                      inputMode="numeric"
                       min={13}
                       max={100}
                       value={data.age}
@@ -294,6 +295,7 @@ export function Onboarding() {
                     <Input
                       id="height"
                       type="number"
+                      inputMode="decimal"
                       min={100}
                       max={250}
                       value={data.height}
@@ -307,6 +309,7 @@ export function Onboarding() {
                     <Input
                       id="weight"
                       type="number"
+                      inputMode="decimal"
                       min={30}
                       max={300}
                       value={data.weight}

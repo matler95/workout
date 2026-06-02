@@ -1,41 +1,19 @@
+/// <reference types="vite/client" />
+
 /**
  * Exercise ID integrity guard
  *
- * FIX #1: Every exercise must have a stable, non-empty `id` field.
- * Without it, workout history, progression suggestions, and exercise charts
- * will silently break because the DB stores records by exercise_id.
- *
- * HOW TO USE
- * ----------
- * Import this file anywhere that imports `exerciseDatabase`, e.g. at the
- * top of src/data/exercises.ts itself, or in src/main.tsx:
- *
- *   import './data/exerciseIntegrityCheck';
- *
- * The check runs once at module load time (dev + prod). In production the
- * check throws so a misconfigured build is caught immediately rather than
- * producing silent data loss.
- *
- * WHAT TO CHECK IN exercises.ts
- * ------------------------------
- * Every entry must look like:
- *
- *   {
- *     id: 'bench-press',          // ← required, unique, URL-safe slug
- *     name: 'Barbell Bench Press',
- *     ...
- *   }
- *
- * IDs should:
- *   - Be lowercase kebab-case  ('romanian-deadlift', not 'RomanianDeadlift')
- *   - Never change once published (history rows reference them by this value)
- *   - Be unique across the entire database
+ * FIX: Previously threw in all environments, meaning a single bad exercise ID
+ * would crash the app for all production users. Now:
+ *   - DEV:  throws immediately so the developer sees it during build/test
+ *   - PROD: logs to console.error (wire to Sentry/monitoring if available)
+ *           and does NOT crash the app — bad IDs just won't appear in history charts
  */
 
 import { exerciseDatabase } from './exercises';
 
 function assertExerciseIds(): void {
-  const seen = new Set<string>();
+  const seen   = new Set<string>();
   const errors: string[] = [];
 
   for (const ex of exerciseDatabase) {
@@ -49,19 +27,28 @@ function assertExerciseIds(): void {
     seen.add(ex.id);
   }
 
-  if (errors.length > 0) {
-    const msg = [
-      `[exerciseIntegrityCheck] ${errors.length} exercise ID problem(s) found:`,
-      ...errors.map(e => `  • ${e}`),
-      '',
-      'Each exercise in src/data/exercises.ts must have a unique, non-empty id.',
-      'Fix these before deploying — missing IDs cause silent data loss in workout history.',
-    ].join('\n');
+  if (errors.length === 0) return;
 
-    // Throw in all environments so the issue is never silently ignored.
+  const msg = [
+    `[exerciseIntegrityCheck] ${errors.length} exercise ID problem(s) found:`,
+    ...errors.map(e => `  • ${e}`),
+    '',
+    'Each exercise in src/data/exercises.ts must have a unique, non-empty id.',
+    'Fix these before deploying — missing IDs cause silent data loss in workout history.',
+  ].join('\n');
+
+  // In development: throw so the issue is caught immediately during local testing.
+  // In production: log to console.error (wire to monitoring) but don't crash the app —
+  //                affected exercises simply won't track history until fixed.
+  const isDev = import.meta.env.DEV;
+
+  if (isDev) {
     throw new Error(msg);
+  } else {
+    console.error(msg);
+    // TODO: send to error monitoring, e.g.:
+    // Sentry.captureException(new Error(msg));
   }
 }
 
-// Run immediately at module load.
 assertExerciseIds();

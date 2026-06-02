@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -42,7 +42,7 @@ function getAvailableMuscles(dayType: string): string[] {
     upper: ['push', 'pull'],
     lower: ['legs'],
   };
-  const categories = categoryMap[dayType]; // undefined → full / bro_split → all
+  const categories = categoryMap[dayType];
   const muscles = new Set<string>();
   exerciseDatabase
     .filter(ex => !categories || categories.includes(ex.category))
@@ -99,26 +99,20 @@ export function WorkoutBuilder() {
       const profile = await profileApi.get();
       setProfile(profile);
 
-      // Fetch workout history for smart warnings
       const history = await workoutApi.getHistory(50).catch(() => []);
       setWorkoutHistory(history);
 
-      // FIX #8: Fetch the existing plan first. Only call initializeDays if
-      // there is no saved plan yet. The previous code called initializeDays
-      // unconditionally, then overwrote the empty days — causing a visible
-      // flash of empty workout days before the saved plan appeared.
       try {
         const plan = await planApi.get();
         if (plan?.workouts && Object.keys(plan.workouts).length > 0) {
           setSelectedExercises(plan.workouts);
           setCurrentDay(Object.keys(plan.workouts)[0]);
-          return; // ← exit early; don't call initializeDays
+          return;
         }
       } catch {
-        // No plan saved yet — fall through to initializeDays
+        // No plan yet — fall through
       }
 
-      // Only reached when there is no existing plan
       initializeDays(profile);
     } catch {
       toast.error('Failed to load profile');
@@ -192,7 +186,6 @@ export function WorkoutBuilder() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // NEW: Select and store periodization model
       const periodization = selectPeriodization(
         profile.primaryGoal,
         profile.experienceLevel,
@@ -201,17 +194,22 @@ export function WorkoutBuilder() {
       );
 
       await planApi.save(selectedExercises);
-      
-      // Store periodization in localStorage
-      localStorage.setItem(
-        'periodizationModel',
-        JSON.stringify({
-          type: periodization.type,
-          phases: periodization.phases,
-          totalWeeks: periodization.totalWeeks,
-          description: periodization.description,
-        })
-      );
+
+      // NOTE: periodization model should ideally be persisted to the DB.
+      // Storing in localStorage for now as a non-critical enhancement.
+      try {
+        localStorage.setItem(
+          'periodizationModel',
+          JSON.stringify({
+            type: periodization.type,
+            phases: periodization.phases,
+            totalWeeks: periodization.totalWeeks,
+            description: periodization.description,
+          })
+        );
+      } catch {
+        // localStorage may be unavailable in some iOS PWA contexts — non-fatal
+      }
 
       toast.success(`Plan saved with ${periodization.type} periodization! 🎯`);
       navigate('/plan');
@@ -241,6 +239,37 @@ export function WorkoutBuilder() {
   const assessment       = assessWorkout(currentExercises, currentDay);
   const availableMuscles = getAvailableMuscles(getDayType(currentDay));
 
+  // FIX: Pre-compute insight objects before passing to WorkoutBuilderInsights.
+  // The component expects computed structs, not raw exercise arrays.
+  const sessionTimeEstimate = profile ? estimateSessionDuration(currentExercises, profile) : undefined;
+
+  const fatigueWarningsList = profile && workoutHistory.length > 0
+    ? checkFatigueWarnings(
+        currentExercises.map(ex => ({
+          id: ex.id,
+          name: ex.name,
+          primaryMuscles: ex.primaryMuscles,
+          secondaryMuscles: ex.secondaryMuscles,
+        })),
+        profile,
+        workoutHistory
+      )
+    : [];
+
+  // Volume balance: count sets per muscle group
+  const volumeBalance = (() => {
+    const balance: Record<string, number> = {};
+    let totalSets = 0;
+    currentExercises.forEach(ex => {
+      ex.primaryMuscles.forEach(m => {
+        balance[m.replace(/_/g, ' ')] = (balance[m.replace(/_/g, ' ')] || 0) + setsPerExercise;
+        totalSets += setsPerExercise;
+      });
+    });
+    const isOptimal = currentExercises.length >= 3 && currentExercises.length <= 8;
+    return { balance, totalSets, isOptimal };
+  })();
+
   const assessmentColorClass = {
     green: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800/40 dark:text-green-200',
     yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950/30 dark:border-yellow-800/40 dark:text-yellow-200',
@@ -267,7 +296,7 @@ export function WorkoutBuilder() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        {/* NEW: Periodization Info */}
+        {/* Periodization Info */}
         {(() => {
           const periodization = selectPeriodization(
             profile.primaryGoal,
@@ -301,21 +330,31 @@ export function WorkoutBuilder() {
           );
         })()}
 
-        <WorkoutBuilderInsights 
-          currentExercises={currentExercises}
-          currentDay={currentDay}
-          workoutHistory={workoutHistory}
+        {/* FIX: Pass pre-computed insight objects, not raw exercise data */}
+        <WorkoutBuilderInsights
+          sessionTimeEstimate={sessionTimeEstimate}
+          volumeBalance={volumeBalance}
+          availableSessionTime={targetLen}
+          exerciseCount={currentExercises.length}
+          fatigueWarnings={fatigueWarningsList.map(w => ({
+            exerciseName: w.exerciseName,
+            message: w.message,
+            severity: w.severity,
+          }))}
         />
 
         <Tabs value={currentDay} onValueChange={(day) => { setCurrentDay(day); setSelectedMuscle(null); }}>
-          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
-            {days.map(day => (
-              <TabsTrigger key={day} value={day} className="flex-shrink-0">
-                {day}
-                <span className="ml-1 text-xs opacity-60">({(selectedExercises[day] || []).length})</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          {/* Scrollable tabs for bro_split (5 days) without overflow */}
+          <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
+            <TabsList className="flex w-max min-w-full">
+              {days.map(day => (
+                <TabsTrigger key={day} value={day} className="flex-shrink-0">
+                  {day}
+                  <span className="ml-1 text-xs opacity-60">({(selectedExercises[day] || []).length})</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           {days.map(day => (
             <TabsContent key={day} value={day} className="space-y-4 mt-4">
@@ -368,7 +407,7 @@ export function WorkoutBuilder() {
                               <p className="font-medium text-sm truncate">{ex.name}</p>
                               <p className="text-xs text-muted-foreground truncate">{ex.primaryMuscles.join(', ')}</p>
                             </div>
-                            <Badge variant="outline" className="text-xs flex-shrink-0">
+                            <Badge variant="muted" className="text-xs flex-shrink-0">
                               {setsPerExercise} sets
                             </Badge>
                             <button onClick={() => removeExercise(day, idx)}
@@ -401,7 +440,7 @@ export function WorkoutBuilder() {
 
                 {/* RIGHT — exercise library */}
                 <Card>
-                  <CardHeader className="pb-2 ">
+                  <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Exercise Library</CardTitle>
                     <div className="relative mt-2">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -418,11 +457,11 @@ export function WorkoutBuilder() {
                           <button
                             key={muscle}
                             onClick={() => setSelectedMuscle(prev => prev === muscle ? null : muscle)}
-                       className={`text-xs px-2.5 py-1.5 rounded-xl font-medium transition-all duration-200 ${
-                          selectedMuscle === muscle
-                            ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        }`}
+                            className={`text-xs px-2.5 py-1.5 rounded-xl font-medium transition-all duration-200 ${
+                              selectedMuscle === muscle
+                                ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                            }`}
                           >
                             {muscle.replace(/_/g, ' ')}
                           </button>
@@ -488,12 +527,12 @@ function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd
           }`}>{ex.difficulty}</span>
         </div>
       </div>
-        <button
-          onClick={onAdd}
-          disabled={added}
-          className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-            added ? 'bg-muted text-muted-foreground' : 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:from-indigo-600 hover:to-violet-700 shadow-sm shadow-indigo-500/20'
-          }`}
+      <button
+        onClick={onAdd}
+        disabled={added}
+        className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+          added ? 'bg-muted text-muted-foreground' : 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:from-indigo-600 hover:to-violet-700 shadow-sm shadow-indigo-500/20'
+        }`}
       >
         {added ? '✓' : <Plus className="w-3.5 h-3.5" />}
       </button>

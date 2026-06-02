@@ -21,12 +21,6 @@ import {
 } from '../../utils/smartAlgorithms';
 import { exerciseDatabase } from '../../data/exercises';
 
-// FIX (units): convert kg → lbs for display when user is on imperial
-function formatWeight(kg: number, units: string): string {
-  if (units === 'imperial') return `${Math.round(kg * 2.20462)} lbs`;
-  return `${kg} kg`;
-}
-
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -51,7 +45,6 @@ export function Dashboard() {
       const [prof, plan, history, bw, vol] = await Promise.all([
         profileApi.get().catch(() => null),
         planApi.get().catch(() => null),
-        // 200 sessions ≈ 4×/week × 50 weeks — prevents streak truncation
         workoutApi.getHistory(200).catch(() => []),
         progressApi.getBodyweight(30).catch(() => []),
         progressApi.getWeeklyVolume().catch(() => []),
@@ -62,7 +55,6 @@ export function Dashboard() {
       setBodyweightData(bw);
       setVolumeData(vol);
 
-      // Compute smart insights
       if (prof && history.length > 0 && vol.length > 0) {
         const deload = suggestDeload(vol, history, prof);
         setDeloadSuggestion(deload);
@@ -71,7 +63,7 @@ export function Dashboard() {
         setRecoveryScore(recovery);
 
         const nextDay = plan?.workouts ? Object.keys(plan.workouts)[0] : null;
-        if (nextDay) {
+        if (nextDay && plan?.workouts) {
           const nextDayExercises = (plan.workouts[nextDay] || []).map((ex: any) => ({
             id: ex.id,
             name: ex.name,
@@ -89,12 +81,30 @@ export function Dashboard() {
     }
   };
 
+  // FIX: Convert from display units to kg before saving.
+  // The DB always stores kg. Imperial users type lbs, so we convert before the API call.
   const handleLogWeight = async () => {
-    const w = parseFloat(newWeight);
-    if (!w || w < 20 || w > 500) { toast.error('Enter a valid weight'); return; }
+    const displayWeight = parseFloat(newWeight);
+    if (!displayWeight || displayWeight <= 0) { toast.error('Enter a valid weight'); return; }
+
+    const units = profile?.units || 'metric';
+
+    // Validate in display units first
+    const minDisplay = units === 'imperial' ? 44  : 20;   // 20 kg ≈ 44 lbs
+    const maxDisplay = units === 'imperial' ? 660 : 300;  // 300 kg ≈ 660 lbs
+    if (displayWeight < minDisplay || displayWeight > maxDisplay) {
+      toast.error(`Enter a weight between ${minDisplay} and ${maxDisplay} ${units === 'imperial' ? 'lbs' : 'kg'}`);
+      return;
+    }
+
+    // Convert to kg for storage
+    const weightKg = units === 'imperial'
+      ? Math.round((displayWeight / 2.20462) * 10) / 10
+      : displayWeight;
+
     setLoggingWeight(true);
     try {
-      await progressApi.logBodyweight(w, format(new Date(), 'yyyy-MM-dd'));
+      await progressApi.logBodyweight(weightKg, format(new Date(), 'yyyy-MM-dd'));
       toast.success('Weight logged!');
       setNewWeight('');
       setShowWeightLog(false);
@@ -127,36 +137,27 @@ export function Dashboard() {
 
   const getCalorieTarget = () => {
     if (!profile?.weight || !profile?.height || !profile?.age) return null;
+    // profile.weight and profile.height are always stored in metric (kg, cm)
     const { weight, height, age, gender, primaryGoal, activityLevel, trainingDays, cardioSessions } = profile;
     const bmr = gender === 'male'
       ? 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age
       : 447.593 + 9.247 * weight + 3.098 * height - 4.330 * age;
 
-    // FIX: use activityLevel as base, then add extra burn from lifting + cardio
-    // sessions that were collected during onboarding specifically for this purpose.
     const baseMult = ({ sedentary: 1.2, lightly_active: 1.375, moderately_active: 1.55, very_active: 1.725 } as any)[activityLevel] || 1.4;
     const weeklyWorkouts = (trainingDays || 0) + (cardioSessions || 0);
-    // Each extra workout session above what's already factored into activityLevel
-    // adds roughly 0.01 to the TDEE multiplier (conservative; 50–80 kcal/session).
     const sessionBonus = Math.max(0, weeklyWorkouts - 3) * 0.01;
     let tdee = bmr * (baseMult + sessionBonus);
 
-    // Scale goal adjustment relative to body size (not a flat kcal value)
-    if (primaryGoal === 'build_muscle') tdee += Math.round(bmr * 0.10);   // ~10% surplus
-    if (primaryGoal === 'lose_fat')     tdee -= Math.round(bmr * 0.15);   // ~15% deficit
+    if (primaryGoal === 'build_muscle') tdee += Math.round(bmr * 0.10);
+    if (primaryGoal === 'lose_fat')     tdee -= Math.round(bmr * 0.15);
 
     return Math.round(tdee);
   };
 
-  // FIX: streak counts only completed past weeks (i >= 1 for the current week
-  // in progress, or checks if the current week has already met the threshold).
-  // Previously the loop started at i=0, which caused the streak to immediately
-  // reset to 0 on any day the user hadn't yet trained this week.
   const getStreak = () => {
     if (!workoutHistory.length) return 0;
     const planned = profile?.trainingDays || 3;
 
-    // Build a Map from ISO week-start string → workout count
     const weekCounts = new Map<string, number>();
     for (const log of workoutHistory) {
       const ws = format(startOfWeek(parseISO(log.completedAt), { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -171,16 +172,8 @@ export function Dashboard() {
       const ws = format(startOfWeek(weekDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
       const count = weekCounts.get(ws) || 0;
 
-      // Current week (i=0): only break the streak if we're past the point where
-      // the user should have trained and they haven't. If the week has met its
-      // target already, count it. If it's still in progress (fewer sessions but
-      // week not over yet), skip it without breaking the streak.
       if (i === 0) {
-        if (count >= planned) {
-          streak++;
-        }
-        // If current week is in progress (count < planned), don't break —
-        // just don't count it. Continue checking prior weeks.
+        if (count >= planned) streak++;
         continue;
       }
 
@@ -198,6 +191,7 @@ export function Dashboard() {
   const readiness   = getReadinessScore();
   const nextWorkout = getNextWorkout(workoutPlan, workoutHistory);
   const cals        = getCalorieTarget();
+  // profile.weight is always kg; multiply by 2.2 for protein grams (same formula either way)
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
   const streak      = getStreak();
   const units       = profile?.units || 'metric';
@@ -208,12 +202,15 @@ export function Dashboard() {
     ? Math.round((sortedBw[sortedBw.length - 1].weight - sortedBw[0].weight) * 10) / 10
     : null;
 
-  // FIX (date-shift): parseISO("2024-01-15") is midnight UTC, which renders as
-  // the previous day in timezones west of UTC. Use new Date(date + 'T12:00:00')
-  // (local noon) so the chart label always matches the intended calendar date.
+  // DB values are always kg — convert only for display
+  const displayWeight = (kg: number) =>
+    units === 'imperial' ? Math.round(kg * 2.20462) : kg;
+
+  const weightUnit = units === 'imperial' ? 'lbs' : 'kg';
+
   const weightChart = sortedBw.map(e => ({
     date:   format(new Date(e.date + 'T12:00:00'), 'MMM d'),
-    weight: units === 'imperial' ? Math.round(e.weight * 2.20462 * 10) / 10 : e.weight,
+    weight: displayWeight(e.weight),
   }));
 
   const readinessColor = !readiness ? 'gray'
@@ -263,7 +260,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 pb-24">
+    <div className="min-h-screen bg-background p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
       <div className="max-w-xl mx-auto space-y-4">
 
         {/* Header */}
@@ -275,7 +272,7 @@ export function Dashboard() {
           </p>
         </div>
 
-        {/* Hero: Today's Workout (peak) */}
+        {/* Hero: Today's Workout */}
         <Card className="border-0 shadow-soft bg-emerald-50/50 dark:bg-emerald-900/20 overflow-hidden hover:shadow-md transition-shadow duration-200">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
@@ -284,12 +281,10 @@ export function Dashboard() {
                 <h2 className="text-2xl font-bold tracking-tight">{nextWorkout?.isToday ? "Today's Workout" : "Next Workout"}</h2>
                 <p className="text-sm text-muted-foreground mt-1">{nextWorkout ? `${nextWorkout.day} • ${(workoutPlan.workouts[nextWorkout.day] || []).length} exercises` : 'No workout scheduled'}</p>
               </div>
-
               <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-soft flex-shrink-0">
                 <Dumbbell className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
-
             {nextWorkout && (
               <div className="mt-4">
                 <Button size="lg" className="w-full rounded-2xl" onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}>
@@ -389,7 +384,8 @@ export function Dashboard() {
               <div className="flex gap-2 mb-3">
                 <Input
                   type="number"
-                  placeholder={`Weight (${units === 'imperial' ? 'lbs' : 'kg'})`}
+                  inputMode="decimal"
+                  placeholder={`Weight (${weightUnit})`}
                   value={newWeight}
                   onChange={e => setNewWeight(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleLogWeight()}
@@ -401,16 +397,12 @@ export function Dashboard() {
                 </Button>
               </div>
             )}
-            {/* FIX (units): display weight in user's preferred unit */}
             {latestWeight && (
               <div className="flex items-end gap-2 mb-3">
                 <span className="text-3xl font-bold tracking-tight">
-                  {units === 'imperial'
-                    ? Math.round(latestWeight.weight * 2.20462)
-                    : latestWeight.weight}
+                  {displayWeight(latestWeight.weight)}
                 </span>
-                <span className="text-muted-foreground mb-1">{units === 'imperial' ? 'lbs' : 'kg'}</span>
-                {/* FIX (date-shift): use local noon to avoid timezone date shift */}
+                <span className="text-muted-foreground mb-1">{weightUnit}</span>
                 <span className="text-xs text-muted-foreground mb-1 ml-1">
                   {format(new Date(latestWeight.date + 'T12:00:00'), 'MMM d')}
                 </span>
@@ -431,7 +423,16 @@ export function Dashboard() {
                 <LineChart data={weightChart}>
                   <XAxis dataKey="date" hide />
                   <YAxis domain={['auto', 'auto']} hide />
-                  <Tooltip formatter={(v: any) => [`${v} ${units === 'imperial' ? 'lbs' : 'kg'}`, 'Weight']} />
+                  <Tooltip
+                    formatter={(v: any) => [`${v} ${weightUnit}`, 'Weight']}
+                    contentStyle={{
+                      background: 'var(--card)',
+                      border: '0.5px solid var(--border)',
+                      borderRadius: '8px',
+                      color: 'var(--foreground)',
+                      fontSize: '12px',
+                    }}
+                  />
                   <Line type="monotone" dataKey="weight" stroke="#6366f1" strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -488,7 +489,6 @@ export function Dashboard() {
                     <div key={i} className="flex justify-between items-center text-sm py-2.5 border-b border-border/50 last:border-0">
                       <div>
                         <p className="font-medium">{log.dayName}</p>
-                        {/* FIX (date-shift): local noon parse */}
                         <p className="text-xs text-muted-foreground">{format(new Date(log.completedAt), 'EEE, MMM d')}</p>
                       </div>
                       <div className="text-right text-xs text-muted-foreground">
