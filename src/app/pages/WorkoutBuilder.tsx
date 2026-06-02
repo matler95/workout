@@ -195,8 +195,6 @@ export function WorkoutBuilder() {
 
       await planApi.save(selectedExercises);
 
-      // NOTE: periodization model should ideally be persisted to the DB.
-      // Storing in localStorage for now as a non-critical enhancement.
       try {
         localStorage.setItem(
           'periodizationModel',
@@ -239,8 +237,6 @@ export function WorkoutBuilder() {
   const assessment       = assessWorkout(currentExercises, currentDay);
   const availableMuscles = getAvailableMuscles(getDayType(currentDay));
 
-  // FIX: Pre-compute insight objects before passing to WorkoutBuilderInsights.
-  // The component expects computed structs, not raw exercise arrays.
   const sessionTimeEstimate = profile ? estimateSessionDuration(currentExercises, profile) : undefined;
 
   const fatigueWarningsList = profile && workoutHistory.length > 0
@@ -256,7 +252,6 @@ export function WorkoutBuilder() {
       )
     : [];
 
-  // Volume balance: count sets per muscle group
   const volumeBalance = (() => {
     const balance: Record<string, number> = {};
     let totalSets = 0;
@@ -278,24 +273,27 @@ export function WorkoutBuilder() {
   }[assessment.color];
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    /* FIX: overflow-x-hidden on the page root prevents any child from causing horizontal scroll */
+    <div className="min-h-screen bg-background pb-20 overflow-x-hidden">
       {/* Header */}
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 px-4 py-3 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="font-bold text-lg tracking-tight">Workout Builder</h1>
-            <p className="text-xs text-muted-foreground">
+        {/* FIX: max-w-4xl + mx-auto keep header content inside viewport */}
+        <div className="max-w-4xl mx-auto flex justify-between items-center min-w-0">
+          <div className="min-w-0 flex-1 mr-3">
+            <h1 className="font-bold text-lg tracking-tight truncate">Workout Builder</h1>
+            <p className="text-xs text-muted-foreground truncate">
               {profile?.workoutStyle?.replace(/_/g, ' ')} · {days.length} days ·{' '}
               {setsPerExercise} sets/exercise
             </p>
           </div>
-          <Button onClick={handleSave} disabled={saving} size="sm" className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">
+          <Button onClick={handleSave} disabled={saving} size="sm" className="flex-shrink-0 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">
             {saving ? 'Saving...' : 'Save Plan'}
           </Button>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+      {/* FIX: page content container gets overflow-x-hidden + proper horizontal padding */}
+      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4 overflow-x-hidden">
         {/* Periodization Info */}
         {(() => {
           const periodization = selectPeriodization(
@@ -307,16 +305,17 @@ export function WorkoutBuilder() {
           return (
             <Card className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30 border-indigo-200 dark:border-indigo-800/50">
               <CardContent className="pt-4">
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   <Zap className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-sm text-indigo-900 dark:text-indigo-100">
                       {periodization.type.charAt(0).toUpperCase() + periodization.type.slice(1)} Periodization
                     </p>
                     <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1">
                       {periodization.description}
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    {/* FIX: flex-wrap prevents badge row from overflowing */}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
                       {periodization.phases.map((phase, i) => (
                         <Badge key={i} variant="secondary" className="text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
                           {phase.name}: {phase.repRange[0]}-{phase.repRange[1]} reps
@@ -330,7 +329,6 @@ export function WorkoutBuilder() {
           );
         })()}
 
-        {/* FIX: Pass pre-computed insight objects, not raw exercise data */}
         <WorkoutBuilderInsights
           sessionTimeEstimate={sessionTimeEstimate}
           volumeBalance={volumeBalance}
@@ -344,11 +342,11 @@ export function WorkoutBuilder() {
         />
 
         <Tabs value={currentDay} onValueChange={(day) => { setCurrentDay(day); setSelectedMuscle(null); }}>
-          {/* Scrollable tabs for bro_split (5 days) without overflow */}
+          {/* FIX: scrollable tab strip — -mx-4 px-4 pulls it edge-to-edge without causing overflow */}
           <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
             <TabsList className="flex w-max min-w-full">
               {days.map(day => (
-                <TabsTrigger key={day} value={day} className="flex-shrink-0">
+                <TabsTrigger key={day} value={day} className="flex-shrink-0 whitespace-nowrap">
                   {day}
                   <span className="ml-1 text-xs opacity-60">({(selectedExercises[day] || []).length})</span>
                 </TabsTrigger>
@@ -358,22 +356,24 @@ export function WorkoutBuilder() {
 
           {days.map(day => (
             <TabsContent key={day} value={day} className="space-y-4 mt-4">
-              <div className="grid md:grid-cols-2 gap-4">
+              {/* FIX: single column on mobile, two columns on md+ */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 {/* LEFT — selected exercises */}
-                <div className="space-y-3">
+                <div className="space-y-3 min-w-0">
+                  {/* FIX: flex-wrap + min-w-0 prevent badge row overflow */}
                   <div className="flex gap-2 flex-wrap">
-                    <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border ${
+                    <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border flex-shrink-0 ${
                       sessionLen > targetLen + 15 ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800/40 dark:text-red-300' :
                       sessionLen < targetLen - 20 ? 'bg-yellow-50 border-yellow-200 text-yellow-700 dark:bg-yellow-950/30 dark:border-yellow-800/40 dark:text-yellow-300' :
                       'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800/40 dark:text-green-300'
                     }`}>
-                      <Clock className="w-3.5 h-3.5" />
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>~{sessionLen} min</span>
-                      {sessionLen > targetLen + 15 && <AlertTriangle className="w-3.5 h-3.5" />}
+                      {sessionLen > targetLen + 15 && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
                     </div>
-                    <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border ${assessmentColorClass}`}>
-                      {assessment.score >= 70 ? <CheckCircle className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />}
+                    <div className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border flex-shrink-0 ${assessmentColorClass}`}>
+                      {assessment.score >= 70 ? <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" /> : <Info className="w-3.5 h-3.5 flex-shrink-0" />}
                       <span>{assessment.label} ({assessment.score}%)</span>
                     </div>
                   </div>
@@ -387,22 +387,23 @@ export function WorkoutBuilder() {
                     </div>
                   )}
 
-                  <Card>
+                  <Card className="min-w-0">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm text-muted-foreground">Selected ({currentExercises.length})</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {currentExercises.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-4 text-center">No exercises yet — add from the library →</p>
+                        <p className="text-sm text-muted-foreground py-4 text-center">No exercises yet — add from the library below</p>
                       ) : (
                         currentExercises.map((ex, idx) => (
                           <div key={idx} className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg group">
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col gap-0.5 flex-shrink-0">
                               <button onClick={() => moveExercise(day, idx, -1)} disabled={idx === 0}
                                 className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none">▲</button>
                               <button onClick={() => moveExercise(day, idx, 1)} disabled={idx === currentExercises.length - 1}
                                 className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none">▼</button>
                             </div>
+                            {/* FIX: min-w-0 on the text container allows truncate to work */}
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm truncate">{ex.name}</p>
                               <p className="text-xs text-muted-foreground truncate">{ex.primaryMuscles.join(', ')}</p>
@@ -439,7 +440,7 @@ export function WorkoutBuilder() {
                 </div>
 
                 {/* RIGHT — exercise library */}
-                <Card>
+                <Card className="min-w-0">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Exercise Library</CardTitle>
                     <div className="relative mt-2">
@@ -451,6 +452,7 @@ export function WorkoutBuilder() {
                         className="pl-9 h-8 text-sm"
                       />
                     </div>
+                    {/* FIX: muscle filter pills wrap instead of overflowing */}
                     {availableMuscles.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {availableMuscles.map(muscle => (
@@ -470,7 +472,7 @@ export function WorkoutBuilder() {
                     )}
                   </CardHeader>
                   <CardContent className="p-0">
-                    <div className="max-h-[520px] overflow-y-auto">
+                    <div className="max-h-[520px] overflow-y-auto overflow-x-hidden">
                       {suggested.length > 0 && (
                         <>
                           <div className="px-4 py-2 bg-primary/5 border-b border-primary/10">
@@ -515,12 +517,13 @@ export function WorkoutBuilder() {
 function ExerciseRow({ ex, added, onAdd }: { ex: Exercise; added: boolean; onAdd: () => void }) {
   return (
     <div className={`flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-muted/50 transition-colors ${added ? 'opacity-50' : ''}`}>
+      {/* FIX: min-w-0 on the text container enables truncate */}
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">{ex.name}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs text-muted-foreground">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
-          <span className="text-xs text-muted-foreground">{ex.category}</span>
-          <span className={`text-xs px-1.5 py-0.5 rounded ${
+          <span className="text-xs text-muted-foreground truncate">{ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}</span>
+          <span className="text-xs text-muted-foreground flex-shrink-0">{ex.category}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
             ex.difficulty === 'beginner'     ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' :
             ex.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' :
                                                'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
