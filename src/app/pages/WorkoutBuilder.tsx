@@ -164,7 +164,7 @@ export function WorkoutBuilder() {
   };
 
   const initializeDays = (prof: any) => {
-    const days: { [key: string]: Exercise[] } = {};
+    const days: { [key: string]: ExerciseWithSets[] } = {};
     const style = prof?.workoutStyle;
     if      (style === 'full_body')   ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
     else if (style === 'upper_lower') ['Upper A', 'Lower A', 'Upper B', 'Lower B'].forEach(d => (days[d] = []));
