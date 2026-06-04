@@ -5,29 +5,17 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { Badge } from '../components/ui/badge';
 import { TrendingUp, Activity, Calendar, Flame, Info, AlertTriangle } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
 import { inferMuscleGroup } from '../../utils/inferMuscleGroup';
-import { ProgressionInsights } from '../components/ProgressionInsights';
-import { ProgressInsights } from '../components/ProgressInsights';
+import { NextSession } from '../components/NextSession';
+import { type WorkoutLog as EngineWorkoutLog } from '../../../utils/progressiveOverload';
 import {
-  computeAllSuggestions,
-  type WorkoutLog as EngineWorkoutLog,
-} from '../../../utils/progressiveOverload';
-import {
-  calculateMuscleVolume,
-  aggregateVolume,
   isVolumeExcessive,
   isVolumeInsufficient,
   VOLUME_LANDMARKS,
 } from '../../utils/volumeTracking';
-import {
-  predictBodyweightTrend,
-  calculateWorkCapacity,
-  calculateMuscleBalance,
-} from '../../utils/smartAlgorithms';
 
 // ─── Local types ───────────────────────────────────────────────────────────────
 
@@ -66,15 +54,12 @@ function toEngineHistory(logs: WorkoutLog[]): EngineWorkoutLog[] {
 }
 
 export function Progress() {
-  const [bodyweightData, setBodyweightData]     = useState<{ date: string; weight: number }[]>([]);
-  const [workoutHistory, setWorkoutHistory]     = useState<WorkoutLog[]>([]);
-  const [dbVolumeData, setDbVolumeData]         = useState<VolumeEntry[]>([]);
-  const [profile, setProfile]                   = useState<any>(null);
-  const [loading, setLoading]                   = useState(true);
+  const [bodyweightData, setBodyweightData] = useState<{ date: string; weight: number }[]>([]);
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutLog[]>([]);
+  const [dbVolumeData, setDbVolumeData]     = useState<VolumeEntry[]>([]);
+  const [profile, setProfile]               = useState<any>(null);
+  const [loading, setLoading]               = useState(true);
   const [selectedExercise, setSelectedExercise] = useState('');
-  const [bodyweightPrediction, setBodyweightPrediction] = useState<any>(null);
-  const [workCapacity, setWorkCapacity] = useState<any>(null);
-  const [muscleBalance, setMuscleBalance] = useState<any>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -90,20 +75,6 @@ export function Progress() {
       setWorkoutHistory(history as WorkoutLog[]);
       setDbVolumeData(vol);
       setProfile(prof);
-
-      // Compute smart insights
-      if (bw.length >= 4) {
-        const prediction = predictBodyweightTrend(bw, 60);
-        setBodyweightPrediction(prediction);
-      }
-
-      if (vol.length > 0 && bw.length > 0) {
-        const capacity = calculateWorkCapacity(vol, vol.slice(0, Math.min(8, vol.length)));
-        setWorkCapacity(capacity);
-
-        const balance = calculateMuscleBalance(vol);
-        setMuscleBalance(balance);
-      }
     } catch (e) {
       console.error('Failed to load progress:', e);
     } finally {
@@ -111,10 +82,7 @@ export function Progress() {
     }
   };
 
-  // FIX #4 (infinite re-render): memoize the mapped array so its reference
-  // stays stable between renders. Without this, toEngineHistory() creates a
-  // new array on every render, which causes ProgressionInsights' useEffect
-  // (which depends on the history prop) to re-fire indefinitely.
+  // Stable engine history reference — avoids re-renders in NextSession
   const engineHistory = useMemo(
     () => toEngineHistory(workoutHistory),
     [workoutHistory],
@@ -132,8 +100,8 @@ export function Progress() {
         byExercise[s.exerciseName].push(s);
       }
       for (const [name, sets] of Object.entries(byExercise)) {
-        const best  = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
-        const e1rm  = best.e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
+        const best = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
+        const e1rm = best.e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
         if (!map[name]) map[name] = [];
         map[name].push({ date, weight: best.weight, reps: best.reps, e1rm });
       }
@@ -191,7 +159,7 @@ export function Progress() {
     Array.from({ length: 84 }, (_, i) => {
       const d = subDays(new Date(), 83 - i);
       return {
-        date: d,
+        date:  d,
         count: workoutHistory.filter(l => isSameDay(parseISO(l.completedAt), d)).length,
         label: format(d, 'MMM d'),
       };
@@ -203,8 +171,11 @@ export function Progress() {
       const weekEnd   = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
       return {
         week:     format(weekStart, 'MMM d'),
-        workouts: workoutHistory.filter(l => { const d = parseISO(l.completedAt); return d >= weekStart && d < weekEnd; }).length,
-        target:   profile?.trainingDays || 3,
+        workouts: workoutHistory.filter(l => {
+          const d = parseISO(l.completedAt);
+          return d >= weekStart && d < weekEnd;
+        }).length,
+        target: profile?.trainingDays || 3,
       };
     });
 
@@ -250,14 +221,6 @@ export function Progress() {
       <div className="max-w-4xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold tracking-tight pt-2">Progress</h1>
 
-        {/* Smart Insights */}
-        <ProgressInsights
-          bodyweightPrediction={bodyweightPrediction}
-          workCapacity={workCapacity}
-          muscleBalance={muscleBalance}
-          units={profile?.units || 'metric'}
-        />
-
         <Tabs defaultValue="body" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="body">Body</TabsTrigger>
@@ -270,9 +233,9 @@ export function Progress() {
           <TabsContent value="body" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: bmi ?? '–',                          label: 'BMI',           sub: bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null },
+                { value: bmi ?? '–', label: 'BMI', sub: bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null },
                 { value: estBodyFat ? `${estBodyFat}%` : '–', label: 'Est. Body Fat', sub: 'approx.' },
-                { value: leanMass ?? '–',                     label: 'Lean kg',       sub: 'estimated' },
+                { value: leanMass ?? '–', label: 'Lean kg', sub: 'estimated' },
               ].map(({ value, label, sub }) => (
                 <Card key={label}>
                   <CardContent className="pt-4 pb-4 text-center">
@@ -286,11 +249,10 @@ export function Progress() {
 
             {(estBodyFat !== null || bmi !== null) && (
               <div className="flex items-start gap-2 bg-muted/50 border border-border rounded-lg p-3 text-xs text-muted-foreground">
-                <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
+                <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                 <p>
-                  Body fat % and lean mass are rough estimates using the Deurenberg equation applied
-                  to BMI. Accuracy varies significantly by individual — use these as directional
-                  trends only, not precise measurements.
+                  Body fat % and lean mass are rough estimates using the Deurenberg equation.
+                  Use as directional trends only, not precise measurements.
                 </p>
               </div>
             )}
@@ -302,39 +264,48 @@ export function Progress() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-            {weightChartData.length > 1 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={weightChartData}>
-                  <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
-                  <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} domain={['auto', 'auto']} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
-                    labelStyle={{ color: 'var(--foreground)' }}
-                    itemStyle={{ color: 'var(--muted-foreground)' }}
-                    />
-                    <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                {weightChartData.length === 1
-                  ? `Current: ${weightChartData[0].weight} kg — log more to see a trend`
-                  : 'No bodyweight data yet. Log from the dashboard.'}
-              </div>
-            )}
+                {weightChartData.length > 1 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={weightChartData}>
+                      <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} domain={['auto', 'auto']} />
+                      <Tooltip
+                        contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
+                      />
+                      <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {weightChartData.length === 1
+                      ? `Current: ${weightChartData[0].weight} kg — log more to see a trend`
+                      : 'No bodyweight data yet. Log from the dashboard.'}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* ── Strength ──────────────────────────────────────────────────── */}
           <TabsContent value="strength" className="space-y-4">
-            {/* FIX #4: pass the memoized engineHistory instead of a new array each render */}
-            <ProgressionInsights history={engineHistory} />
 
+            {/* Next session recommendations — the primary purpose of this tab */}
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 px-0.5">
+                Next session
+              </h2>
+              <NextSession history={engineHistory} />
+            </div>
+
+            {/* Historical charts — below the recommendations */}
             {exerciseNames.length > 0 && (
-              <>
-                <div className="flex gap-2 flex-wrap pt-2">
+              <div className="space-y-4 pt-2">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-0.5">
+                  Strength history
+                </h2>
+
+                <div className="flex gap-2 flex-wrap">
                   {exerciseNames.map(name => (
                     <button
                       key={name}
@@ -364,14 +335,12 @@ export function Progress() {
                           <Tooltip
                             formatter={(v: any, n: string) => [`${Math.round(v)} kg`, n === 'e1rm' ? 'Est. 1RM' : 'Top set']}
                             contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
-                            labelStyle={{ color: 'var(--foreground)' }}
-                            itemStyle={{ color: 'var(--muted-foreground)' }}
                           />
                           <Line type="monotone" dataKey="weight" stroke="#94a3b8" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="weight" />
                           <Line type="monotone" dataKey="e1rm"   stroke="#10B981" strokeWidth={2}   dot={{ r: 3 }} name="e1rm" />
                         </LineChart>
                       </ResponsiveContainer>
-                      <p className="text-xs text-muted-foreground text-center mt-1">— e1RM &nbsp;&nbsp; - - top set weight</p>
+                      <p className="text-xs text-muted-foreground text-center mt-1">— e1RM &nbsp; - - top set weight</p>
                     </CardContent>
                   </Card>
                 )}
@@ -382,17 +351,26 @@ export function Progress() {
                     const first = data[0], last = data[data.length - 1];
                     const diff  = Math.round((last.weight - first.weight) * 10) / 10;
                     return (
-                      <Card key={name} className="cursor-pointer hover:border-primary transition-colors"
-                        onClick={() => setSelectedExercise(name)}>
+                      <Card
+                        key={name}
+                        className="cursor-pointer hover:border-primary transition-colors"
+                        onClick={() => setSelectedExercise(name)}
+                      >
                         <CardContent className="py-3 flex items-center justify-between">
                           <div>
                             <p className="font-medium text-sm">{name}</p>
-                            <p className="text-xs text-muted-foreground">{data.length} session{data.length !== 1 ? 's' : ''}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {data.length} session{data.length !== 1 ? 's' : ''}
+                            </p>
                           </div>
                           <div className="text-right">
                             <p className="font-bold">{last.weight} kg</p>
                             {data.length > 1 && (
-                              <p className={`text-xs ${diff > 0 ? 'text-green-600 dark:text-green-400' : diff < 0 ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground'}`}>
+                              <p className={`text-xs ${
+                                diff > 0 ? 'text-green-600 dark:text-green-400'
+                                : diff < 0 ? 'text-red-500 dark:text-red-400'
+                                : 'text-muted-foreground'
+                              }`}>
                                 {diff > 0 ? '+' : ''}{diff} kg
                               </p>
                             )}
@@ -402,25 +380,16 @@ export function Progress() {
                     );
                   })}
                 </div>
-              </>
+              </div>
             )}
           </TabsContent>
 
           {/* ── Volume ────────────────────────────────────────────────────── */}
           <TabsContent value="volume" className="space-y-4">
-            {/* NEW: Volume Status Warnings */}
+            {/* Volume status warnings */}
             {(() => {
-              const warnings: string[] = [];
-              const excessive: string[] = [];
-              const insufficient: string[] = [];
-              
-              for (const { muscle, sets } of volumeData) {
-                if (isVolumeExcessive(muscle, sets)) {
-                  excessive.push(`${muscle} (${sets} sets > ${VOLUME_LANDMARKS[muscle]?.MRV} MRV)`);
-                } else if (isVolumeInsufficient(muscle, sets)) {
-                  insufficient.push(`${muscle} (${sets} sets < ${VOLUME_LANDMARKS[muscle]?.MEV} MEV)`);
-                }
-              }
+              const excessive   = volumeData.filter(d => isVolumeExcessive(d.muscle, d.sets));
+              const insufficient = volumeData.filter(d => d.sets > 0 && isVolumeInsufficient(d.muscle, d.sets));
 
               if (excessive.length > 0) {
                 return (
@@ -429,12 +398,11 @@ export function Progress() {
                       <div className="flex gap-3">
                         <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-semibold text-sm text-red-900 dark:text-red-200">Volume Alert: Overtraining Risk</p>
-                          <ul className="text-xs text-red-700 dark:text-red-300 mt-2 space-y-1">
-                            {excessive.map((w, i) => <li key={i}>• {w}</li>)}
-                          </ul>
-                          <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                            Consider a deload week or reducing volume for these muscle groups.
+                          <p className="font-semibold text-sm text-red-900 dark:text-red-200 mb-1">
+                            High volume — consider a deload
+                          </p>
+                          <p className="text-xs text-red-700 dark:text-red-300">
+                            {excessive.map(d => `${d.muscle} (${d.sets} sets)`).join(', ')} above MRV
                           </p>
                         </div>
                       </div>
@@ -450,17 +418,18 @@ export function Progress() {
                       <div className="flex gap-3">
                         <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-semibold text-sm text-yellow-900 dark:text-yellow-200">Volume Note: Below Targets</p>
-                          <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 space-y-1">
-                            {insufficient.map((w, i) => <li key={i}>• {w}</li>)}
-                          </ul>
+                          <p className="font-semibold text-sm text-yellow-900 dark:text-yellow-200 mb-1">
+                            Some muscle groups below minimum volume
+                          </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                            {insufficient.map(d => `${d.muscle} (${d.sets} sets)`).join(', ')}
+                          </p>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 );
               }
-
               return null;
             })()}
 
@@ -469,11 +438,13 @@ export function Progress() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <Activity className="w-4 h-4" /> Muscle Volume This Week
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">Total reps per muscle group from the current week</p>
+                <p className="text-xs text-muted-foreground">Total reps per muscle group</p>
               </CardHeader>
               <CardContent>
                 {volumeData.every(d => d.reps === 0) ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">Complete workouts this week to see volume data</p>
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Complete workouts this week to see volume data
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {volumeData.map(({ muscle, reps, sets, pct }) => (
@@ -483,7 +454,10 @@ export function Progress() {
                           <span className="text-muted-foreground">{sets} sets · {reps} reps</span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          <div
+                            className="h-full bg-indigo-500 rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -494,7 +468,9 @@ export function Progress() {
 
             {workoutHistory.length > 0 && (
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-base">Recent Workouts</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Recent Workouts</CardTitle>
+                </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
                     {workoutHistory.slice(0, 5).map((log, i) => {
@@ -503,11 +479,15 @@ export function Progress() {
                         <div key={i} className="flex justify-between items-center py-2 border-b last:border-0 text-sm">
                           <div>
                             <p className="font-medium">{log.dayName}</p>
-                            <p className="text-xs text-muted-foreground">{format(parseISO(log.completedAt), 'EEE, MMM d')}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(parseISO(log.completedAt), 'EEE, MMM d')}
+                            </p>
                           </div>
                           <div className="text-right">
                             <p className="font-medium">{(log.sets || []).length} sets</p>
-                            <p className="text-xs text-muted-foreground">{Math.round(vol / 1000 * 10) / 10}t vol</p>
+                            <p className="text-xs text-muted-foreground">
+                              {Math.round(vol / 1000 * 10) / 10}t vol
+                            </p>
                           </div>
                         </div>
                       );
@@ -522,15 +502,16 @@ export function Progress() {
           <TabsContent value="streaks" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: streakInfo.current,            label: 'Weeks on target', sub: 'consecutive', icon: <Flame className="w-5 h-5 text-orange-500" /> },
-                { value: streakInfo.longest,            label: 'Best streak',     sub: 'weeks' },
-                { value: `${streakInfo.consistency}%`, label: 'Consistency',     sub: 'last 30 days' },
+                { value: streakInfo.current, label: 'Weeks on target', sub: 'consecutive', icon: <Flame className="w-5 h-5 text-orange-500" /> },
+                { value: streakInfo.longest, label: 'Best streak', sub: 'weeks' },
+                { value: `${streakInfo.consistency}%`, label: 'Consistency', sub: 'last 30 days' },
               ].map(({ value, label, sub, icon }: any) => (
                 <Card key={label}>
                   <CardContent className="pt-4 pb-4 text-center">
                     {icon ? (
                       <div className="flex items-center justify-center gap-1 mb-1">
-                        {icon}<span className="text-2xl font-bold">{value}</span>
+                        {icon}
+                        <span className="text-2xl font-bold">{value}</span>
                       </div>
                     ) : (
                       <div className="text-2xl font-bold">{value}</div>
@@ -543,7 +524,7 @@ export function Progress() {
             </div>
 
             <p className="text-xs text-muted-foreground px-1">
-              A week counts as "on target" when you complete at least {profile?.trainingDays ?? 3} workouts in that calendar week.
+              A week counts as "on target" when you complete at least {profile?.trainingDays ?? 3} workouts.
             </p>
 
             <Card>
@@ -562,7 +543,9 @@ export function Progress() {
                             key={d}
                             title={`${day.label}: ${day.count} workout${day.count !== 1 ? 's' : ''}`}
                             className={`w-full aspect-square rounded-sm ${
-                              day.count === 0 ? 'bg-muted' : day.count === 1 ? 'bg-indigo-200 dark:bg-indigo-800' : 'bg-indigo-500'
+                              day.count === 0 ? 'bg-muted'
+                              : day.count === 1 ? 'bg-indigo-200 dark:bg-indigo-800'
+                              : 'bg-indigo-500'
                             }`}
                           />
                         ))}
@@ -572,7 +555,7 @@ export function Progress() {
                   <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
                     <span>Less</span>
                     <div className="w-3 h-3 rounded-sm bg-muted" />
-                          <div className="w-3 h-3 rounded-sm bg-indigo-200 dark:bg-indigo-800" />
+                    <div className="w-3 h-3 rounded-sm bg-indigo-200 dark:bg-indigo-800" />
                     <div className="w-3 h-3 rounded-sm bg-indigo-500" />
                     <span>More</span>
                   </div>
@@ -581,7 +564,9 @@ export function Progress() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">Workouts per Week</CardTitle></CardHeader>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Workouts per Week</CardTitle>
+              </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={weeklyBars} barSize={16}>
@@ -590,11 +575,13 @@ export function Progress() {
                     <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{ background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
-                      labelStyle={{ color: 'var(--foreground)' }}
-                      itemStyle={{ color: 'var(--muted-foreground)' }}
                     />
-                    <ReferenceLine y={profile?.trainingDays || 3} stroke="#10B981" strokeDasharray="4 2"
-                      label={{ value: 'target', position: 'right', fontSize: 10 }} />
+                    <ReferenceLine
+                      y={profile?.trainingDays || 3}
+                      stroke="#10B981"
+                      strokeDasharray="4 2"
+                      label={{ value: 'target', position: 'right', fontSize: 10 }}
+                    />
                     <Bar dataKey="workouts" fill="#10B981" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

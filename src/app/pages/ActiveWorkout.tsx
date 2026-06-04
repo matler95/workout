@@ -19,9 +19,8 @@ import {
 import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import {
-  Clock, Check, Trophy, TrendingUp, TrendingDown,
-  SkipForward, Minus, Plus, ArrowUp,
-  AlertTriangle, Info, Minus as MinusIcon, X,
+  Clock, Check, Trophy, SkipForward,
+  Minus, Plus, X, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -34,10 +33,8 @@ import {
   estimateStartingWeight,
   applyFirstSessionRPECorrection,
   type UserProfile,
-  type StartingWeightResult,
 } from '../../utils/startingWeights';
 import { calculateMuscleVolume } from '../../utils/volumeTracking';
-import { SmartWorkoutGuidance } from '../components/SmartWorkoutGuidance';
 import Celebration from '../components/ui/celebration';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -56,20 +53,17 @@ interface ExercisePlan {
   suggestedReps: [number, number];
   sets: number;
   source: 'history' | 'estimated' | 'bodyweight';
-  suggestion?: ProgressionSuggestion;
-  estimate?: StartingWeightResult;
+  action?: ProgressionSuggestion['action'];
   isFirstSession: boolean;
 }
 
-// ─── Timer persistence keys ────────────────────────────────────────────────────
-// FIX: persist rest-timer start time to sessionStorage so that iOS Safari
-// backgrounding / tab suspension doesn't cause the timer to drift or reset.
+// ─── Timer persistence ─────────────────────────────────────────────────────────
 
-const TIMER_START_KEY = 'aw_rest_start';
+const TIMER_START_KEY   = 'aw_rest_start';
 const WORKOUT_START_KEY = 'aw_workout_start';
 
-function saveRestStart(startMs: number) {
-  try { sessionStorage.setItem(TIMER_START_KEY, String(startMs)); } catch {}
+function saveRestStart(ms: number) {
+  try { sessionStorage.setItem(TIMER_START_KEY, String(ms)); } catch {}
 }
 function loadRestStart(): number | null {
   try { const v = sessionStorage.getItem(TIMER_START_KEY); return v ? Number(v) : null; } catch { return null; }
@@ -77,100 +71,53 @@ function loadRestStart(): number | null {
 function clearRestStart() {
   try { sessionStorage.removeItem(TIMER_START_KEY); } catch {}
 }
-
-function saveWorkoutStart(startMs: number) {
-  try { sessionStorage.setItem(WORKOUT_START_KEY, String(startMs)); } catch {}
+function saveWorkoutStart(ms: number) {
+  try { sessionStorage.setItem(WORKOUT_START_KEY, String(ms)); } catch {}
 }
 function loadWorkoutStart(): number {
   try { const v = sessionStorage.getItem(WORKOUT_START_KEY); return v ? Number(v) : Date.now(); } catch { return Date.now(); }
 }
 
-// ─── Suggestion banner ─────────────────────────────────────────────────────────
+// ─── Suggestion pill — replaces the old SuggestionBanner wall of text ─────────
+// Shows a single compact pill: arrow + target weight, colored by action.
+// No reasoning text during workout — that lives in Progress tab.
 
-function SuggestionBanner({ plan, exerciseKey }: { plan: ExercisePlan; exerciseKey: string }) {
+function SuggestionPill({ plan }: { plan: ExercisePlan }) {
   if (plan.source === 'bodyweight') return null;
 
-  if (plan.source === 'estimated') {
-    const e = plan.estimate!;
-    const tier = classifyExercise(exerciseKey);
-    const tierLabel: Record<string, string> = {
-      heavy_barbell: 'barbell',
-      compound_db_machine: 'compound',
-      isolation: 'isolation',
-      bodyweight: 'bodyweight',
-    };
-    return (
-      <div className="border rounded-lg p-3 bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800/40">
-        <div className="flex items-start gap-2 text-indigo-800 dark:text-indigo-200">
-          <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium">Estimated starting weight</p>
-            <p className="text-xs mt-0.5 opacity-80 leading-relaxed">
-              Based on your bodyweight, experience level, and goal. Start here — the app will
-              calibrate after you log your effort rating.
-            </p>
-            {e.confidence === 'tier_fallback' && (
-              <p className="text-xs mt-1 opacity-60 italic">
-                No exact match found — using {tierLabel[tier] ?? tier} tier average.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const s = plan.suggestion!;
-  if (s.action === 'insufficient_data') return null;
+  const { action, suggestedWeight } = plan;
+  if (!action || action === 'insufficient_data') return null;
 
   const config = {
-    increase_weight: { icon: <ArrowUp className="w-4 h-4 flex-shrink-0" />, bg: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800/40', text: 'text-green-800 dark:text-green-200', label: `Increase to ${s.suggestedWeight} kg` },
-    increase_reps:   { icon: <TrendingUp className="w-4 h-4 flex-shrink-0" />, bg: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800/40', text: 'text-green-800 dark:text-green-200', label: `Target ${s.suggestedReps?.[0]}–${s.suggestedReps?.[1]} reps` },
-    maintain:        { icon: <Info className="w-4 h-4 flex-shrink-0" />, bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800/40', text: 'text-blue-800 dark:text-blue-200', label: `Stay at ${s.currentWeight} kg` },
-    deload:          { icon: <AlertTriangle className="w-4 h-4 flex-shrink-0" />, bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/40', text: 'text-amber-800 dark:text-amber-200', label: `Reduce to ${s.suggestedWeight} kg` },
-    insufficient_data: { icon: <Info className="w-4 h-4 flex-shrink-0" />, bg: 'bg-muted border-border', text: 'text-muted-foreground', label: '' },
-  }[s.action];
+    increase_weight: {
+      icon: <TrendingUp className="w-3 h-3" />,
+      label: `↑ ${suggestedWeight} kg`,
+      cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    },
+    increase_reps: {
+      icon: <TrendingUp className="w-3 h-3" />,
+      label: `↑ more reps`,
+      cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    },
+    maintain: {
+      icon: null,
+      label: `→ ${suggestedWeight} kg`,
+      cls: 'bg-muted text-muted-foreground',
+    },
+    deload: {
+      icon: <TrendingDown className="w-3 h-3" />,
+      label: `↓ ${suggestedWeight} kg`,
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    },
+  }[action] ?? null;
 
-  const confidenceDot = { high: 'bg-green-400', medium: 'bg-yellow-400', low: 'bg-muted-foreground' }[s.confidence];
+  if (!config) return null;
 
   return (
-    <div className={`border rounded-lg p-3 ${config.bg}`}>
-      <div className={`flex items-start gap-2 ${config.text}`}>
-        {config.icon}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm">{config.label}</span>
-            <span className="flex items-center gap-1 text-xs opacity-70">
-              <span className={`w-2 h-2 rounded-full ${confidenceDot}`} />
-              {s.confidence} confidence
-            </span>
-          </div>
-          <p className="text-xs mt-1 opacity-80 leading-relaxed">{s.reasoning}</p>
-          {s.tip && <p className="text-xs mt-1 opacity-60 italic">{s.tip}</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── e1RM display ──────────────────────────────────────────────────────────────
-
-function E1RMDisplay({ plan }: { plan: ExercisePlan }) {
-  const s = plan.suggestion;
-  if (!s || s.action === 'insufficient_data' || s.currentE1RM === 0) return null;
-  const diff = s.previousE1RM !== null
-    ? Math.round((s.currentE1RM - s.previousE1RM) * 10) / 10
-    : null;
-  return (
-    <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
-      <span>Est. 1RM: <strong className="text-foreground">{Math.round(s.currentE1RM)} kg</strong></span>
-      {diff !== null && (
-        <span className={`flex items-center gap-0.5 ${diff > 0 ? 'text-green-600 dark:text-green-400' : diff < 0 ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground'}`}>
-          {diff > 0 ? <TrendingUp className="w-3 h-3" /> : diff < 0 ? <TrendingDown className="w-3 h-3" /> : <MinusIcon className="w-3 h-3" />}
-          {diff > 0 ? '+' : ''}{diff} kg vs last
-        </span>
-      )}
-    </div>
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${config.cls}`}>
+      {config.icon}
+      {config.label}
+    </span>
   );
 }
 
@@ -194,8 +141,8 @@ function ExitDialog({
           <AlertDialogTitle>End workout?</AlertDialogTitle>
           <AlertDialogDescription>
             {hasSets
-              ? 'You have logged sets this session. Would you like to save your progress or discard it?'
-              : 'No sets have been logged yet. Are you sure you want to exit?'}
+              ? 'You have logged sets this session. Save your progress or discard it?'
+              : 'No sets logged yet. Exit without saving?'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
@@ -224,24 +171,12 @@ function ExitDialog({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-const REST_DURATION = 120; // seconds
+const REST_DURATION = 120;
 
 export function ActiveWorkout() {
   const location = useLocation();
   const navigate = useNavigate();
   const dayName  = location.state?.dayName as string | undefined;
-
-  // FIX: guard against missing dayName BEFORE any async work or effects.
-  // Previously the component called loadWorkout() in useEffect even when
-  // dayName was undefined, causing a flash of broken UI and a spurious API call.
-  // We do the redirect synchronously here so the render never reaches the
-  // data-loading path without a valid dayName.
-  if (!dayName) {
-    // Can't call hooks conditionally, but we can redirect immediately in render
-    // before any meaningful state is set up. Using useEffect for this caused the
-    // race — doing it inline prevents loadWorkout() from ever being called.
-    // (React will re-render once, then the navigate fires on the next tick.)
-  }
 
   const [exercises, setExercises]           = useState<any[]>([]);
   const [plans, setPlans]                   = useState<Record<string, ExercisePlan>>({});
@@ -256,49 +191,30 @@ export function ActiveWorkout() {
   const [customReps, setCustomReps]         = useState('');
   const [loading, setLoading]               = useState(true);
   const [showExitDialog, setShowExitDialog] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
+  const [showConfetti, setShowConfetti]     = useState(false);
 
-  const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  // FIX: workout start time is persisted to sessionStorage so it survives
-  // tab backgrounding on mobile.
-  const startTimeRef  = useRef<number>(loadWorkoutStart());
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(loadWorkoutStart());
 
-  const SETS_PER_EXERCISE = 3;
-
-  // FIX: redirect synchronously if dayName is missing — do not proceed to
-  // loadWorkout or any other effect that depends on it.
   useEffect(() => {
-    if (!dayName) {
-      navigate('/plan', { replace: true });
-      return;
-    }
+    if (!dayName) { navigate('/plan', { replace: true }); return; }
     loadWorkout();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [dayName]);
 
-  // FIX: restore timer from sessionStorage when the component mounts or
-  // the app resumes from background. We recalculate elapsed time from the
-  // wall-clock start time rather than relying on the JS interval.
+  // Restore timer from sessionStorage on mount / visibility change
   useEffect(() => {
     const savedStart = loadRestStart();
     if (savedStart !== null) {
-      const elapsed = Math.floor((Date.now() - savedStart) / 1000);
-      const remaining = REST_DURATION - elapsed;
-      if (remaining > 0) {
-        setRestTimer(remaining);
-      } else {
-        clearRestStart();
-        setRestTimer(0);
-      }
+      const remaining = REST_DURATION - Math.floor((Date.now() - savedStart) / 1000);
+      remaining > 0 ? setRestTimer(remaining) : (clearRestStart(), setRestTimer(0));
     }
 
-    // Page visibility API: recalculate remaining time when the tab comes back
-    const handleVisibilityChange = () => {
+    const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         const s = loadRestStart();
         if (s !== null) {
-          const elapsed = Math.floor((Date.now() - s) / 1000);
-          const remaining = REST_DURATION - elapsed;
+          const remaining = REST_DURATION - Math.floor((Date.now() - s) / 1000);
           if (remaining > 0) {
             setRestTimer(remaining);
           } else {
@@ -309,10 +225,11 @@ export function ActiveWorkout() {
         }
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
+  // Rest timer tick
   useEffect(() => {
     if (restTimer <= 0) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -335,8 +252,7 @@ export function ActiveWorkout() {
   }, [restTimer]);
 
   const startRestTimer = () => {
-    const startMs = Date.now();
-    saveRestStart(startMs);
+    saveRestStart(Date.now());
     setRestTimer(REST_DURATION);
   };
 
@@ -353,21 +269,15 @@ export function ActiveWorkout() {
       const exs: any[] = planResult?.workouts?.[dayName!] || [];
       setExercises(exs);
 
-      const historyTyped: WorkoutLog[] = history.map(h => ({
-        dayName: h.dayName,
-        completedAt: h.completedAt,
-        sets: h.sets.map(s => ({ exerciseId: s.exerciseId, exerciseName: s.exerciseName, weight: s.weight, reps: s.reps })),
-        perceivedEffort: h.perceivedEffort,
-        rpeCorrections: h.rpeCorrections,
-      }));
-
-      const historySuggestions = computeAllSuggestions(history);
+      const historySuggestions = computeAllSuggestions(history as WorkoutLog[]);
       const builtPlans: Record<string, ExercisePlan> = {};
 
       for (const ex of exs) {
         const key  = ex.id || ex.name;
         const tier = classifyExercise(ex.name);
         const [repLo, repHi] = getRepTarget(tier);
+        // Use per-exercise sets from plan, fallback to history-based default
+        const planSets = (ex.sets && ex.sets >= 1 && ex.sets <= 6) ? ex.sets : 3;
         const historySuggestion = historySuggestions[key];
 
         if (historySuggestion && historySuggestion.action !== 'insufficient_data') {
@@ -383,26 +293,25 @@ export function ActiveWorkout() {
           builtPlans[key] = {
             suggestedWeight: w,
             suggestedReps: reps,
-            sets: SETS_PER_EXERCISE,
+            sets: planSets,
             source: tier === 'bodyweight' ? 'bodyweight' : 'history',
-            suggestion: historySuggestion,
+            action: historySuggestion.action,
             isFirstSession: false,
           };
         } else if (profile) {
-          const estimate = estimateStartingWeight(ex.name, profile);
+          const estimate = estimateStartingWeight(ex.name, profile, ex.id);
           builtPlans[key] = {
             suggestedWeight: estimate.weight,
             suggestedReps: estimate.reps,
-            sets: estimate.sets,
+            sets: planSets,
             source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
-            estimate,
             isFirstSession: true,
           };
         } else {
           builtPlans[key] = {
             suggestedWeight: 0,
             suggestedReps: [repLo, repHi],
-            sets: SETS_PER_EXERCISE,
+            sets: planSets,
             source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
             isFirstSession: true,
           };
@@ -411,7 +320,7 @@ export function ActiveWorkout() {
 
       setPlans(builtPlans);
       if (exs.length > 0) applyPlanToInputs(exs[0], builtPlans);
-    } catch (e) {
+    } catch {
       toast.error('Failed to load workout');
       navigate('/plan');
     } finally {
@@ -431,7 +340,7 @@ export function ActiveWorkout() {
     }
   };
 
-  // ── Exit handling ────────────────────────────────────────────────────────────
+  // ── Exit ─────────────────────────────────────────────────────────────────────
 
   const handleExitChoice = async (choice: ExitChoice) => {
     setShowExitDialog(false);
@@ -450,11 +359,10 @@ export function ActiveWorkout() {
         });
         toast.success('Partial workout saved');
       } catch {
-        toast.error('Could not save — workout discarded');
+        toast.error('Could not save');
       }
     }
 
-    // Clean up persisted timer state on exit
     clearRestStart();
     try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
     navigate('/plan');
@@ -485,8 +393,8 @@ export function ActiveWorkout() {
     const newCompleted = [...completedSets, newSet];
     setCompletedSets(newCompleted);
 
-    const setsForThisExercise = plan?.sets ?? SETS_PER_EXERCISE;
-    toast.success(`Set ${currentSet} ✓ — ${isBodyweight ? `${reps} reps` : `${weight} kg × ${reps}`}`);
+    const setsForThisExercise = plan?.sets ?? 3;
+    toast.success(`Set ${currentSet} ✓`);
 
     if (currentSet < setsForThisExercise) {
       setCurrentSet(currentSet + 1);
@@ -504,7 +412,6 @@ export function ActiveWorkout() {
       setRestTimer(0);
       clearRestStart();
       applyPlanToInputs(exercises[nextIdx], plans);
-      toast.success(`Next: ${exercises[nextIdx].name}`);
     } else {
       setCurrentPhase('feedback');
     }
@@ -526,11 +433,7 @@ export function ActiveWorkout() {
         }
       }
 
-      // NEW: Calculate muscle volume for this session
       const muscleVolume = calculateMuscleVolume(completedSets);
-
-      // Log volume info for debugging
-      console.log('Session muscle volume:', muscleVolume);
 
       await workoutApi.log({
         dayName: dayName!,
@@ -540,7 +443,7 @@ export function ActiveWorkout() {
         perceivedEffort,
         rpeCorrections,
         duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
-        muscleVolume,   // NEW: attach volume data
+        muscleVolume,
       });
 
       clearRestStart();
@@ -557,12 +460,9 @@ export function ActiveWorkout() {
     }
   };
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // ── Loading / empty guards ──────────────────────────────────────────────────
 
-  if (!dayName) {
-    // Render nothing while redirect fires
-    return null;
-  }
+  if (!dayName) return null;
 
   if (loading) {
     return (
@@ -581,7 +481,7 @@ export function ActiveWorkout() {
         <Card className="w-full max-w-md text-center border-0 shadow-lg">
           <CardContent className="pt-8 pb-8">
             <p className="text-muted-foreground mb-4">No exercises found for {dayName}</p>
-            <Button onClick={() => navigate('/workout-builder')} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">Edit Workout</Button>
+            <Button onClick={() => navigate('/workout-builder')}>Edit Workout</Button>
           </CardContent>
         </Card>
       </div>
@@ -591,8 +491,9 @@ export function ActiveWorkout() {
   // ── Warmup screen ───────────────────────────────────────────────────────────
 
   if (currentPhase === 'warmup') {
-    const progressionCount = Object.values(plans).filter(p => p.suggestion?.action === 'increase_weight').length;
-    const firstTimers      = Object.values(plans).filter(p => p.isFirstSession).length;
+    const progressionCount = Object.values(plans).filter(
+      p => p.action === 'increase_weight'
+    ).length;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600 flex items-center justify-center p-4 relative">
@@ -600,88 +501,62 @@ export function ActiveWorkout() {
         <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
           <CardContent className="pt-4 space-y-4">
             <div className="flex justify-end">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/plan')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => navigate('/plan')}
+              >
                 <X className="w-4 h-4 mr-1" /> Cancel
               </Button>
             </div>
+
             <div className="text-center">
-              <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
+              <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg">
                 <Clock className="w-8 h-8 text-white" />
               </div>
               <h2 className="text-xl font-semibold">{dayName}</h2>
-              <p className="text-muted-foreground text-sm">{exercises.length} exercises</p>
+              <p className="text-muted-foreground text-sm">
+                {exercises.length} exercises
+                {progressionCount > 0 && (
+                  <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                    · {progressionCount} ready to progress ↑
+                  </span>
+                )}
+              </p>
             </div>
 
-            {progressionCount > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 dark:bg-green-950/30 dark:border-green-800/40">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">
-                  🎯 {progressionCount} exercise{progressionCount > 1 ? 's' : ''} ready to go heavier:
-                </p>
-                {exercises
-                  .filter(ex => plans[ex.id || ex.name]?.suggestion?.action === 'increase_weight')
-                  .map(ex => {
-                    const plan = plans[ex.id || ex.name];
-                    return (
-                      <div key={ex.id} className="text-xs text-green-700 dark:text-green-300 flex justify-between py-0.5">
-                        <span>{ex.name}</span>
-                        <span className="font-medium">
-                          {plan.suggestion?.currentWeight} → {plan.suggestedWeight} kg
-                        </span>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-
-            {firstTimers > 0 && progressionCount === 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 dark:bg-indigo-950/30 dark:border-indigo-800/40">
-                <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-                  ✨ Starting weights estimated for {firstTimers} exercise{firstTimers > 1 ? 's' : ''}
-                </p>
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
-                  Based on your bodyweight, experience, and goal. Adjust freely — the app calibrates after your first session.
-                </p>
-              </div>
-            )}
-
+            {/* Warmup guidance */}
             <div className="bg-card rounded-xl p-3 text-sm space-y-1 border border-border/50">
-              <p className="font-medium text-card-foreground">Warm-up first (5–10 min)</p>
-              <p className="text-muted-foreground">• Light cardio to raise heart rate</p>
-              <p className="text-muted-foreground">• Dynamic stretches for today's muscle groups</p>
-              <p className="text-muted-foreground">• 1–2 light warm-up sets with ~50% of working weight</p>
+              <p className="font-medium">Warm up first (5–10 min)</p>
+              <p className="text-muted-foreground">• Light cardio + dynamic stretches</p>
+              <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
             </div>
 
+            {/* Exercise list — clean, no weight preview clutter */}
             <div className="space-y-1">
-              {exercises.map((ex, i) => {
-                const plan = plans[ex.id || ex.name];
-                return (
-                  <div key={i} className="flex items-center gap-2 text-sm py-1.5 border-b border-border/50 last:border-0">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 font-medium">
-                      {i + 1}
-                    </span>
-                    <span className="flex-1">{ex.name}</span>
-                    {plan?.source === 'history' && plan.suggestion?.action === 'increase_weight' && (
-                      <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-1.5 py-0.5 rounded font-medium">↑ {plan.suggestedWeight} kg</span>
-                    )}
-                    {plan?.source === 'history' && plan.suggestion?.action === 'deload' && (
-                      <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded">↓ deload</span>
-                    )}
-                    {plan?.source === 'estimated' && (
-                      <span className="text-xs text-muted-foreground">{plan.suggestedWeight} kg est.</span>
-                    )}
-                    {plan?.source === 'history' && plan.suggestion?.action === 'maintain' && (
-                      <span className="text-xs text-muted-foreground">{plan.suggestedWeight} kg</span>
-                    )}
-                    {plan?.source === 'bodyweight' && (
-                      <span className="text-xs text-muted-foreground">{plan.suggestedReps[0]}–{plan.suggestedReps[1]} reps</span>
-                    )}
-                  </div>
-                );
-              })}
+              {exercises.map((ex, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 text-sm py-1.5 border-b border-border/50 last:border-0"
+                >
+                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 font-medium">
+                    {i + 1}
+                  </span>
+                  <span className="flex-1">{ex.name}</span>
+                  {/* Only show progression action, no weight numbers */}
+                  {plans[ex.id || ex.name]?.action === 'increase_weight' && (
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">↑</span>
+                  )}
+                  {plans[ex.id || ex.name]?.action === 'deload' && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">↓</span>
+                  )}
+                </div>
+              ))}
             </div>
 
             <Button
-              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200"
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25"
               size="lg"
               onClick={() => {
                 const startMs = Date.now();
@@ -702,18 +577,18 @@ export function ActiveWorkout() {
 
   if (currentPhase === 'feedback') {
     const totalVolume    = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
-    const uniqueExercises = new Set(completedSets.map(s => s.exerciseId)).size;
     const durationMin    = Math.round((Date.now() - startTimeRef.current) / 60000);
-    const firstSessionExercises = exercises.filter(ex => plans[ex.id || ex.name]?.isFirstSession);
+    const firstSessionExercises = exercises.filter(
+      ex => plans[ex.id || ex.name]?.isFirstSession
+    );
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.1),transparent_50%)]" />
         <Celebration show={showConfetti} />
-        <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
+        <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl">
           <CardContent className="pt-6 space-y-4">
             <div className="text-center">
-              <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
+              <div className="mx-auto mb-3 w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
                 <Trophy className="w-8 h-8 text-white" />
               </div>
               <h2 className="text-xl font-semibold">Workout Complete!</h2>
@@ -722,8 +597,8 @@ export function ActiveWorkout() {
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
                 { value: completedSets.length, label: 'sets' },
-                { value: uniqueExercises,      label: 'exercises' },
-                { value: `${durationMin}m`,    label: 'duration' },
+                { value: new Set(completedSets.map(s => s.exerciseId)).size, label: 'exercises' },
+                { value: `${durationMin}m`, label: 'duration' },
               ].map(({ value, label }) => (
                 <div key={label} className="bg-green-50 dark:bg-green-950/30 rounded-lg py-3">
                   <div className="text-xl font-bold text-green-700 dark:text-green-300">{value}</div>
@@ -742,13 +617,11 @@ export function ActiveWorkout() {
               </div>
             )}
 
+            {/* RPE rating */}
             <div>
-              <label className="text-sm font-medium mb-2 block">Overall effort (RPE 1–10)</label>
-              {firstSessionExercises.length > 0 && (
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-2 leading-relaxed">
-                  ℹ️ This rating also calibrates starting weights for your {firstSessionExercises.length} new exercise{firstSessionExercises.length > 1 ? 's' : ''} — be honest!
-                </p>
-              )}
+              <label className="text-sm font-medium mb-2 block">
+                How hard was it? (RPE 1–10)
+              </label>
               <div className="flex gap-1">
                 {[1,2,3,4,5,6,7,8,9,10].map(n => (
                   <button
@@ -767,49 +640,29 @@ export function ActiveWorkout() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-1.5">
-                {perceivedEffort <= 3 ? '😴 Too easy — weights will be increased next session'
-                  : perceivedEffort <= 5 ? '🙂 Slightly easy — minor adjustment'
-                  : perceivedEffort <= 7 ? '💪 Perfect effort — right in the zone'
-                  : perceivedEffort <= 8 ? '😤 Hard — good stimulus, recovering well'
-                  : '🔥 Very hard — recovery focus next session'}
+                {perceivedEffort <= 3 ? 'Too easy'
+                  : perceivedEffort <= 5 ? 'Slightly easy'
+                  : perceivedEffort <= 7 ? 'Just right'
+                  : perceivedEffort <= 8 ? 'Hard'
+                  : 'Very hard'}
               </p>
             </div>
-
-            {firstSessionExercises.length > 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 dark:bg-indigo-950/30 dark:border-indigo-800/40">
-                <p className="text-xs font-medium text-indigo-800 dark:text-indigo-200 mb-2">Next session adjustments (based on RPE {perceivedEffort}):</p>
-                {firstSessionExercises.map(ex => {
-                  const plan = plans[ex.id || ex.name];
-                  if (!plan || plan.source !== 'estimated') return null;
-                  const { newWeight } = applyFirstSessionRPECorrection(
-                    plan.suggestedWeight,
-                    perceivedEffort,
-                    classifyExercise(ex.name),
-                  );
-                  return (
-                    <div key={ex.id} className="text-xs text-indigo-700 dark:text-indigo-300 flex justify-between py-0.5">
-                      <span className="truncate pr-2">{ex.name}</span>
-                      <span className="font-medium flex-shrink-0">
-                        {plan.suggestedWeight} → {newWeight} kg
-                        {newWeight === plan.suggestedWeight && ' (no change)'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             <div>
               <label className="text-sm font-medium mb-1.5 block">Notes (optional)</label>
               <Textarea
-                placeholder="How did it feel? Anything to note for next time?"
+                placeholder="Anything to note for next time?"
                 value={feedback}
                 onChange={e => setFeedback(e.target.value)}
-                rows={3}
+                rows={2}
               />
             </div>
 
-            <Button onClick={handleWorkoutComplete} className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25" size="lg">
+            <Button
+              onClick={handleWorkoutComplete}
+              className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600"
+              size="lg"
+            >
               Save & Finish
             </Button>
           </CardContent>
@@ -820,20 +673,33 @@ export function ActiveWorkout() {
 
   // ── Exercise screen ─────────────────────────────────────────────────────────
 
-  const currentExercise       = exercises[currentExerciseIndex];
-  const exerciseKey           = currentExercise.id || currentExercise.name;
-  const plan                  = plans[exerciseKey];
-  const tier                  = classifyExercise(currentExercise.name);
-  const [repLo, repHi]        = plan?.suggestedReps ?? getRepTarget(tier);
-  const exerciseSets          = completedSets.filter(s => s.exerciseId === currentExercise.id);
-  const setsForThisExercise   = plan?.sets ?? SETS_PER_EXERCISE;
-  const totalSetsAll          = exercises.reduce((sum, ex) => sum + (plans[ex.id || ex.name]?.sets ?? SETS_PER_EXERCISE), 0);
-  const progressPct           = Math.round((completedSets.length / totalSetsAll) * 100);
-  const weightStep            = tier === 'isolation' ? 1 : 2.5;
-  const isBodyweight          = plan?.source === 'bodyweight';
+  const currentExercise     = exercises[currentExerciseIndex];
+  const exerciseKey         = currentExercise.id || currentExercise.name;
+  const plan                = plans[exerciseKey];
+  const tier                = classifyExercise(currentExercise.name);
+  const [repLo, repHi]      = plan?.suggestedReps ?? getRepTarget(tier);
+  const exerciseSets        = completedSets.filter(s => s.exerciseId === currentExercise.id);
+  const setsForThisExercise = plan?.sets ?? 3;
+  const totalSetsAll        = exercises.reduce(
+    (sum, ex) => sum + (plans[ex.id || ex.name]?.sets ?? 3),
+    0
+  );
+  const progressPct     = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
+  const weightStep      = tier === 'isolation' ? 1 : 2.5;
+  const isBodyweight    = plan?.source === 'bodyweight';
+
+  // Inline rep range feedback — subtle, no card
+  const repFeedback = (() => {
+    const r = parseInt(customReps);
+    if (!r || isNaN(r)) return null;
+    if (r > repHi)  return { msg: `${r} reps — above target, consider adding weight next set`, color: 'text-blue-600 dark:text-blue-400' };
+    if (r < repLo)  return { msg: `${r} reps — below target, reduce weight if needed`, color: 'text-amber-600 dark:text-amber-400' };
+    return { msg: `${r} reps ✓`, color: 'text-emerald-600 dark:text-emerald-400' };
+  })();
 
   return (
     <div className="min-h-screen bg-background pb-page">
+      {/* Sticky header */}
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
@@ -852,7 +718,6 @@ export function ActiveWorkout() {
               size="sm"
               className="text-muted-foreground hover:text-red-500 h-8 px-2"
               onClick={() => setShowExitDialog(true)}
-              title="End workout"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -866,56 +731,52 @@ export function ActiveWorkout() {
         onChoice={handleExitChoice}
       />
 
-      <div className={`max-w-2xl mx-auto px-4 space-y-4 ${restTimer > 0 ? 'pt-16' : 'pt-4'}`}>
-        {restTimer > 0 && (
-          <div className="sticky top-[57px] z-10 bg-blue-600 dark:bg-blue-700">
-            <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-white text-xs font-semibold uppercase tracking-wide opacity-80">
-                  Rest
-                </span>
-                <span className="text-white text-xl font-bold tabular-nums">
-                  {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
-                </span>
+      {/* Rest timer — sticky bar */}
+      {restTimer > 0 && (
+        <div className="sticky top-[57px] z-10 bg-blue-600 dark:bg-blue-700">
+          <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-white text-xs font-semibold uppercase tracking-wide opacity-80">Rest</span>
+              <span className="text-white text-xl font-bold tabular-nums">
+                {Math.floor(restTimer / 60)}:{String(restTimer % 60).padStart(2, '0')}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-20 h-1.5 bg-white/30 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-white rounded-full transition-all"
+                  style={{ width: `${((REST_DURATION - restTimer) / REST_DURATION) * 100}%` }}
+                />
               </div>
-              <div className="flex items-center gap-3">
-                {/* Mini progress pill */}
-                <div className="w-20 h-1.5 bg-white/30 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-white rounded-full transition-all"
-                    style={{ width: `${((REST_DURATION - restTimer) / REST_DURATION) * 100}%` }}
-                  />
-                </div>
-                <button
-                  onClick={() => { setRestTimer(0); clearRestStart(); }}
-                  className="text-white/80 hover:text-white text-xs font-medium py-1 px-2 rounded bg-white/20 hover:bg-white/30 transition-colors"
-                >
-                  Skip
-                </button>
-              </div>
+              <button
+                onClick={() => { setRestTimer(0); clearRestStart(); }}
+                className="text-white/80 hover:text-white text-xs font-medium py-1 px-2 rounded bg-white/20 hover:bg-white/30 transition-colors"
+              >
+                Skip
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
+      <div className={`max-w-2xl mx-auto px-4 space-y-4 ${restTimer > 0 ? 'pt-4' : 'pt-4'}`}>
         <Card>
           <CardHeader className="pb-3">
             <div className="flex justify-between items-start">
               <div className="flex-1 pr-2">
-                <CardTitle className="text-xl leading-tight">{currentExercise.name}</CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CardTitle className="text-xl leading-tight">{currentExercise.name}</CardTitle>
+                  {/* Suggestion pill — compact, no text wall */}
+                  {plan && <SuggestionPill plan={plan} />}
+                </div>
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {currentExercise.primaryMuscles?.map((m: string) => (
                     <Badge key={m} className="text-xs">{m.replace(/_/g, ' ')}</Badge>
                   ))}
-                  {currentExercise.secondaryMuscles?.map((m: string) => (
-                    <Badge key={m} variant="secondary" className="text-xs">{m.replace(/_/g, ' ')}</Badge>
-                  ))}
                 </div>
-                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <p className="text-xs text-muted-foreground">Target: {repLo}–{repHi} reps</p>
-                  {plan?.isFirstSession && (
-                    <span className="text-xs bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400 px-1.5 py-0.5 rounded">First time</span>
-                  )}
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Target: {repLo}–{repHi} reps
+                </p>
               </div>
               <Button
                 variant="ghost"
@@ -929,24 +790,20 @@ export function ActiveWorkout() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {plan && <SuggestionBanner plan={plan} exerciseKey={exerciseKey} />}
-            {plan && <E1RMDisplay plan={plan} />}
-
-            <SmartWorkoutGuidance 
-              currentExercise={currentExercise}
-              suggestedReps={[repLo, repHi]}
-              exerciseHistory={exerciseSets}
-            />
-
+            {/* Weight + Reps inputs */}
             <div className={`grid gap-3 ${isBodyweight ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {!isBodyweight && (
                 <div>
                   <label className="text-sm font-medium mb-1.5 block">Weight (kg)</label>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 flex-shrink-0"
                       onClick={() => setCustomWeight(w =>
                         String(Math.max(0, Math.round((parseFloat(w || '0') - weightStep) * 10) / 10))
-                      )}>
+                      )}
+                    >
                       <Minus className="w-3 h-3" />
                     </Button>
                     <Input
@@ -956,21 +813,29 @@ export function ActiveWorkout() {
                       onChange={e => setCustomWeight(e.target.value)}
                       className="text-center font-medium"
                     />
-                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 flex-shrink-0"
                       onClick={() => setCustomWeight(w =>
                         String(Math.round((parseFloat(w || '0') + weightStep) * 10) / 10)
-                      )}>
+                      )}
+                    >
                       <Plus className="w-3 h-3" />
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 text-center">±{weightStep} kg</p>
                 </div>
               )}
+
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Reps</label>
                 <div className="flex items-center gap-1">
-                  <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
-                    onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r || '1') - 1)))}>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 flex-shrink-0"
+                    onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r || '1') - 1)))}
+                  >
                     <Minus className="w-3 h-3" />
                   </Button>
                   <Input
@@ -980,31 +845,22 @@ export function ActiveWorkout() {
                     onChange={e => setCustomReps(e.target.value)}
                     className="text-center font-medium"
                   />
-                  <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
-                    onClick={() => setCustomReps(r => String(parseInt(r || '0') + 1))}>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 flex-shrink-0"
+                    onClick={() => setCustomReps(r => String(parseInt(r || '0') + 1))}
+                  >
                     <Plus className="w-3 h-3" />
                   </Button>
                 </div>
               </div>
             </div>
 
-            {customReps && (() => {
-              const reps = parseInt(customReps);
-              if (isNaN(reps)) return null;
-              const inRange = reps >= repLo && reps <= repHi;
-              const above   = reps > repHi;
-              return (
-                <div className={`text-xs px-3 py-1.5 rounded ${
-                  inRange ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300'
-                  : above  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
-                  : 'bg-muted text-muted-foreground'
-                }`}>
-                  {inRange && `✓ In target range (${repLo}–${repHi})`}
-                  {above   && `↑ ${reps - repHi} above target — consider more weight next set`}
-                  {!inRange && !above && `${repLo - reps} short of target — reduce weight if needed`}
-                </div>
-              );
-            })()}
+            {/* Inline rep feedback — single line, no card */}
+            {repFeedback && (
+              <p className={`text-xs ${repFeedback.color}`}>{repFeedback.msg}</p>
+            )}
 
             <Button
               onClick={handleSetComplete}
@@ -1015,6 +871,7 @@ export function ActiveWorkout() {
               Complete Set {currentSet}
             </Button>
 
+            {/* Sets logged this exercise */}
             {exerciseSets.length > 0 && (
               <div className="border-t pt-3">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">This exercise</p>
@@ -1022,12 +879,17 @@ export function ActiveWorkout() {
                   {exerciseSets.map((s, i) => {
                     const e1rm = s.weight > 0 ? Math.round(s.weight * (1 + s.reps / 30)) : null;
                     return (
-                      <div key={i} className="flex justify-between items-center text-sm bg-muted/50 rounded px-3 py-1.5">
+                      <div
+                        key={i}
+                        className="flex justify-between items-center text-sm bg-muted/50 rounded px-3 py-1.5"
+                      >
                         <span className="text-muted-foreground">Set {s.set}</span>
                         <span className="font-medium">
                           {s.weight > 0 ? `${s.weight} kg × ${s.reps}` : `${s.reps} reps`}
                         </span>
-                        {e1rm && <span className="text-xs text-muted-foreground">~{e1rm} kg 1RM</span>}
+                        {e1rm && (
+                          <span className="text-xs text-muted-foreground">~{e1rm} kg 1RM</span>
+                        )}
                       </div>
                     );
                   })}
@@ -1037,6 +899,7 @@ export function ActiveWorkout() {
           </CardContent>
         </Card>
 
+        {/* Exercise instructions */}
         {currentExercise.instructions && (
           <Card>
             <CardContent className="pt-4 pb-4">
@@ -1048,28 +911,20 @@ export function ActiveWorkout() {
           </Card>
         )}
 
+        {/* Up next */}
         {currentExerciseIndex < exercises.length - 1 && (
           <Card>
             <CardContent className="pt-3 pb-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Up next</p>
               <div className="space-y-1.5">
-                {exercises.slice(currentExerciseIndex + 1, currentExerciseIndex + 4).map((ex, i) => {
-                  const p = plans[ex.id || ex.name];
-                  return (
-                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0 text-muted-foreground">
-                        {currentExerciseIndex + 2 + i}
-                      </span>
-                      <span className="flex-1">{ex.name}</span>
-                      {p?.suggestion?.action === 'increase_weight' && (
-                        <span className="text-xs text-green-600 dark:text-green-400">↑ {p.suggestedWeight} kg</span>
-                      )}
-                      {p?.source === 'estimated' && (
-                        <span className="text-xs text-muted-foreground">{p.suggestedWeight} kg est.</span>
-                      )}
-                    </div>
-                  );
-                })}
+                {exercises.slice(currentExerciseIndex + 1, currentExerciseIndex + 4).map((ex, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0">
+                      {currentExerciseIndex + 2 + i}
+                    </span>
+                    <span className="flex-1">{ex.name}</span>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

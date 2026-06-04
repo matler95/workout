@@ -9,17 +9,14 @@ import { Input } from '../components/ui/input';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
 import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, Play } from 'lucide-react';
-import { format, parseISO, startOfWeek, subDays, isSameWeek } from 'date-fns';
+import { format, parseISO, startOfWeek, subDays } from 'date-fns';
 import { toast } from 'sonner';
 import { SmartInsights } from '../components/SmartInsights';
-import { InjuryRiskAlerts } from '../components/InjuryRiskAlerts';
 import {
   suggestDeload,
   calculateRecoveryScore,
-  suggestProgression,
   checkFatigueWarnings,
 } from '../../utils/smartAlgorithms';
-import { exerciseDatabase } from '../../data/exercises';
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -35,8 +32,8 @@ export function Dashboard() {
   const [loading, setLoading]               = useState(true);
   const [volumeData, setVolumeData]         = useState<any[]>([]);
   const [deloadSuggestion, setDeloadSuggestion] = useState<any>(null);
-  const [recoveryScore, setRecoveryScore] = useState<any>(null);
-  const [fatigueWarnings, setFatigueWarnings] = useState<any[]>([]);
+  const [recoveryScore, setRecoveryScore]       = useState<any>(null);
+  const [fatigueWarnings, setFatigueWarnings]   = useState<any[]>([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -55,23 +52,22 @@ export function Dashboard() {
       setBodyweightData(bw);
       setVolumeData(vol);
 
-      if (prof && history.length > 0 && vol.length > 0) {
-        const deload = suggestDeload(vol, history, prof);
-        setDeloadSuggestion(deload);
-
-        const recovery = calculateRecoveryScore(prof, history);
-        setRecoveryScore(recovery);
+      // Only compute insights when there's enough data to be meaningful.
+      // MIN_SESSIONS_FOR_INSIGHTS (4) is enforced inside SmartInsights itself,
+      // but we skip the expensive computation entirely when below threshold.
+      if (prof && history.length >= 4 && vol.length > 0) {
+        setDeloadSuggestion(suggestDeload(vol, history, prof));
+        setRecoveryScore(calculateRecoveryScore(prof, history));
 
         const nextDay = plan?.workouts ? Object.keys(plan.workouts)[0] : null;
         if (nextDay && plan?.workouts) {
           const nextDayExercises = (plan.workouts[nextDay] || []).map((ex: any) => ({
-            id: ex.id,
-            name: ex.name,
-            primaryMuscles: ex.primaryMuscles || [],
+            id:              ex.id,
+            name:            ex.name,
+            primaryMuscles:  ex.primaryMuscles || [],
             secondaryMuscles: ex.secondaryMuscles || [],
           }));
-          const warnings = checkFatigueWarnings(nextDayExercises, prof, history);
-          setFatigueWarnings(warnings);
+          setFatigueWarnings(checkFatigueWarnings(nextDayExercises, prof, history));
         }
       }
     } catch (e) {
@@ -81,23 +77,18 @@ export function Dashboard() {
     }
   };
 
-  // FIX: Convert from display units to kg before saving.
-  // The DB always stores kg. Imperial users type lbs, so we convert before the API call.
   const handleLogWeight = async () => {
     const displayWeight = parseFloat(newWeight);
     if (!displayWeight || displayWeight <= 0) { toast.error('Enter a valid weight'); return; }
 
     const units = profile?.units || 'metric';
-
-    // Validate in display units first
-    const minDisplay = units === 'imperial' ? 44  : 20;   // 20 kg ≈ 44 lbs
-    const maxDisplay = units === 'imperial' ? 660 : 300;  // 300 kg ≈ 660 lbs
+    const minDisplay = units === 'imperial' ? 44  : 20;
+    const maxDisplay = units === 'imperial' ? 660 : 300;
     if (displayWeight < minDisplay || displayWeight > maxDisplay) {
       toast.error(`Enter a weight between ${minDisplay} and ${maxDisplay} ${units === 'imperial' ? 'lbs' : 'kg'}`);
       return;
     }
 
-    // Convert to kg for storage
     const weightKg = units === 'imperial'
       ? Math.round((displayWeight / 2.20462) * 10) / 10
       : displayWeight;
@@ -121,8 +112,8 @@ export function Dashboard() {
 
   const getWeeklyProgress = () => {
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const done = workoutHistory.filter(l => new Date(l.completedAt) >= weekStart).length;
-    const planned = profile?.trainingDays || 3;
+    const done      = workoutHistory.filter(l => new Date(l.completedAt) >= weekStart).length;
+    const planned   = profile?.trainingDays || 3;
     return { completed: done, planned, pct: Math.min(100, Math.round((done / planned) * 100)) };
   };
 
@@ -130,60 +121,45 @@ export function Dashboard() {
     if (!profile) return null;
     const sleepScore    = Math.min(40, (profile.avgSleep / 8) * 40);
     const stressScore   = ((10 - profile.stressLevel) / 10) * 30;
-    const recentCount   = workoutHistory.filter(l => new Date(l.completedAt) >= subDays(new Date(), 2)).length;
-    const recoveryScore = recentCount === 0 ? 30 : recentCount === 1 ? 20 : 10;
-    return Math.round(sleepScore + stressScore + recoveryScore);
+    const recentCount   = workoutHistory.filter(
+      l => new Date(l.completedAt) >= subDays(new Date(), 2)
+    ).length;
+    const recoveryScoreVal = recentCount === 0 ? 30 : recentCount === 1 ? 20 : 10;
+    return Math.round(sleepScore + stressScore + recoveryScoreVal);
   };
 
   const getCalorieTarget = () => {
     if (!profile?.weight || !profile?.height || !profile?.age) return null;
-    // profile.weight and profile.height are always stored in metric (kg, cm)
     const { weight, height, age, gender, primaryGoal, activityLevel, trainingDays, cardioSessions } = profile;
     const bmr = gender === 'male'
       ? 88.362 + 13.397 * weight + 4.799 * height - 5.677 * age
       : 447.593 + 9.247 * weight + 3.098 * height - 4.330 * age;
-
     const baseMult = ({ sedentary: 1.2, lightly_active: 1.375, moderately_active: 1.55, very_active: 1.725 } as any)[activityLevel] || 1.4;
     const weeklyWorkouts = (trainingDays || 0) + (cardioSessions || 0);
-    const sessionBonus = Math.max(0, weeklyWorkouts - 3) * 0.01;
+    const sessionBonus   = Math.max(0, weeklyWorkouts - 3) * 0.01;
     let tdee = bmr * (baseMult + sessionBonus);
-
     if (primaryGoal === 'build_muscle') tdee += Math.round(bmr * 0.10);
     if (primaryGoal === 'lose_fat')     tdee -= Math.round(bmr * 0.15);
-
     return Math.round(tdee);
   };
 
   const getStreak = () => {
     if (!workoutHistory.length) return 0;
-    const planned = profile?.trainingDays || 3;
-
+    const planned    = profile?.trainingDays || 3;
     const weekCounts = new Map<string, number>();
     for (const log of workoutHistory) {
       const ws = format(startOfWeek(parseISO(log.completedAt), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       weekCounts.set(ws, (weekCounts.get(ws) || 0) + 1);
     }
-
     const now = new Date();
     let streak = 0;
-
     for (let i = 0; i <= 52; i++) {
-      const weekDate = subDays(now, i * 7);
-      const ws = format(startOfWeek(weekDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const ws    = format(startOfWeek(subDays(now, i * 7), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       const count = weekCounts.get(ws) || 0;
-
-      if (i === 0) {
-        if (count >= planned) streak++;
-        continue;
-      }
-
-      if (count >= planned) {
-        streak++;
-      } else {
-        break;
-      }
+      if (i === 0) { if (count >= planned) streak++; continue; }
+      if (count >= planned) streak++;
+      else break;
     }
-
     return streak;
   };
 
@@ -191,7 +167,6 @@ export function Dashboard() {
   const readiness   = getReadinessScore();
   const nextWorkout = getNextWorkout(workoutPlan, workoutHistory);
   const cals        = getCalorieTarget();
-  // profile.weight is always kg; multiply by 2.2 for protein grams (same formula either way)
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
   const streak      = getStreak();
   const units       = profile?.units || 'metric';
@@ -202,10 +177,8 @@ export function Dashboard() {
     ? Math.round((sortedBw[sortedBw.length - 1].weight - sortedBw[0].weight) * 10) / 10
     : null;
 
-  // DB values are always kg — convert only for display
   const displayWeight = (kg: number) =>
     units === 'imperial' ? Math.round(kg * 2.20462) : kg;
-
   const weightUnit = units === 'imperial' ? 'lbs' : 'kg';
 
   const weightChart = sortedBw.map(e => ({
@@ -236,7 +209,7 @@ export function Dashboard() {
               <Dumbbell className="w-7 h-7 text-white" />
             </div>
             <p className="text-muted-foreground mb-4">Set up your profile to get started.</p>
-            <Button onClick={() => navigate('/onboarding')} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">Start Onboarding</Button>
+            <Button onClick={() => navigate('/onboarding')}>Start Onboarding</Button>
           </CardContent>
         </Card>
       </div>
@@ -252,7 +225,7 @@ export function Dashboard() {
               <Target className="w-7 h-7 text-white" />
             </div>
             <p className="text-muted-foreground mb-4">You haven't built a workout plan yet.</p>
-            <Button onClick={() => navigate('/workout-builder')} className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 shadow-md shadow-indigo-500/20">Build Plan</Button>
+            <Button onClick={() => navigate('/workout-builder')}>Build Plan</Button>
           </CardContent>
         </Card>
       </div>
@@ -265,7 +238,9 @@ export function Dashboard() {
 
         {/* Header */}
         <div className="pt-2">
-          <h1 className="text-2xl font-bold tracking-tight">Hey, {profile.name?.split(' ')[0]} 👋</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Hey, {profile.name?.split(' ')[0]} 👋
+          </h1>
           <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5" />
             {format(new Date(), 'EEEE, MMM d')}
@@ -278,8 +253,14 @@ export function Dashboard() {
             <div className="flex items-start gap-4">
               <div className="flex-1">
                 <p className="text-sm text-muted-foreground">Ready for</p>
-                <h2 className="text-2xl font-bold tracking-tight">{nextWorkout?.isToday ? "Today's Workout" : "Next Workout"}</h2>
-                <p className="text-sm text-muted-foreground mt-1">{nextWorkout ? `${nextWorkout.day} • ${(workoutPlan.workouts[nextWorkout.day] || []).length} exercises` : 'No workout scheduled'}</p>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  {nextWorkout?.isToday ? "Today's Workout" : "Next Workout"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {nextWorkout
+                    ? `${nextWorkout.day} · ${(workoutPlan.workouts[nextWorkout.day] || []).length} exercises`
+                    : 'No workout scheduled'}
+                </p>
               </div>
               <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center shadow-soft flex-shrink-0">
                 <Dumbbell className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
@@ -287,7 +268,11 @@ export function Dashboard() {
             </div>
             {nextWorkout && (
               <div className="mt-4">
-                <Button size="lg" className="w-full rounded-2xl" onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}>
+                <Button
+                  size="lg"
+                  className="w-full rounded-2xl"
+                  onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}
+                >
                   Start workout
                   <Play className="w-4 h-4 ml-2" />
                 </Button>
@@ -296,8 +281,9 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Smart Insights */}
+        {/* Smart Insights — single insight, gated behind session count */}
         <SmartInsights
+          sessionCount={workoutHistory.length}
           deloadSuggestion={deloadSuggestion}
           recoveryScore={recoveryScore}
           fatigueWarnings={fatigueWarnings}
@@ -305,17 +291,9 @@ export function Dashboard() {
           onGeneratePlan={() => navigate('/workout-builder')}
         />
 
-        {/* Injury Risk Alerts */}
-        {workoutHistory.length > 0 && (
-          <InjuryRiskAlerts
-            workoutHistory={workoutHistory}
-            exercises={exerciseDatabase}
-          />
-        )}
-
         {/* This week + Readiness */}
         <div className="grid grid-cols-2 gap-3">
-          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-200">
+          <Card className="border-0 shadow-md">
             <CardContent className="pt-4 pb-4">
               <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">This week</p>
               <div className="flex items-end gap-1 mb-2">
@@ -327,7 +305,7 @@ export function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow duration-200">
+          <Card className="border-0 shadow-md">
             <CardContent className="pt-4 pb-4">
               <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">Readiness</p>
               <div className="flex items-center gap-2 mb-1">
@@ -357,8 +335,12 @@ export function Dashboard() {
                 <Flame className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-orange-900 dark:text-orange-200">{streak} week{streak !== 1 ? 's' : ''} on target 🔥</p>
-                <p className="text-xs text-orange-600 dark:text-orange-400">Keep it going — you're on fire!</p>
+                <p className="font-semibold text-orange-900 dark:text-orange-200">
+                  {streak} week{streak !== 1 ? 's' : ''} on target 🔥
+                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400">
+                  Keep it going — you're on fire!
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -374,7 +356,12 @@ export function Dashboard() {
                 </div>
                 Bodyweight
               </CardTitle>
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-primary hover:text-primary/80" onClick={() => setShowWeightLog(v => !v)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-primary hover:text-primary/80"
+                onClick={() => setShowWeightLog(v => !v)}
+              >
                 <Plus className="w-3.5 h-3.5 mr-1" /> Log
               </Button>
             </div>
@@ -437,7 +424,9 @@ export function Dashboard() {
                 </LineChart>
               </ResponsiveContainer>
             ) : !latestWeight ? (
-              <p className="text-sm text-muted-foreground text-center py-3">Tap Log to track your weight</p>
+              <p className="text-sm text-muted-foreground text-center py-3">
+                Tap Log to track your weight
+              </p>
             ) : null}
           </CardContent>
         </Card>
@@ -457,16 +446,22 @@ export function Dashboard() {
               {cals && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Calories</span>
-                  <span className="font-semibold">{cals} <span className="text-xs text-muted-foreground font-normal">kcal</span></span>
+                  <span className="font-semibold">
+                    {cals} <span className="text-xs text-muted-foreground font-normal">kcal</span>
+                  </span>
                 </div>
               )}
               {protein && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Protein</span>
-                  <span className="font-semibold">{protein} <span className="text-xs text-muted-foreground font-normal">g</span></span>
+                  <span className="font-semibold">
+                    {protein} <span className="text-xs text-muted-foreground font-normal">g</span>
+                  </span>
                 </div>
               )}
-              <p className="text-xs text-muted-foreground capitalize">Goal: {profile.primaryGoal?.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-muted-foreground capitalize">
+                Goal: {profile.primaryGoal?.replace(/_/g, ' ')}
+              </p>
             </CardContent>
           </Card>
         )}
@@ -477,19 +472,31 @@ export function Dashboard() {
             <CardHeader className="pb-2">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-sm">Recent Activity</CardTitle>
-                <button onClick={() => navigate('/progress')} className="text-xs text-primary font-semibold hover:text-primary/80 transition-colors">View all</button>
+                <button
+                  onClick={() => navigate('/progress')}
+                  className="text-xs text-primary font-semibold hover:text-primary/80 transition-colors"
+                >
+                  View all
+                </button>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
                 {workoutHistory.slice(0, 3).map((log, i) => {
                   const sets = (log.sets || []).length;
-                  const vol  = Math.round((log.sets || []).reduce((s: number, x: any) => s + x.weight * x.reps, 0) / 1000 * 10) / 10;
+                  const vol  = Math.round(
+                    (log.sets || []).reduce((s: number, x: any) => s + x.weight * x.reps, 0) / 1000 * 10
+                  ) / 10;
                   return (
-                    <div key={i} className="flex justify-between items-center text-sm py-2.5 border-b border-border/50 last:border-0">
+                    <div
+                      key={i}
+                      className="flex justify-between items-center text-sm py-2.5 border-b border-border/50 last:border-0"
+                    >
                       <div>
                         <p className="font-medium">{log.dayName}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(log.completedAt), 'EEE, MMM d')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(log.completedAt), 'EEE, MMM d')}
+                        </p>
                       </div>
                       <div className="text-right text-xs text-muted-foreground">
                         <p className="font-medium text-foreground">{sets} sets</p>
