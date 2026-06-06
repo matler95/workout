@@ -4209,6 +4209,25 @@ export const exerciseDatabase: Exercise[] = [
   equipment: 'full_gym',
   difficulty: 'intermediate',
   instructions: '1. Set an adjustable bench to an incline of approximately 45–60 degrees.\n2. Lie face down on the bench with your chest supported and your arms hanging straight toward the floor.\n3. Hold a dumbbell in each hand with your palms facing forward and keep your upper arms perpendicular to the floor.\n4. Keeping your elbows fixed, curl the weights upward by contracting your biceps. Exhale as you lift.\n5. Continue curling until your forearms are nearly vertical and your biceps are fully contracted. Squeeze briefly at the top.\n6. Slowly lower the weights back to the starting position under control while inhaling.\n7. Repeat for the desired number of repetitions, maintaining strict form and avoiding momentum.'
+  },
+{
+  id: 'hipthrust',
+  name: 'Hip Thrust',
+  category: 'legs',
+  primaryMuscles: ['glutes'],
+  secondaryMuscles: ['hamstrings', 'quadriceps', 'lower_back'],
+  equipment: 'full_gym',
+  difficulty: 'intermediate',
+  instructions: '1. Sit on the floor with your upper back positioned against a flat bench and a loaded barbell resting across your hips.\n2. Bend your knees and place your feet flat on the floor about shoulder-width apart.\n3. Brace your core and keep your chin slightly tucked.\n4. Drive through your heels and extend your hips upward until your torso and thighs form a straight line. Exhale as you lift.\n5. Squeeze your glutes hard at the top without excessively arching your lower back.\n6. Slowly lower your hips back toward the floor under control while inhaling.\n7. Repeat for the desired number of repetitions while maintaining a neutral spine throughout the movement.'
+},
+{
+  id: 'bulgariansplitsquat',
+  name: 'Bulgarian Split Squat',
+  category: 'legs',
+  primaryMuscles: ['quadriceps', 'glutes'],
+  secondaryMuscles: ['hamstrings', 'calves', 'core'],
+  equipment: 'full_gym',
+  difficulty: 'intermediate',
+  instructions: '1. Stand a few feet in front of a bench and place the top of one foot behind you on the bench.\n2. Position your front foot far enough forward so that your knee remains roughly over your foot throughout the movement.\n3. Keep your chest up, core braced, and torso upright.\n4. Lower your body by bending your front knee and dropping your rear knee toward the floor. Inhale as you descend.\n5. Continue until your front thigh is approximately parallel to the floor or as far as your mobility allows.\n6. Push through the heel and midfoot of your front leg to return to the starting position while exhaling.\n7. Complete all repetitions on one leg before switching sides.'
   }
 ];
-
