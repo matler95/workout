@@ -3,7 +3,19 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/(?!(?:sw\\.js|manifest\\.json|assets/).*)",
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
+    {
+      "source": "/assets/:path*",
+      "destination": "/assets/:path*"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
