@@ -44,8 +44,24 @@ const NO_NAV_PATHS = new Set([
   '/workout-edit',
 ]);
 
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground animate-pulse">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   // Hide bottom nav for full-screen flows and any /workout-edit/:id path
@@ -54,11 +70,22 @@ function AppRoutes() {
     !NO_NAV_PATHS.has(location.pathname) &&
     !location.pathname.startsWith('/workout-edit');
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground animate-pulse">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Routes>
-        <Route path="/login"  element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
 
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/workout-builder" element={<ProtectedRoute><WorkoutBuilder /></ProtectedRoute>} />

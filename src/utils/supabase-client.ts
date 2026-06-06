@@ -60,6 +60,10 @@ function getSupabase(): SupabaseClient {
           persistSession: true,
           // Use browser localStorage when available (safe no-op on server).
           storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+          // Keep the session refreshed automatically when the access token expires.
+          autoRefreshToken: true,
+          // Prevent the auth library from trying to parse URL fragments in a SPA.
+          detectSessionInUrl: false,
         },
       },
     );
