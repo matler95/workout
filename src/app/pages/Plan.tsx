@@ -107,7 +107,7 @@ export function Plan() {
             // Rest day card
             if (isRest) {
               return (
-                <Card key={dayName} className="border-0 bg-muted/30 shadow-soft border-dashed border-2 border-muted">
+                <Card key={dayName} className="border-2 bg-muted/30 shadow-soft border-dashed border-2 border-muted">
                   <CardContent className="py-5 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
                       <BedDouble className="w-5 h-5 text-muted-foreground" />
