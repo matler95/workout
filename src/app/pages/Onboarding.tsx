@@ -165,7 +165,7 @@ export function Onboarding() {
         <CardContent className="space-y-6">
           {step === 1 && card('What\'s your name?', 'Let\'s personalise your experience',
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">Name</Label>
               <Input id="name" value={data.name} onChange={e => setData({...data, name: e.target.value})} placeholder="John Doe" autoFocus />
             </div>
           )}

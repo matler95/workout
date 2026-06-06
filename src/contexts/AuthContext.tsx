@@ -43,7 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: { data: { name } },
     });
 
-    if (error) throw error;
+    if (error) {
+      // Friendly message when an account already exists for the provided email.
+      const msg = (error as any)?.message ?? '';
+      if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('registered')) {
+        throw new Error('An account for that email already exists. Try signing in.');
+      }
+      throw error;
+    }
 
     if (data.session) {
       // Email confirmation is disabled — session returned immediately

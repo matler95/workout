@@ -54,6 +54,14 @@ function getSupabase(): SupabaseClient {
     _supabase = createClient(
       getEnv('VITE_SUPABASE_URL'),
       getEnv('VITE_SUPABASE_ANON_KEY'),
+      {
+        auth: {
+          // Ensure sessions persist across reloads on the same device.
+          persistSession: true,
+          // Use browser localStorage when available (safe no-op on server).
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        },
+      },
     );
   }
   return _supabase;
