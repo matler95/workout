@@ -1,6 +1,6 @@
 {
   "name": "Atlas",
-  "short_name": "Workouts",
+  "short_name": "Atlas",
   "description": "Modern, cutting-edge smart workout tracker with best-in-class UI/UX for iPhone and PWA",
   "start_url": "/",
   "scope": "/",
