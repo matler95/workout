@@ -52,7 +52,7 @@ export function Signup() {
     try {
       await signUp(email, password, name);
       toast.success('Account created! Let\'s set up your profile');
-      navigate('/onboarding');
+      navigate('/onboarding', { state: { name } });
     } catch (error: any) {
       toast.error(error.message || 'Failed to create account');
     } finally {

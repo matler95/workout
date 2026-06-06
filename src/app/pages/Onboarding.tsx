@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -60,15 +60,18 @@ export function Onboarding() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const [data, setData] = useState<OnboardingData>({
-    name: '', primaryGoal: '', experienceLevel: '',
+  const location = useLocation();
+  const initialName = (location.state as any)?.name ?? '';
+
+  const [data, setData] = useState<OnboardingData>(() => ({
+    name: initialName, primaryGoal: '', experienceLevel: '',
     gender: '', age: '', height: '', weight: '',
     equipment: '', customEquipment: [],
     trainingDays: 3, sessionLength: 60,
     workoutStyle: '', absPreference: '',
     avgSleep: 7, activityLevel: '', stressLevel: 5,
     jobActivity: '', cardioSessions: 0, injuries: '',
-  });
+  }));
 
   const totalSteps = 10;
 
