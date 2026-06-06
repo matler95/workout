@@ -11,7 +11,6 @@ import { profileApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { User, Settings, Globe, Moon, Bell, Trash2, LogOut, ChevronRight } from 'lucide-react';
 
-type Units    = 'metric' | 'imperial';
 type Theme    = 'light' | 'dark' | 'auto';
 type Language = 'english' | 'polish';
 
@@ -22,17 +21,13 @@ export function Profile() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Preferences — initialised from profile once loaded
-  const [units, setUnits]         = useState<Units>('metric');
   const { theme: activeTheme, setTheme: applyTheme } = useTheme();
-  const [theme, setTheme]         = useState<Theme>('light');
-  const [language, setLanguage]   = useState<Language>('english');
-  const [notifWorkout, setNotifWorkout] = useState(true);
+  const [theme, setTheme]       = useState<Theme>('light');
+  const [language, setLanguage] = useState<Language>('english');
+  const [notifWorkout, setNotifWorkout]   = useState(true);
   const [notifProgress, setNotifProgress] = useState(false);
-
-  // Saving states
-  const [savingPrefs, setSavingPrefs]   = useState(false);
-  const [deletingData, setDeletingData] = useState(false);
+  const [savingPrefs, setSavingPrefs]     = useState(false);
+  const [deletingData, setDeletingData]   = useState(false);
 
   useEffect(() => { loadProfile(); }, []);
 
@@ -41,7 +36,6 @@ export function Profile() {
       const p = await profileApi.get();
       setProfile(p);
       if (p) {
-        setUnits(p.units || 'metric');
         const savedTheme = p.theme || 'light';
         setTheme(savedTheme);
         applyTheme(savedTheme);
@@ -54,11 +48,11 @@ export function Profile() {
     }
   };
 
-  // Save preferences whenever any of them change (debounce via button)
   const handleSavePreferences = async () => {
     setSavingPrefs(true);
     try {
-      await profileApi.updatePreferences({ units, theme, language });
+      // units is always 'metric' — no longer a user setting
+      await profileApi.updatePreferences({ units: 'metric', theme, language });
       toast.success('Preferences saved');
     } catch {
       toast.error('Failed to save preferences');
@@ -68,19 +62,14 @@ export function Profile() {
   };
 
   const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
+    try { await signOut(); navigate('/login'); }
+    catch { toast.error('Failed to sign out'); }
   };
 
   const handleDeleteData = async () => {
     if (!window.confirm(
       'This will permanently delete all your workout logs, progress data, and workout plan. Your account stays active. This cannot be undone.'
     )) return;
-
     setDeletingData(true);
     try {
       await profileApi.deleteAllData();
@@ -93,23 +82,21 @@ export function Profile() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-muted border-t-primary" />
-          <p className="text-sm text-muted-foreground animate-pulse">Loading profile...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-muted border-t-primary" />
+        <p className="text-sm text-muted-foreground animate-pulse">Loading profile...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background p-4 pb-24">
       <div className="max-w-2xl mx-auto space-y-4">
         <h1 className="text-2xl font-bold tracking-tight pt-2">Profile & Settings</h1>
 
-        {/* ── User info ─────────────────────────────────────────────── */}
+        {/* Account */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -119,49 +106,43 @@ export function Profile() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center shadow-soft">
-                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-emerald-600 font-bold">{(profile?.name || 'U').split(' ')[0][0] || 'U'}</div>
+                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-emerald-600 font-bold text-xl">
+                  {(profile?.name || 'U').split(' ')[0][0] || 'U'}
+                </div>
               </div>
-
               <div className="flex-1">
                 <div className="text-sm text-muted-foreground">{profile?.name ? 'Welcome back,' : 'Hello'}</div>
                 <div className="text-lg font-semibold">{profile?.name || 'User'}</div>
-                <div className="text-xs text-muted-foreground mt-1">{profile?.primaryGoal ? profile.primaryGoal.replace(/_/g, ' ') : 'Set your goal'}</div>
+                <div className="text-xs text-muted-foreground mt-1 capitalize">
+                  {profile?.primaryGoal?.replace(/_/g, ' ') || 'Set your goal'}
+                </div>
               </div>
-
               <div className="ml-auto text-right">
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p className="font-medium text-sm truncate">{user?.email}</p>
+                <p className="font-medium text-sm truncate max-w-[140px]">{user?.email}</p>
               </div>
             </div>
 
-            {/* Quick stats */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 bg-card rounded-2xl text-center shadow-subtle">
-                <div className="text-xs text-muted-foreground">Days / Week</div>
-                <div className="text-lg font-semibold">{profile?.trainingDays || '—'}</div>
-              </div>
-              <div className="p-3 bg-card rounded-2xl text-center shadow-subtle">
-                <div className="text-xs text-muted-foreground">Session (min)</div>
-                <div className="text-lg font-semibold">{profile?.sessionLength || '—'}</div>
-              </div>
-              <div className="p-3 bg-card rounded-2xl text-center shadow-subtle">
-                <div className="text-xs text-muted-foreground">Experience</div>
-                <div className="text-lg font-semibold capitalize">{profile?.experienceLevel || '—'}</div>
-              </div>
+              {[
+                { label: 'Days / Week', value: profile?.trainingDays || '—' },
+                { label: 'Session (min)', value: profile?.sessionLength || '—' },
+                { label: 'Experience', value: profile?.experienceLevel || '—' },
+              ].map(({ label, value }) => (
+                <div key={label} className="p-3 bg-card rounded-2xl text-center shadow-subtle">
+                  <div className="text-xs text-muted-foreground">{label}</div>
+                  <div className="text-lg font-semibold capitalize">{value}</div>
+                </div>
+              ))}
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => navigate('/onboarding')}
-            >
+            <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/onboarding')}>
               Update profile & goals <ChevronRight className="w-3.5 h-3.5 ml-1" />
             </Button>
           </CardContent>
         </Card>
 
-        {/* ── Preferences ───────────────────────────────────────────── */}
+        {/* Preferences — units removed, metric is the only system */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -169,38 +150,11 @@ export function Profile() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Units */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Units</p>
-              <RadioGroup
-                value={units}
-                onValueChange={v => setUnits(v as Units)}
-                className="flex gap-4"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="metric" id="metric" />
-                  <Label htmlFor="metric">Metric (kg, cm)</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="imperial" id="imperial" />
-                  <Label htmlFor="imperial">Imperial (lbs, ft)</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {/* Theme */}
             <div className="space-y-2">
               <p className="text-sm font-medium flex items-center gap-2">
                 <Moon className="w-3.5 h-3.5" /> Theme
               </p>
-              <RadioGroup
-                value={theme}
-                onValueChange={v => {
-                  setTheme(v as Theme);
-                  applyTheme(v as Theme);
-                }}
-                className="flex gap-4"
-              >
+              <RadioGroup value={theme} onValueChange={v => { setTheme(v as Theme); applyTheme(v as Theme); }} className="flex gap-4">
                 {(['light', 'dark', 'auto'] as Theme[]).map(t => (
                   <div key={t} className="flex items-center gap-2">
                     <RadioGroupItem value={t} id={`theme-${t}`} />
@@ -210,16 +164,11 @@ export function Profile() {
               </RadioGroup>
             </div>
 
-            {/* Language */}
             <div className="space-y-2">
               <p className="text-sm font-medium flex items-center gap-2">
                 <Globe className="w-3.5 h-3.5" /> Language
               </p>
-              <RadioGroup
-                value={language}
-                onValueChange={v => setLanguage(v as Language)}
-                className="flex gap-4"
-              >
+              <RadioGroup value={language} onValueChange={v => setLanguage(v as Language)} className="flex gap-4">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="english" id="lang-en" />
                   <Label htmlFor="lang-en">English</Label>
@@ -231,18 +180,13 @@ export function Profile() {
               </RadioGroup>
             </div>
 
-            <Button
-              onClick={handleSavePreferences}
-              disabled={savingPrefs}
-              size="sm"
-              className="w-full"
-            >
+            <Button onClick={handleSavePreferences} disabled={savingPrefs} size="sm" className="w-full">
               {savingPrefs ? 'Saving…' : 'Save preferences'}
             </Button>
           </CardContent>
         </Card>
 
-        {/* ── Notifications ─────────────────────────────────────────── */}
+        {/* Notifications */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -265,12 +209,12 @@ export function Profile() {
               <Switch checked={notifProgress} onCheckedChange={setNotifProgress} />
             </div>
             <p className="text-xs text-muted-foreground">
-              Notification delivery requires the app to be installed as a PWA.
+              Notifications require the app to be installed as a PWA.
             </p>
           </CardContent>
         </Card>
 
-        {/* ── Danger zone ───────────────────────────────────────────── */}
+        {/* Danger zone */}
         <Card className="border-0 shadow-md border-l-4 border-l-rose-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-rose-600">
@@ -283,19 +227,10 @@ export function Profile() {
               your workout plan, and progress history. Your account and profile stay active.
               This cannot be undone.
             </div>
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={handleDeleteData}
-              disabled={deletingData}
-            >
+            <Button variant="destructive" className="w-full" onClick={handleDeleteData} disabled={deletingData}>
               {deletingData ? 'Deleting…' : 'Delete all workout data'}
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleSignOut}
-            >
+            <Button variant="outline" className="w-full" onClick={handleSignOut}>
               <LogOut className="w-4 h-4 mr-2" /> Sign out
             </Button>
           </CardContent>

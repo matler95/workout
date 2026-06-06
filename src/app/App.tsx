@@ -14,6 +14,7 @@ import { Progress } from './pages/Progress';
 import { Library } from './pages/Library';
 import { Profile } from './pages/Profile';
 import { ActiveWorkout } from './pages/ActiveWorkout';
+import { WorkoutEdit } from './components/WorkoutEdit';
 import { BottomNav } from './components/BottomNav';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -23,17 +24,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto" />
           <p className="mt-4 text-muted-foreground animate-pulse">Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -43,91 +41,34 @@ const NO_NAV_PATHS = new Set([
   '/onboarding',
   '/workout-builder',
   '/active-workout',
+  '/workout-edit',
 ]);
 
 function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
 
-  const showBottomNav = user && !NO_NAV_PATHS.has(location.pathname);
+  // Hide bottom nav for full-screen flows and any /workout-edit/:id path
+  const showBottomNav =
+    user &&
+    !NO_NAV_PATHS.has(location.pathname) &&
+    !location.pathname.startsWith('/workout-edit');
 
   return (
     <>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login"  element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        <Route
-          path="/onboarding"
-          element={
-            <ProtectedRoute>
-              <Onboarding />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/workout-builder"
-          element={
-            <ProtectedRoute>
-              <WorkoutBuilder />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/plan"
-          element={
-            <ProtectedRoute>
-              <Plan />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/progress"
-          element={
-            <ProtectedRoute>
-              <Progress />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/library"
-          element={
-            <ProtectedRoute>
-              <Library />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/active-workout"
-          element={
-            <ProtectedRoute>
-              <ActiveWorkout />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+        <Route path="/workout-builder" element={<ProtectedRoute><WorkoutBuilder /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/plan" element={<ProtectedRoute><Plan /></ProtectedRoute>} />
+        <Route path="/progress" element={<ProtectedRoute><Progress /></ProtectedRoute>} />
+        <Route path="/library" element={<ProtectedRoute><Library /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/active-workout" element={<ProtectedRoute><ActiveWorkout /></ProtectedRoute>} />
+        <Route path="/workout-edit/:sessionId" element={<ProtectedRoute><WorkoutEdit /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
       </Routes>

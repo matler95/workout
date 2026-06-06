@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
 import { profileApi, planApi } from '../../utils/api';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, CheckCircle, Info, Minus } from 'lucide-react';
+import { Search, Plus, Trash2, CheckCircle, Info, Minus, BedDouble } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 
@@ -130,6 +130,7 @@ function defaultSets(profile: any): number {
 export function WorkoutBuilder() {
   const [profile, setProfile]                     = useState<any>(null);
   const [selectedExercises, setSelectedExercises] = useState<{ [key: string]: ExerciseWithSets[] }>({});
+  const [restDays, setRestDays]                     = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery]             = useState('');
   const [currentDay, setCurrentDay]               = useState('');
   const [loading, setLoading]                     = useState(true);
@@ -173,6 +174,15 @@ export function WorkoutBuilder() {
     else                              ['Day 1', 'Day 2', 'Day 3'].forEach(d => (days[d] = []));
     setSelectedExercises(days);
     setCurrentDay(Object.keys(days)[0]);
+  };
+
+  const toggleRestDay = (day: string) => {
+    setRestDays(prev => {
+      const next = new Set(prev);
+      if (next.has(day)) next.delete(day);
+      else next.add(day);
+      return next;
+    });
   };
 
   const getFilteredExercises = (): { suggested: Exercise[]; rest: Exercise[] } => {
@@ -238,7 +248,17 @@ export function WorkoutBuilder() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await planApi.save(selectedExercises);
+      // Mark rest days by storing a special sentinel array with a rest flag
+      const planToSave: Record<string, any[]> = {};
+      for (const [day, exs] of Object.entries(selectedExercises)) {
+        if (restDays.has(day)) {
+          // Store rest day as empty array with __rest flag on first item
+          planToSave[day] = [{ __rest: true }];
+        } else {
+          planToSave[day] = exs;
+        }
+      }
+      await planApi.save(planToSave);
       toast.success('Plan saved!');
       navigate('/plan');
     } catch {
@@ -304,11 +324,14 @@ export function WorkoutBuilder() {
           <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
             <TabsList className="flex w-max min-w-full">
               {days.map(day => (
-                <TabsTrigger key={day} value={day} className="flex-shrink-0 whitespace-nowrap">
+                <TabsTrigger key={day} value={day} className={`flex-shrink-0 whitespace-nowrap ${restDays.has(day) ? 'opacity-50' : ''}`}>
+                  {restDays.has(day) ? <BedDouble className="w-3 h-3 mr-1 inline" /> : null}
                   {day}
-                  <span className="ml-1 text-xs opacity-60">
-                    ({(selectedExercises[day] || []).length})
-                  </span>
+                  {!restDays.has(day) && (
+                    <span className="ml-1 text-xs opacity-60">
+                      ({(selectedExercises[day] || []).length})
+                    </span>
+                  )}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -320,6 +343,33 @@ export function WorkoutBuilder() {
 
                 {/* LEFT — selected exercises */}
                 <div className="space-y-3 min-w-0">
+                  {/* Rest day toggle */}
+                  <div className="flex items-center justify-between mb-1">
+                    <button
+                      onClick={() => toggleRestDay(day)}
+                      className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                        restDays.has(day)
+                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      <BedDouble className="w-3 h-3" />
+                      {restDays.has(day) ? 'Rest day (tap to undo)' : 'Mark as rest day'}
+                    </button>
+                  </div>
+
+                  {/* If rest day, show overlay instead of exercise UI */}
+                  {restDays.has(day) && (
+                    <Card className="border-dashed border-2 border-muted">
+                      <CardContent className="py-12 text-center">
+                        <BedDouble className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+                        <p className="text-sm text-muted-foreground">Rest day — no exercises scheduled</p>
+                        <p className="text-xs text-muted-foreground mt-1">Active recovery, stretching, or full rest</p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {!restDays.has(day) && <>
                   {/* Inline assessment badge — single line, no card */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${assessmentBadgeClass}`}>
@@ -428,6 +478,7 @@ export function WorkoutBuilder() {
                       </div>
                     );
                   })()}
+                  </> /* end !restDays.has(day) */}
                 </div>
 
                 {/* RIGHT — exercise library */}

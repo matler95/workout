@@ -20,7 +20,7 @@ import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import {
   Clock, Check, Trophy, SkipForward,
-  Minus, Plus, X, TrendingUp, TrendingDown,
+  Minus, Plus, X, TrendingUp, TrendingDown, HelpCircle,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -35,6 +35,10 @@ import {
   type UserProfile,
 } from '../../utils/startingWeights';
 import { calculateMuscleVolume } from '../../utils/volumeTracking';
+import {
+  generateSessionId, queueStart, queueUpdate,
+  queueMarkPending, queueClear,
+} from '../../utils/offlineQueue';
 import Celebration from '../components/ui/celebration';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -192,8 +196,10 @@ export function ActiveWorkout() {
   const [loading, setLoading]               = useState(true);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showConfetti, setShowConfetti]     = useState(false);
+  const [showRPEInfo, setShowRPEInfo]         = useState(false);
 
-  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
+  const offlineSessionId   = useRef<string>(generateSessionId());
   const startTimeRef = useRef<number>(loadWorkoutStart());
 
   useEffect(() => {
@@ -357,6 +363,7 @@ export function ActiveWorkout() {
           rpeCorrections: {},
           duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
         });
+        queueClear(offlineSessionId.current);
         toast.success('Partial workout saved');
       } catch {
         toast.error('Could not save');
@@ -392,6 +399,8 @@ export function ActiveWorkout() {
 
     const newCompleted = [...completedSets, newSet];
     setCompletedSets(newCompleted);
+    // Persist to localStorage so a crash doesn't lose progress
+    queueUpdate(offlineSessionId.current, newCompleted);
 
     const setsForThisExercise = plan?.sets ?? 3;
     toast.success(`Set ${currentSet} ✓`);
@@ -435,16 +444,24 @@ export function ActiveWorkout() {
 
       const muscleVolume = calculateMuscleVolume(completedSets);
 
-      await workoutApi.log({
-        dayName: dayName!,
-        completedAt:    new Date().toISOString(),
-        sets:           completedSets,
-        feedback,
-        perceivedEffort,
-        rpeCorrections,
-        duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
-        muscleVolume,
+      const now      = new Date().toISOString();
+      const duration = Math.round((Date.now() - startTimeRef.current) / 60000);
+
+      // Mark as pending before the network call — survives a crash mid-upload
+      queueMarkPending(offlineSessionId.current, {
+        dayName: dayName!, completedAt: now,
+        sets: completedSets, feedback, perceivedEffort,
+        rpeCorrections, duration, muscleVolume,
       });
+
+      await workoutApi.log({
+        dayName: dayName!, completedAt: now,
+        sets: completedSets, feedback, perceivedEffort,
+        rpeCorrections, duration, muscleVolume,
+      });
+
+      // Sync succeeded — clear from offline queue
+      queueClear(offlineSessionId.current);
 
       clearRestStart();
       try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
@@ -533,6 +550,33 @@ export function ActiveWorkout() {
               <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
             </div>
 
+            {/* Step G: RPE correction info box — only shown when relevant */}
+            {(() => {
+              const adjusted = exercises.filter(ex => {
+                const plan = plans[ex.id || ex.name];
+                return plan && !plan.isFirstSession && plan.action !== 'insufficient_data';
+              });
+              if (adjusted.length === 0) return null;
+              return (
+                <div className="flex items-start gap-2">
+                  <button
+                    onClick={() => setShowRPEInfo(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>How are weights chosen?</span>
+                  </button>
+                </div>
+              );
+            })()}
+            {showRPEInfo && (
+              <div className="bg-muted/60 rounded-xl p-3 text-xs text-muted-foreground leading-relaxed">
+                Weights are based on your last session. If you rated a session as very easy or very hard,
+                the weight was automatically adjusted for today. Your effort rating after this workout
+                will fine-tune it further.
+              </div>
+            )}
+
             {/* Exercise list — clean, no weight preview clutter */}
             <div className="space-y-1">
               {exercises.map((ex, i) => (
@@ -562,6 +606,7 @@ export function ActiveWorkout() {
                 const startMs = Date.now();
                 startTimeRef.current = startMs;
                 saveWorkoutStart(startMs);
+                queueStart(offlineSessionId.current, dayName!);
                 setCurrentPhase('exercise');
               }}
             >

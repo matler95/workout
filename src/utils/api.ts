@@ -93,6 +93,27 @@ export interface VolumeEntry {
   best_e1rm: number;
 }
 
+export interface WorkoutsPerWeekEntry {
+  week_start: string;   // YYYY-MM-DD
+  workout_count: number;
+}
+
+export async function getWorkoutsPerWeek(weeksBack = 52): Promise<WorkoutsPerWeekEntry[]> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - weeksBack * 7);
+  const cutoffDate = cutoff.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('workouts_per_week')
+    .select('week_start, workout_count')
+    .gte('week_start', cutoffDate)
+    .order('week_start', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function getUserId(): Promise<string> {
