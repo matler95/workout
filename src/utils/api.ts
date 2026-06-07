@@ -335,7 +335,7 @@ export const workoutApi = {
       .from('workout_sets')
       .select('*')
       .in('session_id', sessionIds)
-      .order('created_at', { ascending: true });
+      .order('completed_at', { ascending: true });
 
     if (setsError) throw setsError;
 
