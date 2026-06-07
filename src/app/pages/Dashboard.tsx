@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getNextWorkout } from '../../utils/getNextWorkout';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,22 +34,15 @@ export function Dashboard() {
   const [fatigueWarnings, setFatigueWarnings]   = useState<any[]>([]);
   const [showSynced, setShowSynced]             = useState(false);
 
-  // FIX 2: Re-fetch whenever the route key changes (i.e. every navigation to /dashboard).
-  // Previously useEffect(loadData, []) only ran on first mount — navigating back from
-  // ActiveWorkout reused the component without triggering a re-fetch.
-  useEffect(() => { loadData(); }, [location.key]);
-
-  // FIX 3: Also re-fetch when the tab becomes visible again (e.g. returning from
-  // ActiveWorkout on mobile where the browser may background the PWA).
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') loadData();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
+  // FIX #3: Prevent concurrent loadData calls.
+  // Both location.key changes (navigation) and visibilitychange events fire
+  // when returning from ActiveWorkout. Without this guard they race and the
+  // second call's setState clobbers the first, sometimes with stale data.
+  const loadingRef = useRef(false);
 
   const loadData = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
       const [prof, plan, history, bw, vol] = await Promise.all([
         profileApi.get().catch(() => null),
@@ -81,8 +74,23 @@ export function Dashboard() {
       console.error('Dashboard load error:', e);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   };
+
+  // Re-fetch on route navigation (e.g. back from ActiveWorkout)
+  useEffect(() => { loadData(); }, [location.key]);
+
+  // Re-fetch when tab becomes visible again (PWA backgrounded on mobile).
+  // The loadingRef guard above prevents a double-fetch when both this and
+  // the location.key effect fire simultaneously on the same navigation.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadData();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const handleLogWeight = async () => {
     const weight = parseFloat(newWeight);
@@ -210,6 +218,7 @@ export function Dashboard() {
           <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Target className="w-7 h-7 text-white" />
           </div>
+          {/* FIX #15 (partial): distinguish "no plan" from "failed to load" */}
           <p className="text-muted-foreground mb-4">You haven't built a workout plan yet.</p>
           <Button onClick={() => navigate('/workout-builder')}>Build Plan</Button>
         </CardContent>

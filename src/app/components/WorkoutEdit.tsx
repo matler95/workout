@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -27,13 +27,17 @@ export function WorkoutEdit() {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
 
+  // FIX #2: Track the original set IDs on load so we can diff and delete
+  // removed entries. Previously originalSetIds was never populated, meaning
+  // the delete branch was dead code and removed sets persisted in the DB.
+  const originalSetIds = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (sessionId) loadSession(sessionId);
   }, [sessionId]);
 
   const loadSession = async (id: string) => {
     try {
-      // Load the session + its sets directly from Supabase
       const { data: sessionData, error: sessErr } = await supabase
         .from('workout_sessions')
         .select('id, day_name, completed_at, perceived_effort, feedback')
@@ -50,16 +54,20 @@ export function WorkoutEdit() {
       if (setsErr) throw setsErr;
 
       setSession(sessionData);
-      setSets(
-        (setsData || []).map(s => ({
-          id:           s.id,
-          exerciseName: s.exercise_name,
-          setNumber:    s.set_number,
-          weightKg:     parseFloat(s.weight_kg),
-          reps:         s.reps,
-          dirty:        false,
-        }))
-      );
+
+      const loadedSets: EditableSet[] = (setsData || []).map(s => ({
+        id:           s.id,
+        exerciseName: s.exercise_name,
+        setNumber:    s.set_number,
+        weightKg:     parseFloat(s.weight_kg),
+        reps:         s.reps,
+        dirty:        false,
+      }));
+
+      setSets(loadedSets);
+
+      // Capture all original IDs so handleSave can compute what was deleted
+      originalSetIds.current = new Set(loadedSets.map(s => s.id));
     } catch (e) {
       toast.error('Failed to load session');
       navigate(-1);
@@ -83,9 +91,8 @@ export function WorkoutEdit() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // 1. Update changed sets
       const dirtyIds = sets.filter(s => s.dirty);
-
-      // Update each changed set
       await Promise.all(
         dirtyIds.map(s =>
           supabase
@@ -95,11 +102,18 @@ export function WorkoutEdit() {
         )
       );
 
-      // Delete removed sets
-      const currentIds  = new Set(sets.map(s => s.id));
-      const originalIds = sets.map(s => s.id); // we only have current — track deleted separately
-      // deletedIds tracked via state diff:
-      // (we stored original IDs on load but simplified — just re-fetch and diff)
+      // 2. FIX #2: Delete sets that were removed from the UI.
+      // Diff the original IDs against the current IDs to find what was deleted.
+      const currentIds = new Set(sets.map(s => s.id));
+      const deletedIds = [...originalSetIds.current].filter(id => !currentIds.has(id));
+
+      if (deletedIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from('workout_sets')
+          .delete()
+          .in('id', deletedIds);
+        if (delErr) throw delErr;
+      }
 
       toast.success('Workout updated');
       navigate(-1);
@@ -123,7 +137,9 @@ export function WorkoutEdit() {
     return acc;
   }, {});
 
-  const hasDirty = sets.some(s => s.dirty);
+  const hasDirty    = sets.some(s => s.dirty);
+  const hasDeleted  = sets.length < originalSetIds.current.size;
+  const hasChanges  = hasDirty || hasDeleted;
 
   return (
     <div className="min-h-screen bg-background p-4 pb-24">
@@ -141,15 +157,21 @@ export function WorkoutEdit() {
               </p>
             )}
           </div>
-          <Button onClick={handleSave} disabled={saving || !hasDirty} size="sm" className="rounded-xl">
+          <Button onClick={handleSave} disabled={saving || !hasChanges} size="sm" className="rounded-xl">
             <Save className="w-4 h-4 mr-1.5" />
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </div>
 
-        {!hasDirty && (
+        {!hasChanges && (
           <p className="text-xs text-muted-foreground px-1">
-            Edit any weight or rep count below — changes are saved when you tap Save.
+            Edit any weight or rep count below, or tap the trash icon to remove a set — changes are saved when you tap Save.
+          </p>
+        )}
+
+        {hasDeleted && !saving && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 px-1">
+            {originalSetIds.current.size - sets.length} set{originalSetIds.current.size - sets.length !== 1 ? 's' : ''} will be deleted on save.
           </p>
         )}
 
@@ -193,6 +215,7 @@ export function WorkoutEdit() {
                   <button
                     onClick={() => deleteSet(s.id)}
                     className="text-muted-foreground/40 hover:text-red-500 transition-colors flex-shrink-0"
+                    title="Remove set"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

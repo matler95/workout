@@ -1,7 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router';
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { Toaster } from './components/ui/sonner';
 
 import { Login } from './pages/Login';
@@ -64,7 +65,6 @@ function AppRoutes() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Hide bottom nav for full-screen flows and any /workout-edit/:id path
   const showBottomNav =
     user &&
     !NO_NAV_PATHS.has(location.pathname) &&
@@ -105,14 +105,40 @@ function AppRoutes() {
   );
 }
 
+/**
+ * ThemeBridge — keeps next-themes in sync with our custom ThemeContext.
+ *
+ * FIX #1: sonner's <Toaster> calls useTheme() from next-themes internally.
+ * If next-themes ThemeProvider is never mounted, useTheme() always returns
+ * "system" and toasts never pick up the app's dark mode class. We fix this
+ * by mounting NextThemesProvider and keeping it in sync with our custom
+ * ThemeContext via this bridge component.
+ */
+function ThemeBridge({ children }: { children: React.ReactNode }) {
+  const { resolved } = useTheme();
+
+  return (
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="light"
+      forcedTheme={resolved}   // always mirrors our custom ThemeContext
+      disableTransitionOnChange
+    >
+      {children}
+    </NextThemesProvider>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AuthProvider>
-          <AppRoutes />
-          <Toaster />
-        </AuthProvider>
+        <ThemeBridge>
+          <AuthProvider>
+            <AppRoutes />
+            <Toaster />
+          </AuthProvider>
+        </ThemeBridge>
       </ThemeProvider>
     </BrowserRouter>
   );
