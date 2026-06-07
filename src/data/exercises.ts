@@ -7,6 +7,8 @@
   equipment: 'full_gym' | 'bodyweight';
   equipmentType: 'barbell' | 'dumbbell' | 'smith' | 'machine' | 'kettlebell' | 'band' | 'bodyweight' | 'other';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
+  notes?: string;
+  tempo?: string;
   instructions: string;
 }
 

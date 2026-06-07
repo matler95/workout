@@ -102,7 +102,7 @@ export function SmartExerciseFilters({
             Smart Exercise Recommendations
           </CardTitle>
           <Button
-            variant={filterMode === 'recommended' ? 'default' : 'ghost'}
+            variant={filterMode === 'recommended' ? 'outline' : 'ghost'}
             size="sm"
             onClick={() => setFilterMode(filterMode === 'recommended' ? 'all' : 'recommended')}
             className="text-xs h-7"
