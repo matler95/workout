@@ -5,8 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
-import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import { Label } from '../components/ui/label';
+import { OptionGroup } from '../components/ui/OptionButton';
 import { profileApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { User, Settings, Globe, Moon, Bell, Trash2, LogOut, ChevronRight } from 'lucide-react';
@@ -51,7 +50,6 @@ export function Profile() {
   const handleSavePreferences = async () => {
     setSavingPrefs(true);
     try {
-      // units is always 'metric' — no longer a user setting
       await profileApi.updatePreferences({ units: 'metric', theme, language });
       toast.success('Preferences saved');
     } catch {
@@ -142,7 +140,7 @@ export function Profile() {
           </CardContent>
         </Card>
 
-        {/* Preferences — units removed, metric is the only system */}
+        {/* Preferences */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -150,34 +148,38 @@ export function Profile() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+
+            {/* Theme */}
             <div className="space-y-2">
               <p className="text-sm font-medium flex items-center gap-2">
                 <Moon className="w-3.5 h-3.5" /> Theme
               </p>
-              <RadioGroup value={theme} onValueChange={v => { setTheme(v as Theme); applyTheme(v as Theme); }} className="flex gap-4">
-                {(['light', 'dark', 'auto'] as Theme[]).map(t => (
-                  <div key={t} className="flex items-center gap-2">
-                    <RadioGroupItem value={t} id={`theme-${t}`} />
-                    <Label htmlFor={`theme-${t}`} className="capitalize">{t}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
+              <OptionGroup
+                value={theme}
+                onChange={(v) => { setTheme(v); applyTheme(v); }}
+                options={[
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark',  label: 'Dark' },
+                  { value: 'auto',  label: 'Auto' },
+                ]}
+                cols={2}
+              />
             </div>
 
+            {/* Language */}
             <div className="space-y-2">
               <p className="text-sm font-medium flex items-center gap-2">
                 <Globe className="w-3.5 h-3.5" /> Language
               </p>
-              <RadioGroup value={language} onValueChange={v => setLanguage(v as Language)} className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="english" id="lang-en" />
-                  <Label htmlFor="lang-en">English</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="polish" id="lang-pl" />
-                  <Label htmlFor="lang-pl">Polski</Label>
-                </div>
-              </RadioGroup>
+              <OptionGroup
+                value={language}
+                onChange={setLanguage}
+                options={[
+                  { value: 'english', label: 'English' },
+                  { value: 'polish',  label: 'Polski' },
+                ]}
+                cols={2}
+              />
             </div>
 
             <Button onClick={handleSavePreferences} disabled={savingPrefs} size="sm" className="w-full">

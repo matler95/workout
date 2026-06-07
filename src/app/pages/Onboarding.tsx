@@ -4,10 +4,10 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
 import { Textarea } from '../components/ui/textarea';
+import { OptionGroup, OptionButton } from '../components/ui/OptionButton';
 import { profileApi, progressApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -18,8 +18,8 @@ interface OnboardingData {
   experienceLevel: string;
   gender: string;
   age: string;
-  height: string;   // always cm
-  weight: string;   // always kg
+  height: string;
+  weight: string;
   equipment: string;
   customEquipment: string[];
   trainingDays: number;
@@ -124,26 +124,6 @@ export function Onboarding() {
     </div>
   );
 
-  const optionGrid = (
-    field: keyof OnboardingData,
-    options: { value: string; label: string; sub?: string }[],
-    cols = 2
-  ) => (
-    <div className={`grid grid-cols-${cols} gap-3`}>
-      {options.map(o => {
-        const selected = data[field] === o.value;
-        return (
-          <button key={o.value} type="button"
-            onClick={() => setData({ ...data, [field]: o.value })}
-            className={`text-left p-3 rounded-2xl border ${selected ? 'bg-emerald-50 border-emerald-200 shadow-glow-emerald' : 'bg-card border-border'}`}>
-            <div className="font-medium">{o.label}</div>
-            {o.sub && <div className="text-xs text-muted-foreground mt-1">{o.sub}</div>}
-          </button>
-        );
-      })}
-    </div>
-  );
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-purple-500 to-violet-600" />
@@ -159,52 +139,67 @@ export function Onboarding() {
             <Progress value={(step / totalSteps) * 100} className="h-2" />
             <div className="flex items-center gap-2 mt-2">
               {Array.from({ length: totalSteps }, (_, i) => i + 1).map(n => (
-                <div key={n} className={`w-2.5 h-2.5 rounded-full ${n === step ? 'bg-emerald-600' : 'bg-muted'}`} />
+                <div key={n} className={`w-2.5 h-2.5 rounded-full transition-colors ${n === step ? 'bg-emerald-600' : n < step ? 'bg-emerald-300' : 'bg-muted'}`} />
               ))}
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {step === 1 && card('What\'s your name?', 'Let\'s personalise your experience',
+
+          {/* Step 1 — Name */}
+          {step === 1 && card("What's your name?", "Let's personalise your experience",
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input id="name" value={data.name} onChange={e => setData({...data, name: e.target.value})} placeholder="John Doe" autoFocus />
             </div>
           )}
 
-          {step === 2 && card('What\'s your primary goal?', undefined,
-            optionGrid('primaryGoal', [
-              { value: 'build_muscle',        label: 'Build Muscle' },
-              { value: 'lose_fat',             label: 'Lose Fat' },
-              { value: 'increase_strength',    label: 'Increase Strength' },
-              { value: 'general_fitness',      label: 'General Fitness' },
-              { value: 'athletic_performance', label: 'Athletic Performance' },
-            ])
+          {/* Step 2 — Goal */}
+          {step === 2 && card("What's your primary goal?", undefined,
+            <OptionGroup
+              value={data.primaryGoal as any}
+              onChange={v => setData({ ...data, primaryGoal: v })}
+              options={[
+                { value: 'build_muscle',        label: 'Build Muscle' },
+                { value: 'lose_fat',             label: 'Lose Fat' },
+                { value: 'increase_strength',    label: 'Increase Strength' },
+                { value: 'general_fitness',      label: 'General Fitness' },
+                { value: 'athletic_performance', label: 'Athletic Performance' },
+              ]}
+              cols={2}
+            />
           )}
 
-          {step === 3 && card('What\'s your experience level?', undefined,
-            optionGrid('experienceLevel', [
-              { value: 'beginner',     label: 'Beginner',     sub: 'Less than 6 months' },
-              { value: 'intermediate', label: 'Intermediate', sub: '6 months to 2 years' },
-              { value: 'advanced',     label: 'Advanced',     sub: '2+ years' },
-            ], 1)
+          {/* Step 3 — Experience */}
+          {step === 3 && card("What's your experience level?", undefined,
+            <OptionGroup
+              value={data.experienceLevel as any}
+              onChange={v => setData({ ...data, experienceLevel: v })}
+              options={[
+                { value: 'beginner',     label: 'Beginner',     sub: 'Less than 6 months' },
+                { value: 'intermediate', label: 'Intermediate', sub: '6 months to 2 years' },
+                { value: 'advanced',     label: 'Advanced',     sub: '2+ years' },
+              ]}
+              cols={1}
+            />
           )}
 
+          {/* Step 4 — Demographics */}
           {step === 4 && card('Tell us about yourself', undefined,
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Gender</Label>
-                <RadioGroup value={data.gender} onValueChange={v => setData({...data, gender: v})}>
-                  <div className="flex gap-4">
-                    {[{value:'male',label:'Male'},{value:'female',label:'Female'},{value:'other',label:'Other'}].map(o => (
-                      <div key={o.value} className="flex items-center space-x-2">
-                        <RadioGroupItem value={o.value} id={o.value} />
-                        <Label htmlFor={o.value}>{o.label}</Label>
-                      </div>
-                    ))}
-                  </div>
-                </RadioGroup>
+                <OptionGroup
+                  value={data.gender as any}
+                  onChange={v => setData({ ...data, gender: v })}
+                  options={[
+                    { value: 'male',   label: 'Male' },
+                    { value: 'female', label: 'Female' },
+                    { value: 'other',  label: 'Other' },
+                  ]}
+                  cols={2}
+                />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -229,20 +224,27 @@ export function Onboarding() {
             </div>
           )}
 
+          {/* Step 5 — Equipment */}
           {step === 5 && card('What equipment do you have?', undefined,
-            optionGrid('equipment', [
-              { value: 'full_gym',    label: 'Full Gym',              sub: 'Barbells, cables, machines, dumbbells' },
-              { value: 'limited',     label: 'Home / Limited',        sub: 'Dumbbells, pull-up bar, bands' },
-              { value: 'bodyweight',  label: 'Bodyweight Only',       sub: 'No equipment needed' },
-            ], 1)
+            <OptionGroup
+              value={data.equipment as any}
+              onChange={v => setData({ ...data, equipment: v })}
+              options={[
+                { value: 'full_gym',   label: 'Full Gym',         sub: 'Barbells, cables, machines, dumbbells' },
+                { value: 'limited',    label: 'Home / Limited',   sub: 'Dumbbells, pull-up bar, bands' },
+                { value: 'bodyweight', label: 'Bodyweight Only',  sub: 'No equipment needed' },
+              ]}
+              cols={1}
+            />
           )}
 
+          {/* Step 6 — Availability */}
           {step === 6 && (
             <div className="space-y-6">
               <CardTitle>Training Availability</CardTitle>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Training days per week: {data.trainingDays}</Label>
+                  <Label>Training days per week: <span className="font-semibold text-foreground">{data.trainingDays}</span></Label>
                   <Slider value={[data.trainingDays]} onValueChange={([v]) => setData({...data, trainingDays: v})} min={1} max={7} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>1 day</span><span>7 days</span></div>
                   {data.trainingDays === 1 && (
@@ -250,7 +252,7 @@ export function Onboarding() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Session length (minutes): {data.sessionLength}</Label>
+                  <Label>Session length: <span className="font-semibold text-foreground">{data.sessionLength} min</span></Label>
                   <Slider value={[data.sessionLength]} onValueChange={([v]) => setData({...data, sessionLength: v})} min={15} max={120} step={15} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>15 min</span><span>120 min</span></div>
                 </div>
@@ -258,84 +260,90 @@ export function Onboarding() {
             </div>
           )}
 
+          {/* Step 7 — Workout Style */}
           {step === 7 && card('Preferred Workout Style', undefined,
             <div className="space-y-3">
-              {optionGrid('workoutStyle', [
-                { value: 'full_body',   label: 'Full Body',          sub: '3×/week — all muscles every session' },
-                { value: 'upper_lower', label: 'Upper / Lower',      sub: '4×/week — alternates upper and lower' },
-                { value: 'ppl',         label: 'Push / Pull / Legs', sub: '6×/week — dedicated push, pull, leg days' },
-                { value: 'bro_split',   label: 'Bro Split',          sub: '5–6×/week — one muscle group per day' },
-              ])}
+              <OptionGroup
+                value={data.workoutStyle as any}
+                onChange={v => setData({ ...data, workoutStyle: v })}
+                options={[
+                  { value: 'full_body',   label: 'Full Body',          sub: '3×/week — all muscles every session' },
+                  { value: 'upper_lower', label: 'Upper / Lower',      sub: '4×/week — alternates upper and lower' },
+                  { value: 'ppl',         label: 'Push / Pull / Legs', sub: '6×/week — dedicated push, pull, leg days' },
+                  { value: 'bro_split',   label: 'Bro Split',          sub: '5–6×/week — one muscle group per day' },
+                ]}
+                cols={1}
+              />
               {data.trainingDays <= 2 && data.workoutStyle !== '' && data.workoutStyle !== 'full_body' && (
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
-                  Full body training is usually most effective with {data.trainingDays} day{data.trainingDays>1?'s':''}/week.
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                  Full body training is usually most effective with {data.trainingDays} day{data.trainingDays > 1 ? 's' : ''}/week.
                 </p>
               )}
             </div>
           )}
 
+          {/* Step 8 — Abs */}
           {step === 8 && card('Ab Training Preference', undefined,
-            <RadioGroup value={data.absPreference} onValueChange={v => setData({...data, absPreference: v})}>
-              {[
+            <OptionGroup
+              value={data.absPreference as any}
+              onChange={v => setData({ ...data, absPreference: v })}
+              options={[
                 { value: 'all_days',      label: 'Add abs to all workout days' },
                 { value: 'specific_days', label: "Add abs to specific days (I'll choose in the builder)" },
                 { value: 'none',          label: 'No dedicated ab work' },
-              ].map(o => (
-                <div key={o.value} className="flex items-center space-x-2">
-                  <RadioGroupItem value={o.value} id={o.value} />
-                  <Label htmlFor={o.value}>{o.label}</Label>
-                </div>
-              ))}
-            </RadioGroup>
+              ]}
+              cols={1}
+            />
           )}
 
+          {/* Step 9 — Recovery & Lifestyle */}
           {step === 9 && (
             <div className="space-y-6">
               <CardTitle>Recovery & Lifestyle</CardTitle>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="space-y-2">
-                  <Label>Average sleep (hours): {data.avgSleep}</Label>
+                  <Label>Average sleep: <span className="font-semibold text-foreground">{data.avgSleep}h</span></Label>
                   <Slider value={[data.avgSleep]} onValueChange={([v]) => setData({...data, avgSleep: v})} min={4} max={10} step={0.5} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>4h</span><span>10h</span></div>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Activity outside the gym</Label>
-                  <RadioGroup value={data.activityLevel} onValueChange={v => setData({...data, activityLevel: v})}>
-                    {[
-                      { value: 'sedentary',         label: 'Sedentary — mostly sitting' },
-                      { value: 'lightly_active',    label: 'Lightly active — light walking' },
-                      { value: 'moderately_active', label: 'Moderately active — regular movement' },
-                      { value: 'very_active',       label: 'Very active — physical job or sport' },
-                    ].map(o => (
-                      <div key={o.value} className="flex items-center space-x-2">
-                        <RadioGroupItem value={o.value} id={o.value} />
-                        <Label htmlFor={o.value}>{o.label}</Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                  <OptionGroup
+                    value={data.activityLevel as any}
+                    onChange={v => setData({ ...data, activityLevel: v })}
+                    options={[
+                      { value: 'sedentary',         label: 'Sedentary',         sub: 'Mostly sitting' },
+                      { value: 'lightly_active',    label: 'Lightly active',    sub: 'Light walking' },
+                      { value: 'moderately_active', label: 'Moderately active', sub: 'Regular movement' },
+                      { value: 'very_active',       label: 'Very active',       sub: 'Physical job or sport' },
+                    ]}
+                    cols={2}
+                  />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Stress level (1 = low, 10 = high): {data.stressLevel}</Label>
+                  <Label>Stress level: <span className="font-semibold text-foreground">{data.stressLevel}/10</span></Label>
                   <Slider value={[data.stressLevel]} onValueChange={([v]) => setData({...data, stressLevel: v})} min={1} max={10} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>Low</span><span>High</span></div>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Job activity</Label>
-                  <RadioGroup value={data.jobActivity} onValueChange={v => setData({...data, jobActivity: v})}>
-                    {[
+                  <OptionGroup
+                    value={data.jobActivity as any}
+                    onChange={v => setData({ ...data, jobActivity: v })}
+                    options={[
                       { value: 'desk',     label: 'Desk job' },
                       { value: 'standing', label: 'Standing / moderate movement' },
                       { value: 'physical', label: 'Physical labour' },
-                    ].map(o => (
-                      <div key={o.value} className="flex items-center space-x-2">
-                        <RadioGroupItem value={o.value} id={`job-${o.value}`} />
-                        <Label htmlFor={`job-${o.value}`}>{o.label}</Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                    ]}
+                    cols={1}
+                  />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Cardio sessions per week: {data.cardioSessions}</Label>
+                  <Label>Cardio sessions per week: <span className="font-semibold text-foreground">{data.cardioSessions}</span></Label>
                   <Slider value={[data.cardioSessions]} onValueChange={([v]) => setData({...data, cardioSessions: v})} min={0} max={7} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>0</span><span>7</span></div>
                 </div>
@@ -343,6 +351,7 @@ export function Onboarding() {
             </div>
           )}
 
+          {/* Step 10 — Injuries */}
           {step === 10 && card('Movement & History', 'Any injuries or limitations we should know about?',
             <div className="space-y-2">
               <Label htmlFor="injuries">Injuries or limitations (optional)</Label>
