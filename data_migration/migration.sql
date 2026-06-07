@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 
   -- Step 5: equipment
   equipment        TEXT NOT NULL DEFAULT 'full_gym'
-                   CHECK (equipment IN ('full_gym','bodyweight','limited')),
+                   CHECK (equipment IN ('full_gym','bodyweight')),
   custom_equipment TEXT[] DEFAULT '{}',   -- e.g. ['Dumbbells','Pull-up bar']
 
   -- Step 6: availability

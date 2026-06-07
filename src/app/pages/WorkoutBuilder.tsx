@@ -177,7 +177,6 @@ export function WorkoutBuilder() {
   const getFilteredExercises = (): { suggested: Exercise[]; rest: Exercise[] } => {
     const all = exerciseDatabase.filter(ex => {
       if (profile?.equipment === 'bodyweight' && ex.equipment !== 'bodyweight') return false;
-      if (profile?.equipment === 'limited'    && ex.equipment === 'full_gym')   return false;
       if (profile?.experienceLevel === 'beginner' && ex.difficulty === 'advanced') return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();

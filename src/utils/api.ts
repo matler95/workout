@@ -20,7 +20,7 @@ export interface UserProfile {
   age: number;
   height: number;       // cm
   weight: number;       // kg
-  equipment: 'full_gym' | 'bodyweight' | 'limited';
+  equipment: 'full_gym' | 'bodyweight';
   customEquipment: string[];
   trainingDays: number;
   sessionLength: number; // minutes

@@ -30,8 +30,6 @@ export function SmartExerciseFilters({
     if (profile) {
       if (profile.equipment === 'bodyweight') {
         candidates = candidates.filter(e => e.equipment === 'bodyweight');
-      } else if (profile.equipment === 'limited') {
-        candidates = candidates.filter(e => e.equipment !== 'full_gym');
       }
       if (profile.experienceLevel === 'beginner') {
         candidates = candidates.filter(e => e.difficulty !== 'advanced');
@@ -143,7 +141,7 @@ export function SmartExerciseFilters({
                 {exercise.difficulty !== 'beginner' && (
                   <span>• {exercise.difficulty}</span>
                 )}
-                <span>• {exercise.equipment}</span>
+                <span>• {(exercise.equipmentType || exercise.equipment).replace('_', ' ')}</span>
               </div>
             </div>
 

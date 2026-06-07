@@ -319,7 +319,7 @@ export function ActiveWorkout() {
             source: tier === 'bodyweight' ? 'bodyweight' : 'history',
             action: historySuggestion.action,
             isFirstSession: false,
-            mode: getWeightMode(ex.name, ex.equipment || 'full_gym', tier),
+            mode: getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', tier),
           };
         } else if (profile) {
           // FIX 1: pass the stable key as exerciseId so startingWeights can
@@ -340,7 +340,7 @@ export function ActiveWorkout() {
             sets: planSets,
             source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
             isFirstSession: true,
-            mode: getWeightMode(ex.name, ex.equipment || 'full_gym', tier),
+            mode: getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', tier),
           };
         }
       }
@@ -407,7 +407,7 @@ export function ActiveWorkout() {
     const ex      = exercises[currentExerciseIndex];
     const key     = exerciseKey(ex);
     const plan    = plans[key];
-    const mode    = plan?.mode ?? getWeightMode(ex.name, ex.equipment || 'full_gym', classifyExercise(ex.name));
+    const mode    = plan?.mode ?? getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', classifyExercise(ex.name));
     const isBodyweightMode = mode === 'bodyweight';
 
     if (!isBodyweightMode && weight <= 0) { toast.error('Enter weight'); return; }
@@ -771,7 +771,7 @@ export function ActiveWorkout() {
     0
   );
   const progressPct     = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
-  const weightMode      = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipment || 'full_gym', tier);
+  const weightMode      = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipmentType || currentExercise.equipment || 'full_gym', tier);
   const modeConfig      = getWeightModeConfig(weightMode);
   const isBodyweight    = weightMode === 'bodyweight';
   const plates          = !isBodyweight ? plateSuggestion(parseFloat(customWeight) || 0, weightMode) : '';

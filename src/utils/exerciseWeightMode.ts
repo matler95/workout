@@ -61,12 +61,18 @@ export function getWeightMode(
 ): WeightMode {
   const n = exerciseName.toLowerCase();
 
-  // 1. Smith machine — explicit override before anything else
+  // 1. Explicit equipment type metadata should override name-based guessing.
+  if (equipment === 'bodyweight') return 'bodyweight';
+  if (equipment === 'smith') return 'smith';
+  if (equipment === 'barbell') return 'barbell';
+  if (equipment === 'dumbbell') return 'dumbbell';
+  if (equipment === 'machine' || equipment === 'cable' || equipment === 'kettlebell' || equipment === 'band') return 'dumbbell';
+
+  // 2. Smith machine — explicit override before anything else
   if (SMITH_KEYWORDS.some(k => n.includes(k))) return 'smith';
 
-  // 2. Bodyweight — equipment flag OR tier OR name keywords
+  // 3. Bodyweight — tier OR name keywords
   if (
-    equipment === 'bodyweight' ||
     tier === 'bodyweight' ||
     BODYWEIGHT_KEYWORDS.some(k => n.includes(k))
   ) return 'bodyweight';

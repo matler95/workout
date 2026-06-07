@@ -231,7 +231,6 @@ export function Onboarding() {
               onChange={v => setData({ ...data, equipment: v })}
               options={[
                 { value: 'full_gym',   label: 'Full Gym',         sub: 'Barbells, cables, machines, dumbbells' },
-                { value: 'limited',    label: 'Home / Limited',   sub: 'Dumbbells, pull-up bar, bands' },
                 { value: 'bodyweight', label: 'Bodyweight Only',  sub: 'No equipment needed' },
               ]}
               cols={1}
