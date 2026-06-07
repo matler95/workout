@@ -17,6 +17,7 @@ import {
   type ProgressionSuggestion,
   type WorkoutLog,
 } from '../../../utils/progressiveOverload';
+import { getWeightMode, formatWeight } from '../../utils/exerciseWeightMode';
 import { workoutApi } from '../../utils/api';
 
 interface NextSessionProps {
@@ -94,26 +95,33 @@ function ExerciseNextCard({
               <ActionChip action={suggestion.action} />
             </div>
             {/* Weight target — the one number that matters */}
-            {suggestion.action === 'increase_weight' && (
-              <p className="text-sm text-green-700 dark:text-green-300 font-semibold mt-0.5">
-                {suggestion.currentWeight} → {suggestion.suggestedWeight} kg
-              </p>
-            )}
-            {suggestion.action === 'deload' && (
-              <p className="text-sm text-amber-700 dark:text-amber-300 font-semibold mt-0.5">
-                {suggestion.currentWeight} → {suggestion.suggestedWeight} kg
-              </p>
-            )}
-            {suggestion.action === 'maintain' && suggestion.currentWeight > 0 && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Stay at {suggestion.currentWeight} kg
-              </p>
-            )}
-            {suggestion.action === 'increase_reps' && (
-              <p className="text-sm text-green-700 dark:text-green-300 font-semibold mt-0.5">
-                Target {suggestion.suggestedReps?.[0]}–{suggestion.suggestedReps?.[1]} reps
-              </p>
-            )}
+            {(() => {
+              const tier = classifyExercise(exerciseKey);
+              const mode = getWeightMode(exerciseKey, 'full_gym', tier);
+              const fmtCurrent   = formatWeight(suggestion.currentWeight, mode);
+              const fmtSuggested = formatWeight(suggestion.suggestedWeight ?? suggestion.currentWeight, mode);
+              if (suggestion.action === 'increase_weight') return (
+                <p className="text-sm text-green-700 dark:text-green-300 font-semibold mt-0.5">
+                  {fmtCurrent} → {fmtSuggested}
+                </p>
+              );
+              if (suggestion.action === 'deload') return (
+                <p className="text-sm text-amber-700 dark:text-amber-300 font-semibold mt-0.5">
+                  {fmtCurrent} → {fmtSuggested}
+                </p>
+              );
+              if (suggestion.action === 'maintain' && suggestion.currentWeight > 0) return (
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Stay at {fmtCurrent}
+                </p>
+              );
+              if (suggestion.action === 'increase_reps') return (
+                <p className="text-sm text-green-700 dark:text-green-300 font-semibold mt-0.5">
+                  Target {suggestion.suggestedReps?.[0]}–{suggestion.suggestedReps?.[1]} reps
+                </p>
+              );
+              return null;
+            })()}
           </div>
 
           {/* e1RM + trend + expand toggle */}

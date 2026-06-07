@@ -17,6 +17,7 @@
 
 import { classifyExercise, getRepTarget, type ExerciseTier } from '../../utils/progressiveOverload';
 import { exerciseDatabase } from '../data/exercises';
+import { getWeightMode, type WeightMode } from './exerciseWeightMode';
 
 // ─── Profile shape ────────────────────────────────────────────────────────────
 
@@ -217,6 +218,7 @@ export interface StartingWeightResult {
   sets: number;
   isBodyweight: boolean;
   confidence: 'id_match' | 'name_match' | 'tier_fallback';
+  mode: WeightMode;
 }
 
 // ─── Main function ────────────────────────────────────────────────────────────
@@ -241,6 +243,7 @@ export function estimateStartingWeight(
       sets:   profile.experienceLevel === 'beginner' ? 2 : 3,
       isBodyweight: true,
       confidence: 'id_match',
+      mode: 'bodyweight' as WeightMode,
     };
   }
 
@@ -252,12 +255,14 @@ export function estimateStartingWeight(
   const genAdj = expAdj * genderFactor(profile.gender, tier);
   const final  = roundToIncrement(genAdj * goalModifier(profile.primaryGoal), tier);
 
+  const mode = getWeightMode(exerciseName, 'full_gym', tier);
   return {
     weight: final,
     reps:   [repLo, repHi],
     sets:   profile.experienceLevel === 'beginner' ? 2 : 3,
     isBodyweight: false,
     confidence,
+    mode,
   };
 }
 

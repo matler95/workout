@@ -36,6 +36,10 @@ import {
 } from '../../utils/startingWeights';
 import { calculateMuscleVolume } from '../../utils/volumeTracking';
 import {
+  getWeightMode, getWeightModeConfig, formatWeight, plateSuggestion,
+  type WeightMode,
+} from '../../utils/exerciseWeightMode';
+import {
   generateSessionId, queueStart, queueUpdate,
   queueMarkPending, queueClear,
 } from '../../utils/offlineQueue';
@@ -59,6 +63,7 @@ interface ExercisePlan {
   source: 'history' | 'estimated' | 'bodyweight';
   action?: ProgressionSuggestion['action'];
   isFirstSession: boolean;
+  mode: WeightMode;
 }
 
 // ─── Timer persistence ─────────────────────────────────────────────────────────
@@ -92,10 +97,12 @@ function SuggestionPill({ plan }: { plan: ExercisePlan }) {
   const { action, suggestedWeight } = plan;
   if (!action || action === 'insufficient_data') return null;
 
+  const mode = plan.mode ?? 'dumbbell';
+  const weightStr = formatWeight(suggestedWeight, mode);
   const config = {
     increase_weight: {
       icon: <TrendingUp className="w-3 h-3" />,
-      label: `↑ ${suggestedWeight} kg`,
+      label: `↑ ${weightStr}`,
       cls: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
     },
     increase_reps: {
@@ -105,12 +112,12 @@ function SuggestionPill({ plan }: { plan: ExercisePlan }) {
     },
     maintain: {
       icon: null,
-      label: `→ ${suggestedWeight} kg`,
+      label: `→ ${weightStr}`,
       cls: 'bg-muted text-muted-foreground',
     },
     deload: {
       icon: <TrendingDown className="w-3 h-3" />,
-      label: `↓ ${suggestedWeight} kg`,
+      label: `↓ ${weightStr}`,
       cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     },
   }[action] ?? null;
@@ -196,6 +203,7 @@ export function ActiveWorkout() {
   const [loading, setLoading]               = useState(true);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showConfetti, setShowConfetti]     = useState(false);
+  const [showExtraWeight, setShowExtraWeight] = useState(false);
   const [showRPEInfo, setShowRPEInfo]         = useState(false);
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -303,6 +311,7 @@ export function ActiveWorkout() {
             source: tier === 'bodyweight' ? 'bodyweight' : 'history',
             action: historySuggestion.action,
             isFirstSession: false,
+            mode: getWeightMode(ex.name, ex.equipment || 'full_gym', tier),
           };
         } else if (profile) {
           const estimate = estimateStartingWeight(ex.name, profile, ex.id);
@@ -312,6 +321,7 @@ export function ActiveWorkout() {
             sets: planSets,
             source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
             isFirstSession: true,
+            mode: estimate.mode,
           };
         } else {
           builtPlans[key] = {
@@ -320,6 +330,7 @@ export function ActiveWorkout() {
             sets: planSets,
             source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
             isFirstSession: true,
+            mode: getWeightMode(ex.name, ex.equipment || 'full_gym', tier),
           };
         }
       }
@@ -337,10 +348,13 @@ export function ActiveWorkout() {
   const applyPlanToInputs = (ex: any, allPlans: Record<string, ExercisePlan>) => {
     const plan = allPlans[ex.id || ex.name];
     if (!plan) { setCustomWeight(''); setCustomReps(''); return; }
-    if (plan.source === 'bodyweight') {
+    if (plan.mode === 'bodyweight') {
+      // Bodyweight: start with 0 added weight, reps from plan
       setCustomWeight('0');
       setCustomReps(String(plan.suggestedReps[0]));
+      setShowExtraWeight(false);
     } else {
+      // All weighted modes: pre-fill with suggested weight
       setCustomWeight(plan.suggestedWeight > 0 ? String(plan.suggestedWeight) : '');
       setCustomReps(String(plan.suggestedReps[0]));
     }
@@ -382,17 +396,24 @@ export function ActiveWorkout() {
     const reps   = parseInt(customReps) || 0;
     if (reps <= 0) { toast.error('Enter reps'); return; }
 
-    const ex   = exercises[currentExerciseIndex];
-    const plan = plans[ex.id || ex.name];
-    const isBodyweight = plan?.source === 'bodyweight';
+    const ex      = exercises[currentExerciseIndex];
+    const plan    = plans[ex.id || ex.name];
+    const mode    = plan?.mode ?? getWeightMode(ex.name, ex.equipment || 'full_gym', classifyExercise(ex.name));
+    const isBodyweightMode = mode === 'bodyweight';
 
-    if (!isBodyweight && weight <= 0) { toast.error('Enter weight'); return; }
+    // For weighted exercises, require a weight > 0
+    if (!isBodyweightMode && weight <= 0) { toast.error('Enter weight'); return; }
+
+    // For bodyweight: log added weight (0 if no extra weight added)
+    const loggedWeight = isBodyweightMode
+      ? (showExtraWeight ? weight : 0)
+      : weight;
 
     const newSet: SetLog = {
       exerciseId:   ex.id,
       exerciseName: ex.name,
       set:          currentSet,
-      weight:       isBodyweight ? 0 : weight,
+      weight:       loggedWeight,
       reps,
       timestamp:    new Date().toISOString(),
     };
@@ -403,7 +424,11 @@ export function ActiveWorkout() {
     queueUpdate(offlineSessionId.current, newCompleted);
 
     const setsForThisExercise = plan?.sets ?? 3;
-    toast.success(`Set ${currentSet} ✓`);
+    const modeForToast = plan?.mode ?? 'dumbbell';
+    const weightDisplay = isBodyweightMode
+      ? (showExtraWeight && weight > 0 ? `+${weight} kg, ` : '')
+      : `${weight} ${modeForToast === 'dumbbell' ? 'kg/side' : modeForToast === 'smith' ? 'kg plates' : 'kg'}, `;
+    toast.success(`Set ${currentSet} ✓ — ${weightDisplay}${reps} reps`);
 
     if (currentSet < setsForThisExercise) {
       setCurrentSet(currentSet + 1);
@@ -419,6 +444,7 @@ export function ActiveWorkout() {
       setCurrentExerciseIndex(nextIdx);
       setCurrentSet(1);
       setRestTimer(0);
+      setShowExtraWeight(false);
       clearRestStart();
       applyPlanToInputs(exercises[nextIdx], plans);
     } else {
@@ -588,13 +614,28 @@ export function ActiveWorkout() {
                     {i + 1}
                   </span>
                   <span className="flex-1">{ex.name}</span>
-                  {/* Only show progression action, no weight numbers */}
-                  {plans[ex.id || ex.name]?.action === 'increase_weight' && (
-                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">↑</span>
-                  )}
-                  {plans[ex.id || ex.name]?.action === 'deload' && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400">↓</span>
-                  )}
+                  {/* Mode-aware weight display */}
+                  {(() => {
+                    const p = plans[ex.id || ex.name];
+                    if (!p) return null;
+                    const wStr = formatWeight(p.suggestedWeight, p.mode ?? 'dumbbell');
+                    if (p.action === 'increase_weight') return (
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">↑ {wStr}</span>
+                    );
+                    if (p.action === 'deload') return (
+                      <span className="text-xs text-amber-600 dark:text-amber-400">↓ {wStr}</span>
+                    );
+                    if (p.source === 'estimated' && p.suggestedWeight > 0) return (
+                      <span className="text-xs text-muted-foreground">{wStr}</span>
+                    );
+                    if (p.source === 'history' && p.action === 'maintain' && p.suggestedWeight > 0) return (
+                      <span className="text-xs text-muted-foreground">{wStr}</span>
+                    );
+                    if (p.mode === 'bodyweight') return (
+                      <span className="text-xs text-muted-foreground">{p.suggestedReps[0]}–{p.suggestedReps[1]} reps</span>
+                    );
+                    return null;
+                  })()}
                 </div>
               ))}
             </div>
@@ -730,8 +771,10 @@ export function ActiveWorkout() {
     0
   );
   const progressPct     = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
-  const weightStep      = tier === 'isolation' ? 1 : 2.5;
-  const isBodyweight    = plan?.source === 'bodyweight';
+  const weightMode      = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipment || 'full_gym', tier);
+  const modeConfig      = getWeightModeConfig(weightMode);
+  const isBodyweight    = weightMode === 'bodyweight';
+  const plates          = !isBodyweight ? plateSuggestion(parseFloat(customWeight) || 0, weightMode) : '';
 
   // Inline rep range feedback — subtle, no card
   const repFeedback = (() => {
@@ -835,72 +878,108 @@ export function ActiveWorkout() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {/* Weight + Reps inputs */}
-            <div className={`grid gap-3 ${isBodyweight ? 'grid-cols-1' : 'grid-cols-2'}`}>
-              {!isBodyweight && (
+            {/* Weight + Reps inputs — mode-aware */}
+
+            {/* Bodyweight: reps first, optional extra weight below */}
+            {isBodyweight ? (
+              <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Weight (kg)</label>
+                  <label className="text-sm font-medium mb-1.5 block">Reps</label>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 flex-shrink-0"
-                      onClick={() => setCustomWeight(w =>
-                        String(Math.max(0, Math.round((parseFloat(w || '0') - weightStep) * 10) / 10))
-                      )}
-                    >
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r || '1') - 1)))}>
                       <Minus className="w-3 h-3" />
                     </Button>
-                    <Input
-                      type="number"
-                      placeholder="kg"
-                      value={customWeight}
-                      onChange={e => setCustomWeight(e.target.value)}
-                      className="text-center font-medium"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 flex-shrink-0"
-                      onClick={() => setCustomWeight(w =>
-                        String(Math.round((parseFloat(w || '0') + weightStep) * 10) / 10)
-                      )}
-                    >
+                    <Input type="number" placeholder="reps" value={customReps}
+                      onChange={e => setCustomReps(e.target.value)} className="text-center font-medium" />
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setCustomReps(r => String(parseInt(r || '0') + 1))}>
                       <Plus className="w-3 h-3" />
                     </Button>
                   </div>
                 </div>
-              )}
 
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Reps</label>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 flex-shrink-0"
-                    onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r || '1') - 1)))}
+                {/* Optional added weight toggle */}
+                {!showExtraWeight ? (
+                  <button
+                    onClick={() => setShowExtraWeight(true)}
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
                   >
-                    <Minus className="w-3 h-3" />
-                  </Button>
-                  <Input
-                    type="number"
-                    placeholder="reps"
-                    value={customReps}
-                    onChange={e => setCustomReps(e.target.value)}
-                    className="text-center font-medium"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-10 w-10 flex-shrink-0"
-                    onClick={() => setCustomReps(r => String(parseInt(r || '0') + 1))}
-                  >
-                    <Plus className="w-3 h-3" />
-                  </Button>
+                    <Plus className="w-3 h-3" /> Add weight (vest / belt / plate)
+                  </button>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-sm font-medium">Added weight (kg)</label>
+                      <button onClick={() => { setShowExtraWeight(false); setCustomWeight('0'); }}
+                        className="text-xs text-muted-foreground hover:text-foreground">Remove</button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                        onClick={() => setCustomWeight(w => String(Math.max(0, Math.round((parseFloat(w||'0') - modeConfig.step) * 10) / 10)))}>
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <Input type="number" placeholder="0" value={customWeight === '0' ? '' : customWeight}
+                        onChange={e => setCustomWeight(e.target.value)} className="text-center font-medium" />
+                      <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                        onClick={() => setCustomWeight(w => String(Math.round((parseFloat(w||'0') + modeConfig.step) * 10) / 10))}>
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Vest, dip belt, or plate held between feet</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Weighted: barbell / smith / dumbbell */
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium">{modeConfig.inputLabel}</label>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setCustomWeight(w =>
+                        String(Math.max(0, Math.round((parseFloat(w||'0') - modeConfig.step) * 10) / 10))
+                      )}>
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <Input type="number" placeholder="0" value={customWeight}
+                      onChange={e => setCustomWeight(e.target.value)} className="text-center font-medium" />
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setCustomWeight(w =>
+                        String(Math.round((parseFloat(w||'0') + modeConfig.step) * 10) / 10)
+                      )}>
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  {/* Mode hint — barbell/smith/dumbbell note */}
+                  {modeConfig.hint && (
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{modeConfig.hint}</p>
+                  )}
+                  {/* Plate suggestion for barbell */}
+                  {plates && (
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">{plates}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Reps</label>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setCustomReps(r => String(Math.max(1, parseInt(r||'1') - 1)))}>
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <Input type="number" placeholder="reps" value={customReps}
+                      onChange={e => setCustomReps(e.target.value)} className="text-center font-medium" />
+                    <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setCustomReps(r => String(parseInt(r||'0') + 1))}>
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Inline rep feedback — single line, no card */}
             {repFeedback && (
@@ -930,9 +1009,18 @@ export function ActiveWorkout() {
                       >
                         <span className="text-muted-foreground">Set {s.set}</span>
                         <span className="font-medium">
-                          {s.weight > 0 ? `${s.weight} kg × ${s.reps}` : `${s.reps} reps`}
+                          {(() => {
+                            if (weightMode === 'bodyweight') {
+                              return s.weight > 0
+                                ? `${s.reps} reps +${s.weight} kg`
+                                : `${s.reps} reps`;
+                            }
+                            if (weightMode === 'dumbbell') return `${s.weight} kg/side × ${s.reps}`;
+                            if (weightMode === 'smith')    return `${s.weight} kg plates × ${s.reps}`;
+                            return `${s.weight} kg × ${s.reps}`;
+                          })()}
                         </span>
-                        {e1rm && (
+                        {e1rm && weightMode !== 'bodyweight' && (
                           <span className="text-xs text-muted-foreground">~{e1rm} kg 1RM</span>
                         )}
                       </div>
