@@ -87,9 +87,16 @@ function loadWorkoutStart(): number {
   try { const v = sessionStorage.getItem(WORKOUT_START_KEY); return v ? Number(v) : Date.now(); } catch { return Date.now(); }
 }
 
-// ─── Suggestion pill — replaces the old SuggestionBanner wall of text ─────────
-// Shows a single compact pill: arrow + target weight, colored by action.
-// No reasoning text during workout — that lives in Progress tab.
+// ─── FIX 1: Stable exercise key helper ────────────────────────────────────────
+// Plan exercises stored in JSONB may have id: undefined if they were added
+// before the exercise ID audit. Fall back to the name so the progression
+// engine can still match history entries (which also key by name in that case).
+
+function exerciseKey(ex: { id?: string; name: string }): string {
+  return (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
+}
+
+// ─── Suggestion pill ──────────────────────────────────────────────────────────
 
 function SuggestionPill({ plan }: { plan: ExercisePlan }) {
   if (plan.source === 'bodyweight') return null;
@@ -287,10 +294,11 @@ export function ActiveWorkout() {
       const builtPlans: Record<string, ExercisePlan> = {};
 
       for (const ex of exs) {
-        const key  = ex.id || ex.name;
+        // FIX 1: use stable key — never rely on id alone since JSONB exercises
+        // may have been saved without an id field.
+        const key  = exerciseKey(ex);
         const tier = classifyExercise(ex.name);
         const [repLo, repHi] = getRepTarget(tier);
-        // Use per-exercise sets from plan, fallback to history-based default
         const planSets = (ex.sets && ex.sets >= 1 && ex.sets <= 6) ? ex.sets : 3;
         const historySuggestion = historySuggestions[key];
 
@@ -314,7 +322,9 @@ export function ActiveWorkout() {
             mode: getWeightMode(ex.name, ex.equipment || 'full_gym', tier),
           };
         } else if (profile) {
-          const estimate = estimateStartingWeight(ex.name, profile, ex.id);
+          // FIX 1: pass the stable key as exerciseId so startingWeights can
+          // look up the WEIGHT_BY_ID map correctly even when ex.id is undefined.
+          const estimate = estimateStartingWeight(ex.name, profile, ex.id || undefined);
           builtPlans[key] = {
             suggestedWeight: estimate.weight,
             suggestedReps: estimate.reps,
@@ -346,15 +356,13 @@ export function ActiveWorkout() {
   };
 
   const applyPlanToInputs = (ex: any, allPlans: Record<string, ExercisePlan>) => {
-    const plan = allPlans[ex.id || ex.name];
+    const plan = allPlans[exerciseKey(ex)];
     if (!plan) { setCustomWeight(''); setCustomReps(''); return; }
     if (plan.mode === 'bodyweight') {
-      // Bodyweight: start with 0 added weight, reps from plan
       setCustomWeight('0');
       setCustomReps(String(plan.suggestedReps[0]));
       setShowExtraWeight(false);
     } else {
-      // All weighted modes: pre-fill with suggested weight
       setCustomWeight(plan.suggestedWeight > 0 ? String(plan.suggestedWeight) : '');
       setCustomReps(String(plan.suggestedReps[0]));
     }
@@ -397,20 +405,23 @@ export function ActiveWorkout() {
     if (reps <= 0) { toast.error('Enter reps'); return; }
 
     const ex      = exercises[currentExerciseIndex];
-    const plan    = plans[ex.id || ex.name];
+    const key     = exerciseKey(ex);
+    const plan    = plans[key];
     const mode    = plan?.mode ?? getWeightMode(ex.name, ex.equipment || 'full_gym', classifyExercise(ex.name));
     const isBodyweightMode = mode === 'bodyweight';
 
-    // For weighted exercises, require a weight > 0
     if (!isBodyweightMode && weight <= 0) { toast.error('Enter weight'); return; }
 
-    // For bodyweight: log added weight (0 if no extra weight added)
     const loggedWeight = isBodyweightMode
       ? (showExtraWeight ? weight : 0)
       : weight;
 
+    // FIX 1: exerciseId is always a non-empty string — falls back to name.
+    // This is what gets written to workout_sets.exercise_id in the DB.
+    // The progression engine keys history by (exerciseId || exerciseName),
+    // so using the same stable key here ensures future sessions match correctly.
     const newSet: SetLog = {
-      exerciseId:   ex.id,
+      exerciseId:   key,            // stable: ex.id || ex.name
       exerciseName: ex.name,
       set:          currentSet,
       weight:       loggedWeight,
@@ -420,7 +431,6 @@ export function ActiveWorkout() {
 
     const newCompleted = [...completedSets, newSet];
     setCompletedSets(newCompleted);
-    // Persist to localStorage so a crash doesn't lose progress
     queueUpdate(offlineSessionId.current, newCompleted);
 
     const setsForThisExercise = plan?.sets ?? 3;
@@ -456,7 +466,7 @@ export function ActiveWorkout() {
     try {
       const rpeCorrections: Record<string, number> = {};
       for (const ex of exercises) {
-        const key  = ex.id || ex.name;
+        const key  = exerciseKey(ex);
         const plan = plans[key];
         if (plan?.isFirstSession && plan.source === 'estimated') {
           const { newWeight } = applyFirstSessionRPECorrection(
@@ -473,7 +483,6 @@ export function ActiveWorkout() {
       const now      = new Date().toISOString();
       const duration = Math.round((Date.now() - startTimeRef.current) / 60000);
 
-      // Mark as pending before the network call — survives a crash mid-upload
       queueMarkPending(offlineSessionId.current, {
         dayName: dayName!, completedAt: now,
         sets: completedSets, feedback, perceivedEffort,
@@ -486,7 +495,6 @@ export function ActiveWorkout() {
         rpeCorrections, duration, muscleVolume,
       });
 
-      // Sync succeeded — clear from offline queue
       queueClear(offlineSessionId.current);
 
       clearRestStart();
@@ -569,17 +577,15 @@ export function ActiveWorkout() {
               </p>
             </div>
 
-            {/* Warmup guidance */}
             <div className="bg-card rounded-xl p-3 text-sm space-y-1 border border-border/50">
               <p className="font-medium">Warm up first (5–10 min)</p>
               <p className="text-muted-foreground">• Light cardio + dynamic stretches</p>
               <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
             </div>
 
-            {/* Step G: RPE correction info box — only shown when relevant */}
             {(() => {
               const adjusted = exercises.filter(ex => {
-                const plan = plans[ex.id || ex.name];
+                const plan = plans[exerciseKey(ex)];
                 return plan && !plan.isFirstSession && plan.action !== 'insufficient_data';
               });
               if (adjusted.length === 0) return null;
@@ -603,7 +609,6 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* Exercise list — clean, no weight preview clutter */}
             <div className="space-y-1">
               {exercises.map((ex, i) => (
                 <div
@@ -614,9 +619,8 @@ export function ActiveWorkout() {
                     {i + 1}
                   </span>
                   <span className="flex-1">{ex.name}</span>
-                  {/* Mode-aware weight display */}
                   {(() => {
-                    const p = plans[ex.id || ex.name];
+                    const p = plans[exerciseKey(ex)];
                     if (!p) return null;
                     const wStr = formatWeight(p.suggestedWeight, p.mode ?? 'dumbbell');
                     if (p.action === 'increase_weight') return (
@@ -664,9 +668,6 @@ export function ActiveWorkout() {
   if (currentPhase === 'feedback') {
     const totalVolume    = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
     const durationMin    = Math.round((Date.now() - startTimeRef.current) / 60000);
-    const firstSessionExercises = exercises.filter(
-      ex => plans[ex.id || ex.name]?.isFirstSession
-    );
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
@@ -703,7 +704,6 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* RPE rating */}
             <div>
               <label className="text-sm font-medium mb-2 block">
                 How hard was it? (RPE 1–10)
@@ -760,14 +760,14 @@ export function ActiveWorkout() {
   // ── Exercise screen ─────────────────────────────────────────────────────────
 
   const currentExercise     = exercises[currentExerciseIndex];
-  const exerciseKey         = currentExercise.id || currentExercise.name;
-  const plan                = plans[exerciseKey];
+  const currentKey          = exerciseKey(currentExercise);
+  const plan                = plans[currentKey];
   const tier                = classifyExercise(currentExercise.name);
   const [repLo, repHi]      = plan?.suggestedReps ?? getRepTarget(tier);
-  const exerciseSets        = completedSets.filter(s => s.exerciseId === currentExercise.id);
+  const exerciseSets        = completedSets.filter(s => s.exerciseId === currentKey);
   const setsForThisExercise = plan?.sets ?? 3;
   const totalSetsAll        = exercises.reduce(
-    (sum, ex) => sum + (plans[ex.id || ex.name]?.sets ?? 3),
+    (sum, ex) => sum + (plans[exerciseKey(ex)]?.sets ?? 3),
     0
   );
   const progressPct     = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
@@ -776,7 +776,6 @@ export function ActiveWorkout() {
   const isBodyweight    = weightMode === 'bodyweight';
   const plates          = !isBodyweight ? plateSuggestion(parseFloat(customWeight) || 0, weightMode) : '';
 
-  // Inline rep range feedback — subtle, no card
   const repFeedback = (() => {
     const r = parseInt(customReps);
     if (!r || isNaN(r)) return null;
@@ -819,7 +818,7 @@ export function ActiveWorkout() {
         onChoice={handleExitChoice}
       />
 
-      {/* Rest timer — sticky bar */}
+      {/* Rest timer */}
       {restTimer > 0 && (
         <div className="sticky top-[57px] z-10 bg-blue-600 dark:bg-blue-700">
           <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
@@ -854,7 +853,6 @@ export function ActiveWorkout() {
               <div className="flex-1 pr-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-xl leading-tight">{currentExercise.name}</CardTitle>
-                  {/* Suggestion pill — compact, no text wall */}
                   {plan && <SuggestionPill plan={plan} />}
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1.5">
@@ -878,9 +876,6 @@ export function ActiveWorkout() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {/* Weight + Reps inputs — mode-aware */}
-
-            {/* Bodyweight: reps first, optional extra weight below */}
             {isBodyweight ? (
               <div className="space-y-3">
                 <div>
@@ -899,7 +894,6 @@ export function ActiveWorkout() {
                   </div>
                 </div>
 
-                {/* Optional added weight toggle */}
                 {!showExtraWeight ? (
                   <button
                     onClick={() => setShowExtraWeight(true)}
@@ -931,7 +925,6 @@ export function ActiveWorkout() {
                 )}
               </div>
             ) : (
-              /* Weighted: barbell / smith / dumbbell */
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -953,11 +946,9 @@ export function ActiveWorkout() {
                       <Plus className="w-3 h-3" />
                     </Button>
                   </div>
-                  {/* Mode hint — barbell/smith/dumbbell note */}
                   {modeConfig.hint && (
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{modeConfig.hint}</p>
                   )}
-                  {/* Plate suggestion for barbell */}
                   {plates && (
                     <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">{plates}</p>
                   )}
@@ -981,7 +972,6 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            {/* Inline rep feedback — single line, no card */}
             {repFeedback && (
               <p className={`text-xs ${repFeedback.color}`}>{repFeedback.msg}</p>
             )}
@@ -995,7 +985,6 @@ export function ActiveWorkout() {
               Complete Set {currentSet}
             </Button>
 
-            {/* Sets logged this exercise */}
             {exerciseSets.length > 0 && (
               <div className="border-t pt-3">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">This exercise</p>
@@ -1032,7 +1021,6 @@ export function ActiveWorkout() {
           </CardContent>
         </Card>
 
-        {/* Exercise instructions */}
         {currentExercise.instructions && (
           <Card>
             <CardContent className="pt-4 pb-4">
@@ -1044,7 +1032,6 @@ export function ActiveWorkout() {
           </Card>
         )}
 
-        {/* Up next */}
         {currentExerciseIndex < exercises.length - 1 && (
           <Card>
             <CardContent className="pt-3 pb-3">

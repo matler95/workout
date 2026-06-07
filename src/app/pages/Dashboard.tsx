@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getNextWorkout } from '../../utils/getNextWorkout';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -18,6 +18,7 @@ import { suggestDeload, calculateRecoveryScore, checkFatigueWarnings } from '../
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [profile, setProfile]               = useState<any>(null);
   const [workoutPlan, setWorkoutPlan]       = useState<any>(null);
@@ -33,7 +34,20 @@ export function Dashboard() {
   const [fatigueWarnings, setFatigueWarnings]   = useState<any[]>([]);
   const [showSynced, setShowSynced]             = useState(false);
 
-  useEffect(() => { loadData(); }, []);
+  // FIX 2: Re-fetch whenever the route key changes (i.e. every navigation to /dashboard).
+  // Previously useEffect(loadData, []) only ran on first mount — navigating back from
+  // ActiveWorkout reused the component without triggering a re-fetch.
+  useEffect(() => { loadData(); }, [location.key]);
+
+  // FIX 3: Also re-fetch when the tab becomes visible again (e.g. returning from
+  // ActiveWorkout on mobile where the browser may background the PWA).
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadData();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const loadData = async () => {
     try {
@@ -92,13 +106,33 @@ export function Dashboard() {
     return { completed: done, planned, pct: Math.min(100, Math.round((done / planned) * 100)) };
   };
 
-  const getReadinessScore = () => {
-    if (!profile) return null;
-    const sleepScore  = Math.min(40, (profile.avgSleep / 8) * 40);
-    const stressScore = ((10 - profile.stressLevel) / 10) * 30;
-    const recent      = workoutHistory.filter(l => new Date(l.completedAt) >= subDays(new Date(), 2)).length;
-    const recScore    = recent === 0 ? 30 : recent === 1 ? 20 : 10;
-    return Math.round(sleepScore + stressScore + recScore);
+  const getLastWorkout = () => {
+    if (!workoutHistory || workoutHistory.length === 0) return null;
+    const last = workoutHistory[0];
+    const sets = (last.sets || []).length;
+    const volume = Math.round((last.sets || []).reduce((s: number, x: any) => s + x.weight * x.reps, 0) / 1000 * 10) / 10;
+    return {
+      dayName: last.dayName,
+      completedAt: last.completedAt,
+      sets,
+      volume,
+    };
+  };
+
+  const getTimeAgo = (isoDate: string) => {
+    const then = new Date(isoDate).getTime();
+    const now = new Date().getTime();
+    const ms = now - then;
+    const mins = Math.floor(ms / 60000);
+    const hours = Math.floor(ms / 3600000);
+    const days = Math.floor(ms / 86400000);
+
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days}d ago`;
+    const weeks = Math.floor(days / 7);
+    return `${weeks}w ago`;
   };
 
   const getCalorieTarget = () => {
@@ -134,7 +168,6 @@ export function Dashboard() {
   };
 
   const weekProg    = getWeeklyProgress();
-  const readiness   = getReadinessScore();
   const nextWorkout = getNextWorkout(workoutPlan, workoutHistory);
   const cals        = getCalorieTarget();
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
@@ -146,7 +179,6 @@ export function Dashboard() {
     ? Math.round((sortedBw[sortedBw.length-1].weight - sortedBw[0].weight) * 10) / 10
     : null;
   const weightChart  = sortedBw.map(e => ({ date: format(new Date(e.date+'T12:00:00'),'MMM d'), weight: e.weight }));
-  const readinessColor = !readiness ? 'gray' : readiness >= 75 ? 'green' : readiness >= 50 ? 'yellow' : 'red';
 
   if (loading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -246,18 +278,42 @@ export function Dashboard() {
               <p className="text-xs text-muted-foreground mt-1">workouts</p>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-md">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">Readiness</p>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-3xl font-bold tracking-tight">{readiness ?? '–'}</span>
-                <Flame className={`w-5 h-5 ${readinessColor==='green'?'text-emerald-500':readinessColor==='yellow'?'text-amber-500':'text-rose-500'}`} />
-              </div>
-              <p className={`text-xs font-medium ${readinessColor==='green'?'text-emerald-600':readinessColor==='yellow'?'text-amber-600':'text-rose-600'}`}>
-                {readiness && readiness >= 75 ? 'Ready to train' : readiness && readiness >= 50 ? 'Train with care' : 'Consider rest'}
-              </p>
-            </CardContent>
-          </Card>
+          {(() => {
+            const lastWorkout = getLastWorkout();
+            return lastWorkout ? (
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4 pb-4">
+                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">Last Workout</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold">{lastWorkout.dayName}</span>
+                      <span className="text-xs text-muted-foreground">{getTimeAgo(lastWorkout.completedAt)}</span>
+                    </div>
+                    <div className="flex gap-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Sets</p>
+                        <p className="font-semibold">{lastWorkout.sets}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Volume</p>
+                        <p className="font-semibold">{lastWorkout.volume}t</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4 pb-4">
+                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide font-medium">Last Workout</p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">No workouts yet</p>
+                    <p className="text-xs text-muted-foreground">Complete your first session to see day, time, sets & volume.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
 
         {streak > 0 && (
