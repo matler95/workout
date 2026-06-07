@@ -4,11 +4,18 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
-import { profileApi, planApi } from '../../utils/api';
+import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { Search, Plus, Trash2, CheckCircle, Info, Minus, BedDouble } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
+import {
+  buildSuggestionMap,
+  smartSetCount,
+  setCountReason,
+  type SuggestionMap,
+} from '../../utils/smartSetCount';
+import type { WorkoutLog } from '../../../utils/progressiveOverload';
 
 // Exercise as stored in the plan — extends base Exercise with user-configured sets
 export interface ExerciseWithSets extends Exercise {
@@ -16,47 +23,21 @@ export interface ExerciseWithSets extends Exercise {
 }
 
 // ─── Muscle group normalization ───────────────────────────────────────────────
-// Maps exercise primaryMuscles strings → canonical group names used in targets.
-// This fixes the mismatch where MUSCLE_TARGETS used loose names that didn't
-// match actual exercise muscle strings (e.g. "back" vs "lats"/"upper_back").
 
 const MUSCLE_ALIASES: Record<string, string> = {
-  // Chest
-  chest:        'chest',
-  upper_chest:  'chest',
-  lower_chest:  'chest',
-  // Back
-  lats:         'back',
-  upper_back:   'back',
-  lower_back:   'back',
-  traps:        'back',
-  rhomboids:    'back',
-  // Shoulders
-  front_delts:  'shoulders',
-  side_delts:   'shoulders',
-  rear_delts:   'shoulders',
-  delts:        'shoulders',
-  // Arms
-  biceps:       'biceps',
-  triceps:      'triceps',
-  // Legs
-  quads:        'quads',
-  quadriceps:   'quads',
-  hamstrings:   'hamstrings',
-  glutes:       'glutes',
-  calves:       'calves',
-  hip_flexors:  'hamstrings',
-  // Core
-  abs:          'core',
-  core:         'core',
-  obliques:     'core',
+  chest: 'chest', upper_chest: 'chest', lower_chest: 'chest',
+  lats: 'back', upper_back: 'back', lower_back: 'back', traps: 'back', rhomboids: 'back',
+  front_delts: 'shoulders', side_delts: 'shoulders', rear_delts: 'shoulders', delts: 'shoulders',
+  biceps: 'biceps', triceps: 'triceps',
+  quads: 'quads', quadriceps: 'quads',
+  hamstrings: 'hamstrings', glutes: 'glutes', calves: 'calves', hip_flexors: 'hamstrings',
+  abs: 'core', core: 'core', obliques: 'core',
 };
 
 function normalizeMuscle(muscle: string): string {
   return MUSCLE_ALIASES[muscle.toLowerCase()] ?? muscle.toLowerCase();
 }
 
-// Day type → required muscle groups (using normalized names)
 const MUSCLE_TARGETS: Record<string, string[]> = {
   push:  ['chest', 'shoulders', 'triceps'],
   pull:  ['back', 'biceps'],
@@ -68,10 +49,10 @@ const MUSCLE_TARGETS: Record<string, string[]> = {
 
 function getDayType(dayName: string): string {
   const n = dayName.toLowerCase();
-  if (n.includes('push'))                        return 'push';
-  if (n.includes('pull'))                        return 'pull';
-  if (n.includes('leg') || n.includes('lower'))  return 'legs';
-  if (n.includes('upper'))                       return 'upper';
+  if (n.includes('push'))                       return 'push';
+  if (n.includes('pull'))                       return 'pull';
+  if (n.includes('leg') || n.includes('lower')) return 'legs';
+  if (n.includes('upper'))                      return 'upper';
   return 'full';
 }
 
@@ -83,7 +64,6 @@ function assessWorkout(exercises: Exercise[], dayName: string) {
   const dayType = getDayType(dayName);
   const targets = MUSCLE_TARGETS[dayType] || MUSCLE_TARGETS.full;
 
-  // Collect all normalized muscles from selected exercises
   const covered = new Set<string>();
   exercises.forEach(ex => {
     ex.primaryMuscles.forEach(m => covered.add(normalizeMuscle(m)));
@@ -123,27 +103,36 @@ function getAvailableMuscles(dayType: string): string[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-function defaultSets(profile: any): number {
-  return profile?.experienceLevel === 'beginner' ? 2 : 3;
-}
-
 export function WorkoutBuilder() {
   const [profile, setProfile]                     = useState<any>(null);
   const [selectedExercises, setSelectedExercises] = useState<{ [key: string]: ExerciseWithSets[] }>({});
-  const [restDays, setRestDays]                     = useState<Set<string>>(new Set());
+  const [restDays, setRestDays]                   = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery]             = useState('');
   const [currentDay, setCurrentDay]               = useState('');
   const [loading, setLoading]                     = useState(true);
   const [saving, setSaving]                       = useState(false);
   const [selectedMuscle, setSelectedMuscle]       = useState<string | null>(null);
+
+  // ── Smart set count state ──────────────────────────────────────────────────
+  const [suggestionMap, setSuggestionMap]         = useState<SuggestionMap>({});
+  const [workoutHistory, setWorkoutHistory]       = useState<WorkoutLog[]>([]);
+
   const navigate = useNavigate();
 
   useEffect(() => { loadProfile(); }, []);
 
   const loadProfile = async () => {
     try {
-      const prof = await profileApi.get();
+      const [prof, history] = await Promise.all([
+        profileApi.get(),
+        workoutApi.getHistory(100).catch(() => []),
+      ]);
       setProfile(prof);
+
+      // Build the suggestion map once — reused for every addExercise call
+      const hist = history as WorkoutLog[];
+      setWorkoutHistory(hist);
+      setSuggestionMap(buildSuggestionMap(hist));
 
       try {
         const plan = await planApi.get();
@@ -219,7 +208,21 @@ export function WorkoutBuilder() {
   const addExercise = (exercise: Exercise) => {
     const current = selectedExercises[currentDay] || [];
     if (current.some(e => e.id === exercise.id)) { toast.error('Already added'); return; }
-    const withSets: ExerciseWithSets = { ...exercise, sets: defaultSets(profile) };
+
+    // ── Smart set count: use history-aware logic instead of hardcoded default ──
+    // Pass exercisesInDay + 1 (the exercise being added) so the time budget
+    // calculation reflects the actual plan size.
+    const exercisesInDay = current.length + 1;
+    const sets = smartSetCount(
+      exercise.id,
+      exercise.name,
+      suggestionMap,
+      workoutHistory,
+      profile,
+      exercisesInDay,
+    );
+
+    const withSets: ExerciseWithSets = { ...exercise, sets };
     setSelectedExercises(prev => ({ ...prev, [currentDay]: [...current, withSets] }));
   };
 
@@ -227,7 +230,7 @@ export function WorkoutBuilder() {
     setSelectedExercises(prev => {
       const exs = [...(prev[day] || [])];
       const current = exs[idx];
-      const newSets = Math.min(6, Math.max(1, (current.sets ?? defaultSets(profile)) + delta));
+      const newSets = Math.min(6, Math.max(1, (current.sets ?? fallbackSets(profile)) + delta));
       exs[idx] = { ...current, sets: newSets };
       return { ...prev, [day]: exs };
     });
@@ -248,11 +251,9 @@ export function WorkoutBuilder() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Mark rest days by storing a special sentinel array with a rest flag
       const planToSave: Record<string, any[]> = {};
       for (const [day, exs] of Object.entries(selectedExercises)) {
         if (restDays.has(day)) {
-          // Store rest day as empty array with __rest flag on first item
           planToSave[day] = [{ __rest: true }];
         } else {
           planToSave[day] = exs;
@@ -285,7 +286,6 @@ export function WorkoutBuilder() {
   const assessment       = assessWorkout(currentExercises, currentDay);
   const availableMuscles = getAvailableMuscles(getDayType(currentDay));
 
-  // Assessment badge colors
   const assessmentBadgeClass = {
     green:  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
     yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
@@ -302,6 +302,9 @@ export function WorkoutBuilder() {
             <h1 className="font-bold text-lg tracking-tight truncate">Workout Builder</h1>
             <p className="text-xs text-muted-foreground truncate">
               {profile?.workoutStyle?.replace(/_/g, ' ')} · {days.length} days
+              {workoutHistory.length > 0 && (
+                <span className="ml-1 text-primary/70">· sets from history</span>
+              )}
             </p>
           </div>
           <Button
@@ -358,7 +361,6 @@ export function WorkoutBuilder() {
                     </button>
                   </div>
 
-                  {/* If rest day, show overlay instead of exercise UI */}
                   {restDays.has(day) && (
                     <Card className="border-dashed border-2 border-muted">
                       <CardContent className="py-12 text-center">
@@ -370,7 +372,7 @@ export function WorkoutBuilder() {
                   )}
 
                   {!restDays.has(day) && <>
-                  {/* Inline assessment badge — single line, no card */}
+                  {/* Inline assessment badge */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${assessmentBadgeClass}`}>
                       {assessment.score >= 70
@@ -379,8 +381,6 @@ export function WorkoutBuilder() {
                       }
                       {assessment.label}
                     </span>
-
-                    {/* Missing muscles — compact, only when actually missing */}
                     {assessment.missing.length > 0 && currentExercises.length > 0 && (
                       <span className="text-xs text-muted-foreground">
                         Missing: {assessment.missing.map(m => m.replace(/_/g, ' ')).join(', ')}
@@ -400,62 +400,78 @@ export function WorkoutBuilder() {
                           No exercises yet — add from the library below
                         </p>
                       ) : (
-                        currentExercises.map((ex, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg group"
-                          >
-                            <div className="flex flex-col gap-0.5 flex-shrink-0">
-                              <button
-                                onClick={() => moveExercise(day, idx, -1)}
-                                disabled={idx === 0}
-                                className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none"
-                              >▲</button>
-                              <button
-                                onClick={() => moveExercise(day, idx, 1)}
-                                disabled={idx === currentExercises.length - 1}
-                                className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none"
-                              >▼</button>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{ex.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}
-                              </p>
-                            </div>
-                            {/* Sets stepper */}
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <button
-                                onClick={() => updateSets(day, idx, -1)}
-                                disabled={(ex.sets ?? defaultSets(profile)) <= 1}
-                                className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 transition-colors"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="text-xs font-semibold w-8 text-center tabular-nums">
-                                {ex.sets ?? defaultSets(profile)}×
-                              </span>
-                              <button
-                                onClick={() => updateSets(day, idx, 1)}
-                                disabled={(ex.sets ?? defaultSets(profile)) >= 6}
-                                className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
-                            <button
-                              onClick={() => removeExercise(day, idx)}
-                              className="text-muted-foreground/50 hover:text-red-500 transition-colors p-1 flex-shrink-0"
+                        currentExercises.map((ex, idx) => {
+                          const reason = setCountReason(
+                            ex.id, ex.name, suggestionMap, workoutHistory, profile,
+                            currentExercises.length,
+                          );
+                          const hasHistory = workoutHistory.length > 0 &&
+                            (suggestionMap[ex.id || ex.name]?.action !== 'insufficient_data' ||
+                             workoutHistory.some(log =>
+                               log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
+                             ));
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg group"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))
+                              <div className="flex flex-col gap-0.5 flex-shrink-0">
+                                <button
+                                  onClick={() => moveExercise(day, idx, -1)}
+                                  disabled={idx === 0}
+                                  className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none"
+                                >▲</button>
+                                <button
+                                  onClick={() => moveExercise(day, idx, 1)}
+                                  disabled={idx === currentExercises.length - 1}
+                                  className="text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-20 text-xs leading-none"
+                                >▼</button>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{ex.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}
+                                </p>
+                                {/* Smart set reason hint */}
+                                {hasHistory && (
+                                  <p className="text-xs text-primary/60 truncate mt-0.5">{reason}</p>
+                                )}
+                              </div>
+                              {/* Sets stepper */}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => updateSets(day, idx, -1)}
+                                  disabled={(ex.sets ?? fallbackSets(profile)) <= 1}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 transition-colors"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="text-xs font-semibold w-8 text-center tabular-nums">
+                                  {ex.sets ?? fallbackSets(profile)}×
+                                </span>
+                                <button
+                                  onClick={() => updateSets(day, idx, 1)}
+                                  disabled={(ex.sets ?? fallbackSets(profile)) >= 6}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 transition-colors"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => removeExercise(day, idx)}
+                                className="text-muted-foreground/50 hover:text-red-500 transition-colors p-1 flex-shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })
                       )}
                     </CardContent>
                   </Card>
 
-                  {/* Muscle coverage pills — informational, compact */}
+                  {/* Muscle coverage pills */}
                   {currentExercises.length > 0 && (() => {
                     const allMuscles = new Map<string, 'primary' | 'secondary'>();
                     currentExercises.forEach(ex => {
@@ -478,7 +494,7 @@ export function WorkoutBuilder() {
                       </div>
                     );
                   })()}
-                  </> /* end !restDays.has(day) */}
+                  </>}
                 </div>
 
                 {/* RIGHT — exercise library */}
@@ -494,7 +510,6 @@ export function WorkoutBuilder() {
                         className="pl-9 h-8 text-sm"
                       />
                     </div>
-                    {/* Muscle filter pills */}
                     {availableMuscles.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {availableMuscles.map(muscle => (
@@ -528,6 +543,10 @@ export function WorkoutBuilder() {
                               ex={ex}
                               added={currentExercises.some(e => e.id === ex.id)}
                               onAdd={() => addExercise(ex)}
+                              previewSets={smartSetCount(ex.id, ex.name, suggestionMap, workoutHistory, profile, currentExercises.length)}
+                              hasHistory={workoutHistory.some(log =>
+                                log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
+                              )}
                             />
                           ))}
                         </>
@@ -545,6 +564,10 @@ export function WorkoutBuilder() {
                               ex={ex}
                               added={currentExercises.some(e => e.id === ex.id)}
                               onAdd={() => addExercise(ex)}
+                              previewSets={smartSetCount(ex.id, ex.name, suggestionMap, workoutHistory, profile, currentExercises.length)}
+                              hasHistory={workoutHistory.some(log =>
+                                log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
+                              )}
                             />
                           ))}
                         </>
@@ -566,14 +589,23 @@ export function WorkoutBuilder() {
   );
 }
 
+/** Fallback for exercises already in the plan that have no history */
+function fallbackSets(profile: any): number {
+  return profile?.experienceLevel === 'beginner' ? 2 : 3;
+}
+
 function ExerciseRow({
   ex,
   added,
   onAdd,
+  previewSets,
+  hasHistory,
 }: {
   ex: Exercise;
   added: boolean;
   onAdd: () => void;
+  previewSets: number;
+  hasHistory: boolean;
 }) {
   return (
     <div
@@ -595,6 +627,14 @@ function ExerciseRow({
               : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
           }`}>
             {ex.difficulty}
+          </span>
+          {/* Preview set count — shows what will be assigned on add */}
+          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+            hasHistory
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'bg-muted text-muted-foreground'
+          }`}>
+            {previewSets}×
           </span>
         </div>
       </div>
