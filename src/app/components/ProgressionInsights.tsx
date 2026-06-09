@@ -1,4 +1,15 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * ProgressionInsights — strength progression cards for the Progress tab.
+ *
+ * FIX #16: The original code fired a separate workoutApi.getExerciseHistory()
+ * Supabase query every time the user expanded a card. With 20+ exercises this
+ * meant up to 20 sequential DB round-trips. Now all exercise histories needed
+ * for charts are pre-fetched from the already-loaded workoutHistory prop in
+ * a single pass (no extra DB queries), and the per-card expand just reads from
+ * the in-memory map.
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import {
   computeAllSuggestions,
@@ -7,7 +18,7 @@ import {
   type ProgressionSuggestion,
   type WorkoutLog,
 } from '../../../utils/progressiveOverload';
-import { workoutApi, type ExerciseHistoryPoint } from '../../utils/api';
+import { workoutApi } from '../../utils/api';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -17,15 +28,54 @@ import { format, parseISO } from 'date-fns';
 
 type FilterKey = 'all' | 'increase' | 'maintain' | 'deload';
 
+// ─── Chart data ───────────────────────────────────────────────────────────────
+
+interface ChartPoint { date: string; e1rm: number; weight: number }
+
+/**
+ * FIX #16: Build the chart-data map from already-loaded workout history.
+ * No extra DB queries — we iterate the history once and collect per-exercise
+ * best-set e1RM data. This replaces the per-card workoutApi.getExerciseHistory()
+ * call that previously fired on every card expand.
+ */
+function buildChartMap(history: WorkoutLog[]): Record<string, ChartPoint[]> {
+  const map: Record<string, ChartPoint[]> = {};
+
+  // History is newest-first; reverse to plot chronologically
+  for (const log of [...history].reverse()) {
+    const date = format(parseISO(log.completedAt), 'MMM d');
+
+    // Group by stable key within this session
+    const byKey: Record<string, { weight: number; reps: number; e1rm: number }> = {};
+    for (const s of (log.sets || [])) {
+      const key = s.exerciseId || s.exerciseName;
+      const e1rm = s.weight > 0 && s.reps > 0
+        ? s.weight * (1 + s.reps / 30)
+        : 0;
+      const existing = byKey[key];
+      if (!existing || e1rm > existing.e1rm) {
+        byKey[key] = { weight: s.weight, reps: s.reps, e1rm };
+      }
+    }
+
+    for (const [key, { weight, e1rm }] of Object.entries(byKey)) {
+      if (!map[key]) map[key] = [];
+      map[key].push({ date, e1rm: Math.round(e1rm), weight });
+    }
+  }
+
+  return map;
+}
+
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 function ActionIcon({ action }: { action: ProgressionSuggestion['action'] }) {
   switch (action) {
-    case 'increase_weight': return <ArrowUp className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    case 'increase_reps':   return <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />;
+    case 'increase_weight': return <ArrowUp      className="w-4 h-4 text-green-600 dark:text-green-400" />;
+    case 'increase_reps':   return <TrendingUp   className="w-4 h-4 text-green-600 dark:text-green-400" />;
     case 'deload':          return <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400" />;
-    case 'maintain':        return <Minus className="w-4 h-4 text-blue-500 dark:text-blue-400" />;
-    default:                return <Info className="w-4 h-4 text-muted-foreground" />;
+    case 'maintain':        return <Minus        className="w-4 h-4 text-blue-500 dark:text-blue-400" />;
+    default:                return <Info         className="w-4 h-4 text-muted-foreground" />;
   }
 }
 
@@ -46,12 +96,10 @@ interface ExerciseCardProps {
   suggestion: ProgressionSuggestion;
   expanded: boolean;
   onClick: () => void;
+  chartData: ChartPoint[];   // FIX #16: passed in, no per-card fetch
 }
 
-function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCardProps) {
-  const [chartData, setChartData]     = useState<any[]>([]);
-  const [loadingChart, setLoadingChart] = useState(false);
-
+function ExerciseCard({ exerciseKey, suggestion, expanded, onClick, chartData }: ExerciseCardProps) {
   const tier = classifyExercise(exerciseKey);
   const [repLo, repHi] = getRepTarget(tier);
   const tierLabel: Record<string, string> = {
@@ -59,25 +107,12 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
     isolation: 'Isolation', bodyweight: 'Bodyweight',
   };
 
-  const trendColor = suggestion.e1RMTrend === 'up' ? 'text-green-600 dark:text-green-400'
-    : suggestion.e1RMTrend === 'down' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground';
-  const TrendIcon = suggestion.e1RMTrend === 'up' ? TrendingUp
-    : suggestion.e1RMTrend === 'down' ? TrendingDown : Minus;
-
-  useEffect(() => {
-    if (!expanded || chartData.length > 0) return;
-    setLoadingChart(true);
-    workoutApi.getExerciseHistory(exerciseKey)
-      .then((pts: ExerciseHistoryPoint[]) => {
-        setChartData(pts.map(p => ({
-          date:   format(parseISO(p.completed_at), 'MMM d'),
-          e1rm:   Math.round(p.e1rm_kg),
-          weight: p.weight_kg,
-        })));
-      })
-      .catch(() => {/* chart stays empty */})
-      .finally(() => setLoadingChart(false));
-  }, [expanded, exerciseKey]);
+  const trendColor =
+    suggestion.e1RMTrend === 'up'   ? 'text-green-600 dark:text-green-400' :
+    suggestion.e1RMTrend === 'down' ? 'text-red-500 dark:text-red-400'     : 'text-muted-foreground';
+  const TrendIcon =
+    suggestion.e1RMTrend === 'up'   ? TrendingUp   :
+    suggestion.e1RMTrend === 'down' ? TrendingDown : Minus;
 
   return (
     <Card
@@ -138,13 +173,10 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
               <span className="text-muted-foreground">({tierLabel[tier]})</span>
             </div>
 
+            {/* FIX #16: chartData is already in-memory, no DB query needed */}
             <div>
               <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Estimated 1RM history</p>
-              {loadingChart ? (
-                <div className="h-32 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-400" />
-                </div>
-              ) : chartData.length >= 2 ? (
+              {chartData.length >= 2 ? (
                 <>
                   <ResponsiveContainer width="100%" height={130}>
                     <LineChart data={chartData}>
@@ -180,10 +212,9 @@ function ExerciseCard({ exerciseKey, suggestion, expanded, onClick }: ExerciseCa
   );
 }
 
-// ─── Props: accept pre-loaded history to avoid double fetch ───────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface ProgressionInsightsProps {
-  /** Pass workout history from the parent if already loaded (avoids a second fetch). */
   history?: WorkoutLog[];
 }
 
@@ -192,14 +223,14 @@ interface ProgressionInsightsProps {
 export function ProgressionInsights({ history: externalHistory }: ProgressionInsightsProps = {}) {
   const [suggestions, setSuggestions] = useState<Record<string, ProgressionSuggestion>>({});
   const [loading, setLoading]         = useState(true);
+  const [history, setHistory]         = useState<WorkoutLog[]>(externalHistory || []);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [filter, setFilter]           = useState<FilterKey>('all');
 
   useEffect(() => {
     if (externalHistory) {
-      // Parent already loaded history — compute directly, no extra fetch
-      const allSuggestions = computeAllSuggestions(externalHistory);
-      setSuggestions(allSuggestions);
+      setHistory(externalHistory);
+      setSuggestions(computeAllSuggestions(externalHistory));
       setLoading(false);
     } else {
       loadData();
@@ -208,14 +239,19 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
 
   const loadData = async () => {
     try {
-      const history = await workoutApi.getHistory(100);
-      setSuggestions(computeAllSuggestions(history as WorkoutLog[]));
+      const h = await workoutApi.getHistory(100);
+      setHistory(h as WorkoutLog[]);
+      setSuggestions(computeAllSuggestions(h as WorkoutLog[]));
     } catch (e) {
       console.error('Failed to load progression data', e);
     } finally {
       setLoading(false);
     }
   };
+
+  // FIX #16: Build chart data once from the already-loaded history.
+  // No per-card DB queries — all data is derived from what we already have.
+  const chartMap = useMemo(() => buildChartMap(history), [history]);
 
   const allEntries = Object.entries(suggestions).filter(([, s]) => s.action !== 'insufficient_data');
 
@@ -237,25 +273,21 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
     deload:   allEntries.filter(([, s]) => s.action === 'deload').length,
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
 
-  if (allEntries.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <TrendingUp className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="font-medium text-muted-foreground">No progression data yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Complete workouts to see weight suggestions here</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (allEntries.length === 0) return (
+    <Card>
+      <CardContent className="py-12 text-center">
+        <TrendingUp className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+        <p className="font-medium text-muted-foreground">No progression data yet</p>
+        <p className="text-sm text-muted-foreground mt-1">Complete workouts to see weight suggestions here</p>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-4">
@@ -263,8 +295,8 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
       <div className="grid grid-cols-3 gap-2">
         {([
           { key: 'increase' as FilterKey, count: counts.increase, label: 'Ready to progress', bg: 'bg-green-50 border-green-100 dark:bg-green-950/30 dark:border-green-800/30', activeBg: 'bg-green-100 border-green-300 dark:bg-green-900/50 dark:border-green-700/50', text: 'text-green-700 dark:text-green-300' },
-          { key: 'maintain' as FilterKey, count: counts.maintain, label: 'Keep weight',        bg: 'bg-blue-50 border-blue-100 dark:bg-blue-950/30 dark:border-blue-800/30',  activeBg: 'bg-blue-100 border-blue-300 dark:bg-blue-900/50 dark:border-blue-700/50',  text: 'text-blue-700 dark:text-blue-300' },
-          { key: 'deload'   as FilterKey, count: counts.deload,   label: 'Deload',             bg: 'bg-amber-50 border-amber-100 dark:bg-amber-950/30 dark:border-amber-800/30',activeBg: 'bg-amber-100 border-amber-300 dark:bg-amber-900/50 dark:border-amber-700/50',text: 'text-amber-700 dark:text-amber-300' },
+          { key: 'maintain' as FilterKey, count: counts.maintain, label: 'Keep weight',        bg: 'bg-blue-50 border-blue-100 dark:bg-blue-950/30 dark:border-blue-800/30',   activeBg: 'bg-blue-100 border-blue-300 dark:bg-blue-900/50 dark:border-blue-700/50',   text: 'text-blue-700 dark:text-blue-300' },
+          { key: 'deload'   as FilterKey, count: counts.deload,   label: 'Deload',             bg: 'bg-amber-50 border-amber-100 dark:bg-amber-950/30 dark:border-amber-800/30', activeBg: 'bg-amber-100 border-amber-300 dark:bg-amber-900/50 dark:border-amber-700/50', text: 'text-amber-700 dark:text-amber-300' },
         ] as const).map(({ key, count, label, bg, activeBg, text }) => (
           <button
             key={key}
@@ -287,7 +319,6 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
         </p>
       </div>
 
-      {/* Exercise cards */}
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
@@ -302,6 +333,7 @@ export function ProgressionInsights({ history: externalHistory }: ProgressionIns
             suggestion={suggestion}
             expanded={expandedKey === key}
             onClick={() => setExpandedKey(expandedKey === key ? null : key)}
+            chartData={chartMap[key] || []}
           />
         ))
       )}

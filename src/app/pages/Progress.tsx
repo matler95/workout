@@ -73,22 +73,41 @@ export function Progress() {
 
   const engineHistory = useMemo(() => toEngineHistory(workoutHistory), [workoutHistory]);
 
+  // FIX #12: Strength chart now groups by exerciseId (matching the progression
+  // engine's keying strategy) and uses exerciseName only as the display label.
+  // Previously the chart grouped by exerciseName while the engine keyed by
+  // exerciseId, so charts and suggestions could diverge for exercises whose
+  // id and name don't map 1:1 (e.g. custom exercises, renamed entries).
   const getStrengthData = () => {
-    const map: Record<string, { date: string; weight: number; reps: number; e1rm: number }[]> = {};
+    // Map: stableKey → { displayName, dataPoints[] }
+    const map: Record<string, {
+      displayName: string;
+      data: { date: string; weight: number; reps: number; e1rm: number }[];
+    }> = {};
+
     for (const log of [...workoutHistory].reverse()) {
       const date = format(parseISO(log.completedAt), 'MMM d');
-      const byEx: Record<string, SetLog[]> = {};
+
+      // Group sets within this session by their stable key
+      const byKey: Record<string, { name: string; sets: SetLog[] }> = {};
       for (const s of (log.sets || [])) {
-        if (!byEx[s.exerciseName]) byEx[s.exerciseName] = [];
-        byEx[s.exerciseName].push(s);
+        // FIX #12: use exerciseId as the stable key, fall back to exerciseName
+        // (exactly matching computeAllSuggestions in progressiveOverload.ts)
+        const key = s.exerciseId || s.exerciseName;
+        if (!byKey[key]) byKey[key] = { name: s.exerciseName, sets: [] };
+        byKey[key].sets.push(s);
       }
-      for (const [name, sets] of Object.entries(byEx)) {
+
+      for (const [key, { name, sets }] of Object.entries(byKey)) {
         const best = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
         const e1rm = best.e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
-        if (!map[name]) map[name] = [];
-        map[name].push({ date, weight: best.weight, reps: best.reps, e1rm });
+        if (!map[key]) map[key] = { displayName: name, data: [] };
+        map[key].data.push({ date, weight: best.weight, reps: best.reps, e1rm });
       }
     }
+
+    // Return as { displayName → dataPoints } for rendering
+    // (keep display name for UI, stable key for selection state)
     return map;
   };
 
@@ -98,18 +117,18 @@ export function Progress() {
       const muscles = inferMuscleGroup(row.exercise_id, row.exercise_name);
       for (const m of muscles) muscleVol[m] = (muscleVol[m] || 0) + row.total_reps;
     }
-    const order  = ['Chest','Back','Quads','Hamstrings','Shoulders','Biceps','Triceps','Core'];
+    const order  = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps', 'Core'];
     const maxVol = Math.max(...Object.values(muscleVol), 1);
     return order.map(m => ({
       muscle: m,
       reps:   muscleVol[m] || 0,
-      sets:   dbVolumeData.filter(r => inferMuscleGroup(r.exercise_id, r.exercise_name).includes(m))
-                          .reduce((s, r) => s + r.total_sets, 0),
+      sets:   dbVolumeData
+        .filter(r => inferMuscleGroup(r.exercise_id, r.exercise_name).includes(m))
+        .reduce((s, r) => s + r.total_sets, 0),
       pct: Math.round(((muscleVol[m] || 0) / maxVol) * 100),
     }));
   };
 
-  // Step F: streak calculation uses DB view instead of in-JS computation
   const getStreakInfo = () => {
     if (weeklyData.length === 0) return { current: 0, longest: 0, consistency: 0 };
     const planned = profile?.trainingDays || 3;
@@ -139,19 +158,23 @@ export function Progress() {
 
   const getWeeklyBarData = () =>
     weeklyData.slice(-12).map(w => ({
-      week: format(parseISO(w.week_start), 'MMM d'),
+      week:     format(parseISO(w.week_start), 'MMM d'),
       workouts: w.workout_count,
-      target: profile?.trainingDays || 3,
+      target:   profile?.trainingDays || 3,
     }));
 
   const weightChartData = bodyweightData.slice(-30).map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
-  const strengthData    = getStrengthData();
-  const exerciseNames   = Object.keys(strengthData);
-  const activeExercise  = selectedExercise || exerciseNames[0] || '';
-  const volumeData      = getVolumeData();
-  const streakInfo      = getStreakInfo();
-  const heatmap         = getHeatmapData();
-  const weeklyBars      = getWeeklyBarData();
+  const strengthMap     = getStrengthData();
+
+  // FIX #12: selectedExercise is now a stable key (exerciseId || exerciseName)
+  const exerciseKeys    = Object.keys(strengthMap);
+  const activeKey       = selectedExercise || exerciseKeys[0] || '';
+  const activeEntry     = strengthMap[activeKey];
+
+  const volumeData   = getVolumeData();
+  const streakInfo   = getStreakInfo();
+  const heatmap      = getHeatmapData();
+  const weeklyBars   = getWeeklyBarData();
 
   const bmi = profile ? Math.round((profile.weight / Math.pow(profile.height / 100, 2)) * 10) / 10 : null;
   const estBodyFat = profile && bmi
@@ -189,11 +212,11 @@ export function Progress() {
             <TabsTrigger value="streaks">Streaks</TabsTrigger>
           </TabsList>
 
-          {/* ── Body ───────────────────────────────────────────────────── */}
+          {/* ── Body ── */}
           <TabsContent value="body" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: bmi ?? '–', label: 'BMI', sub: bmi ? (bmi<18.5?'Underweight':bmi<25?'Normal':bmi<30?'Overweight':'Obese') : null },
+                { value: bmi ?? '–', label: 'BMI', sub: bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null },
                 { value: estBodyFat ? `${estBodyFat}%` : '–', label: 'Est. Body Fat', sub: 'approx.' },
                 { value: leanMass ?? '–', label: 'Lean kg', sub: 'estimated' },
               ].map(({ value, label, sub }) => (
@@ -220,8 +243,8 @@ export function Progress() {
                     <LineChart data={weightChartData}>
                       <CartesianGrid strokeDasharray="3 3" style={{ stroke: 'var(--border)' }} />
                       <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
-                      <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} domain={['auto','auto']} unit=" kg" />
-                      <Tooltip {...tooltipStyle} formatter={(v:any) => [`${v} kg`, 'Weight']} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} domain={['auto', 'auto']} unit=" kg" />
+                      <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} kg`, 'Weight']} />
                       <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -234,35 +257,40 @@ export function Progress() {
             </Card>
           </TabsContent>
 
-          {/* ── Strength ───────────────────────────────────────────────── */}
+          {/* ── Strength ── */}
           <TabsContent value="strength" className="space-y-4">
             <div>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 px-0.5">Next session</h2>
               <NextSession history={engineHistory} />
             </div>
-            {exerciseNames.length > 0 && (
+            {exerciseKeys.length > 0 && (
               <div className="space-y-4 pt-2">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-0.5">Strength history</h2>
+                {/* FIX #12: buttons now key by stableKey, display exerciseName */}
                 <div className="flex gap-2 flex-wrap">
-                  {exerciseNames.map(name => (
-                    <button key={name} onClick={() => setSelectedExercise(name)}
-                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${activeExercise===name?'bg-primary text-primary-foreground':'bg-muted text-muted-foreground hover:bg-muted/80 border border-border/50'}`}>
-                      {name}
+                  {exerciseKeys.map(key => (
+                    <button key={key} onClick={() => setSelectedExercise(key)}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                        activeKey === key
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80 border border-border/50'
+                      }`}>
+                      {strengthMap[key].displayName}
                     </button>
                   ))}
                 </div>
-                {activeExercise && strengthData[activeExercise] && (
+                {activeEntry && (
                   <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-base">{activeExercise}</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-base">{activeEntry.displayName}</CardTitle></CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={200}>
-                        <LineChart data={strengthData[activeExercise]}>
+                        <LineChart data={activeEntry.data}>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
                           <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
-                          <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} unit="kg" domain={['auto','auto']} />
-                          <Tooltip {...tooltipStyle} formatter={(v:any,n:string) => [`${Math.round(v)} kg`, n==='e1rm'?'Est. 1RM':'Top set']} />
+                          <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} unit="kg" domain={['auto', 'auto']} />
+                          <Tooltip {...tooltipStyle} formatter={(v: any, n: string) => [`${Math.round(v)} kg`, n === 'e1rm' ? 'Est. 1RM' : 'Top set']} />
                           <Line type="monotone" dataKey="weight" stroke="#94a3b8" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="weight" />
-                          <Line type="monotone" dataKey="e1rm" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} name="e1rm" />
+                          <Line type="monotone" dataKey="e1rm"   stroke="#10B981"  strokeWidth={2}   dot={{ r: 3 }} name="e1rm" />
                         </LineChart>
                       </ResponsiveContainer>
                       <p className="text-xs text-muted-foreground text-center mt-1">— e1RM &nbsp; - - top set weight</p>
@@ -270,22 +298,22 @@ export function Progress() {
                   </Card>
                 )}
                 <div className="space-y-2">
-                  {exerciseNames.map(name => {
-                    const data = strengthData[name];
-                    const first = data[0], last = data[data.length-1];
+                  {exerciseKeys.map(key => {
+                    const { displayName, data } = strengthMap[key];
+                    const first = data[0], last = data[data.length - 1];
                     const diff = Math.round((last.weight - first.weight) * 10) / 10;
                     return (
-                      <Card key={name} className="cursor-pointer hover:border-primary transition-colors" onClick={() => setSelectedExercise(name)}>
+                      <Card key={key} className="cursor-pointer hover:border-primary transition-colors" onClick={() => setSelectedExercise(key)}>
                         <CardContent className="py-3 flex items-center justify-between">
                           <div>
-                            <p className="font-medium text-sm">{name}</p>
-                            <p className="text-xs text-muted-foreground">{data.length} session{data.length!==1?'s':''}</p>
+                            <p className="font-medium text-sm">{displayName}</p>
+                            <p className="text-xs text-muted-foreground">{data.length} session{data.length !== 1 ? 's' : ''}</p>
                           </div>
                           <div className="text-right">
                             <p className="font-bold">{last.weight} kg</p>
                             {data.length > 1 && (
-                              <p className={`text-xs ${diff>0?'text-green-600 dark:text-green-400':diff<0?'text-red-500 dark:text-red-400':'text-muted-foreground'}`}>
-                                {diff>0?'+':''}{diff} kg
+                              <p className={`text-xs ${diff > 0 ? 'text-green-600 dark:text-green-400' : diff < 0 ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground'}`}>
+                                {diff > 0 ? '+' : ''}{diff} kg
                               </p>
                             )}
                           </div>
@@ -298,7 +326,7 @@ export function Progress() {
             )}
           </TabsContent>
 
-          {/* ── Volume ─────────────────────────────────────────────────── */}
+          {/* ── Volume ── */}
           <TabsContent value="volume" className="space-y-4">
             {(() => {
               const excessive    = volumeData.filter(d => isVolumeExcessive(d.muscle, d.sets));
@@ -310,20 +338,20 @@ export function Progress() {
                       <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="font-semibold text-sm text-red-900 dark:text-red-200 mb-1">High volume — consider a deload</p>
-                        <p className="text-xs text-red-700 dark:text-red-300">{excessive.map(d=>`${d.muscle} (${d.sets} sets)`).join(', ')} above MRV</p>
+                        <p className="text-xs text-red-700 dark:text-red-300">{excessive.map(d => `${d.muscle} (${d.sets} sets)`).join(', ')} above MRV</p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               );
-              if (insufficient.length > 0 && volumeData.some(d=>d.sets>0)) return (
+              if (insufficient.length > 0 && volumeData.some(d => d.sets > 0)) return (
                 <Card className="bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800/50">
                   <CardContent className="pt-4">
                     <div className="flex gap-3">
                       <Info className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="font-semibold text-sm text-yellow-900 dark:text-yellow-200 mb-1">Some muscle groups below minimum volume</p>
-                        <p className="text-xs text-yellow-700 dark:text-yellow-300">{insufficient.map(d=>`${d.muscle} (${d.sets} sets)`).join(', ')}</p>
+                        <p className="text-xs text-yellow-700 dark:text-yellow-300">{insufficient.map(d => `${d.muscle} (${d.sets} sets)`).join(', ')}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -338,7 +366,7 @@ export function Progress() {
                 <p className="text-xs text-muted-foreground">Total reps per muscle group</p>
               </CardHeader>
               <CardContent>
-                {volumeData.every(d=>d.reps===0) ? (
+                {volumeData.every(d => d.reps === 0) ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">Complete workouts this week to see volume data</p>
                 ) : (
                   <div className="space-y-3">
@@ -358,25 +386,24 @@ export function Progress() {
               </CardContent>
             </Card>
 
-            {/* Step E: show workout notes */}
             {workoutHistory.length > 0 && (
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-base">Recent Workouts</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-2">
                     {workoutHistory.slice(0, 5).map((log, i) => {
-                      const vol = (log.sets||[]).reduce((s,x)=>s+x.weight*x.reps,0);
+                      const vol = (log.sets || []).reduce((s, x) => s + x.weight * x.reps, 0);
                       return (
                         <div key={i} className="py-2 border-b last:border-0">
                           <div className="flex justify-between items-center text-sm">
                             <div>
                               <p className="font-medium">{log.dayName}</p>
-                              <p className="text-xs text-muted-foreground">{format(parseISO(log.completedAt),'EEE, MMM d')}</p>
+                              <p className="text-xs text-muted-foreground">{format(parseISO(log.completedAt), 'EEE, MMM d')}</p>
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="text-right">
-                                <p className="font-medium">{(log.sets||[]).length} sets</p>
-                                <p className="text-xs text-muted-foreground">{Math.round(vol/1000*10)/10}t vol</p>
+                                <p className="font-medium">{(log.sets || []).length} sets</p>
+                                <p className="text-xs text-muted-foreground">{Math.round(vol / 1000 * 10) / 10}t vol</p>
                               </div>
                               {log.id && (
                                 <button
@@ -389,7 +416,6 @@ export function Progress() {
                               )}
                             </div>
                           </div>
-                          {/* Step E: notes */}
                           {log.feedback && log.feedback.trim() && log.feedback !== '(partial workout)' && (
                             <p className="text-xs text-muted-foreground italic mt-1 leading-relaxed">"{log.feedback}"</p>
                           )}
@@ -402,21 +428,20 @@ export function Progress() {
             )}
           </TabsContent>
 
-          {/* ── Streaks ─────────────────────────────────────────────────── */}
+          {/* ── Streaks ── */}
           <TabsContent value="streaks" className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               {[
                 { value: streakInfo.current, label: 'Weeks on target', sub: 'consecutive', icon: <Flame className="w-5 h-5 text-orange-500" /> },
-                { value: streakInfo.longest, label: 'Best streak', sub: 'weeks' },
+                { value: streakInfo.longest, label: 'Best streak',     sub: 'weeks' },
                 { value: `${streakInfo.consistency}%`, label: 'Consistency', sub: 'last 30 days' },
               ].map(({ value, label, sub, icon }: any) => (
                 <Card key={label}>
                   <CardContent className="pt-4 pb-4 text-center">
-                    {icon ? (
-                      <div className="flex items-center justify-center gap-1 mb-1">{icon}<span className="text-2xl font-bold">{value}</span></div>
-                    ) : (
-                      <div className="text-2xl font-bold">{value}</div>
-                    )}
+                    {icon
+                      ? <div className="flex items-center justify-center gap-1 mb-1">{icon}<span className="text-2xl font-bold">{value}</span></div>
+                      : <div className="text-2xl font-bold">{value}</div>
+                    }
                     <div className="text-xs text-muted-foreground mt-1">{label}</div>
                     <div className="text-xs text-muted-foreground">{sub}</div>
                   </CardContent>
@@ -428,12 +453,12 @@ export function Progress() {
               <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Calendar className="w-4 h-4" /> Activity — Last 12 Weeks</CardTitle></CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <div className="grid gap-1" style={{ gridTemplateColumns:'repeat(12,1fr)', minWidth:280 }}>
-                    {Array.from({length:12},(_,w) => (
+                  <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(12,1fr)', minWidth: 280 }}>
+                    {Array.from({ length: 12 }, (_, w) => (
                       <div key={w} className="flex flex-col gap-1">
-                        {heatmap.slice(w*7,w*7+7).map((day,d) => (
-                          <div key={d} title={`${day.label}: ${day.count} workout${day.count!==1?'s':''}`}
-                            className={`w-full aspect-square rounded-sm ${day.count===0?'bg-muted':day.count===1?'bg-indigo-200 dark:bg-indigo-800':'bg-indigo-500'}`} />
+                        {heatmap.slice(w * 7, w * 7 + 7).map((day, d) => (
+                          <div key={d} title={`${day.label}: ${day.count} workout${day.count !== 1 ? 's' : ''}`}
+                            className={`w-full aspect-square rounded-sm ${day.count === 0 ? 'bg-muted' : day.count === 1 ? 'bg-indigo-200 dark:bg-indigo-800' : 'bg-indigo-500'}`} />
                         ))}
                       </div>
                     ))}
@@ -454,11 +479,12 @@ export function Progress() {
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={weeklyBars} barSize={16}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
-                    <XAxis dataKey="week" tick={{ fontSize:10, fill:'var(--muted-foreground)' }} interval={2} />
-                    <YAxis tick={{ fontSize:11, fill:'var(--muted-foreground)' }} allowDecimals={false} />
+                    <XAxis dataKey="week" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} interval={2} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} allowDecimals={false} />
                     <Tooltip {...tooltipStyle} />
-                    <ReferenceLine y={profile?.trainingDays||3} stroke="#10B981" strokeDasharray="4 2" label={{ value:'target', position:'right', fontSize:10 }} />
-                    <Bar dataKey="workouts" fill="#10B981" radius={[3,3,0,0]} />
+                    <ReferenceLine y={profile?.trainingDays || 3} stroke="#10B981" strokeDasharray="4 2"
+                      label={{ value: 'target', position: 'right', fontSize: 10 }} />
+                    <Bar dataKey="workouts" fill="#10B981" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

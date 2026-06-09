@@ -1,48 +1,42 @@
 /**
  * Offline Queue — workout set persistence
  *
- * Problem: ActiveWorkout holds all logged sets in React state. If the browser
- * crashes, the tab is killed, or Supabase is unreachable, all progress is lost.
+ * FIX #10: Stale in-progress sessions were never cleaned up. If a user
+ * started a workout, killed the app without finishing, then started a new
+ * workout, the old in-progress entry stayed in localStorage indefinitely.
+ * getInProgressWorkout() would return the old stale session, and there was
+ * no way to clean it up short of clearing all localStorage.
  *
- * Solution:
- *   1. On every set completion, write the full session snapshot to localStorage.
- *   2. On workoutApi.log() success, clear the queue entry.
- *   3. On app load, check for orphaned queue entries and offer to retry.
- *
- * Storage key: `offline_workout_<sessionUUID>`
- * Index key:   `offline_workout_index`  (list of pending UUIDs)
- *
- * The session UUID is generated client-side when the workout starts so we
- * can track it across crashes without a DB round-trip.
+ * Fix: queueStart now marks any existing in-progress sessions as abandoned
+ * before creating the new one. A separate pruneAbandoned() helper (called on
+ * app startup) removes in-progress sessions older than 24 h.
  */
 
 import { workoutApi, type WorkoutSet, type MuscleVolumeEntry } from './api';
 
 export interface QueuedWorkout {
-  sessionId:      string;
-  dayName:        string;
-  startedAt:      string;
-  completedAt?:   string;
-  sets:           WorkoutSet[];
+  sessionId:       string;
+  dayName:         string;
+  startedAt:       string;
+  completedAt?:    string;
+  sets:            WorkoutSet[];
   perceivedEffort?: number;
-  feedback?:      string;
+  feedback?:       string;
   rpeCorrections?: Record<string, number>;
-  duration?:      number;
-  muscleVolume?:  Record<string, MuscleVolumeEntry>;
-  status:         'in_progress' | 'pending_sync' | 'synced';
+  duration?:       number;
+  muscleVolume?:   Record<string, MuscleVolumeEntry>;
+  status:          'in_progress' | 'abandoned' | 'pending_sync' | 'synced';
 }
 
-const INDEX_KEY  = 'offline_workout_index';
-const PREFIX     = 'offline_workout_';
+const INDEX_KEY = 'offline_workout_index';
+const PREFIX    = 'offline_workout_';
+const STALE_MS  = 24 * 60 * 60 * 1000; // 24 hours
 
 // ── Read / write helpers ───────────────────────────────────────────────────────
 
 function readIndex(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(INDEX_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(INDEX_KEY) || '[]'); }
+  catch { return []; }
 }
 
 function writeIndex(ids: string[]) {
@@ -53,9 +47,7 @@ function readEntry(id: string): QueuedWorkout | null {
   try {
     const raw = localStorage.getItem(PREFIX + id);
     return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function writeEntry(entry: QueuedWorkout) {
@@ -71,35 +63,47 @@ function deleteEntry(id: string) {
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
-/** Generate a client-side session ID when starting a workout */
 export function generateSessionId(): string {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** Start tracking a new workout session */
+/**
+ * FIX #10: Before creating a new in-progress session, mark any existing
+ * in-progress sessions as 'abandoned'. This prevents getInProgressWorkout()
+ * from returning a stale session from a previous app launch.
+ *
+ * We don't delete them immediately in case they contain valuable set data
+ * (the CrashRecoveryBanner only surfaces 'pending_sync' entries, so abandoned
+ * entries are invisible to the user but can be recovered by support if needed).
+ * They will be pruned by pruneAbandoned() on the next app startup.
+ */
 export function queueStart(sessionId: string, dayName: string): void {
+  // Abandon any lingering in-progress sessions
+  for (const id of readIndex()) {
+    const entry = readEntry(id);
+    if (entry?.status === 'in_progress') {
+      writeEntry({ ...entry, status: 'abandoned' });
+    }
+  }
+
   const entry: QueuedWorkout = {
     sessionId,
     dayName,
     startedAt: new Date().toISOString(),
-    sets: [],
-    status: 'in_progress',
+    sets:      [],
+    status:    'in_progress',
   };
   writeEntry(entry);
   const idx = readIndex();
-  if (!idx.includes(sessionId)) {
-    writeIndex([...idx, sessionId]);
-  }
+  if (!idx.includes(sessionId)) writeIndex([...idx, sessionId]);
 }
 
-/** Snapshot current sets to localStorage — call after every set completion */
 export function queueUpdate(sessionId: string, sets: WorkoutSet[]): void {
   const entry = readEntry(sessionId);
   if (!entry) return;
   writeEntry({ ...entry, sets });
 }
 
-/** Mark session as pending sync (workout finished, about to call API) */
 export function queueMarkPending(
   sessionId: string,
   payload: Omit<QueuedWorkout, 'sessionId' | 'startedAt' | 'status'>
@@ -109,27 +113,23 @@ export function queueMarkPending(
   writeEntry({
     ...entry,
     ...payload,
-    status: 'pending_sync',
+    status:      'pending_sync',
     completedAt: payload.completedAt || new Date().toISOString(),
   });
 }
 
-/** Remove after successful API sync */
 export function queueClear(sessionId: string): void {
   deleteEntry(sessionId);
 }
 
-/** Get all pending (unsynced completed) workouts */
 export function getPendingWorkouts(): QueuedWorkout[] {
   return readIndex()
     .map(readEntry)
     .filter((e): e is QueuedWorkout => e !== null && e.status === 'pending_sync');
 }
 
-/** Get in-progress workout (for crash recovery) */
 export function getInProgressWorkout(): QueuedWorkout | null {
-  const ids = readIndex();
-  for (const id of ids) {
+  for (const id of readIndex()) {
     const entry = readEntry(id);
     if (entry?.status === 'in_progress') return entry;
   }
@@ -137,9 +137,24 @@ export function getInProgressWorkout(): QueuedWorkout | null {
 }
 
 /**
- * Try to sync all pending workouts to Supabase.
- * Called on app startup. Returns number of successfully synced sessions.
+ * FIX #10: Remove in-progress and abandoned sessions older than STALE_MS (24 h).
+ * Called once on app startup (main.tsx) before flushPendingWorkouts so the index
+ * stays lean and getInProgressWorkout() never returns truly stale data.
  */
+export function pruneAbandoned(): void {
+  const now = Date.now();
+  for (const id of readIndex()) {
+    const entry = readEntry(id);
+    if (!entry) { deleteEntry(id); continue; }
+    if (
+      (entry.status === 'in_progress' || entry.status === 'abandoned') &&
+      now - new Date(entry.startedAt).getTime() > STALE_MS
+    ) {
+      deleteEntry(id);
+    }
+  }
+}
+
 export async function flushPendingWorkouts(): Promise<number> {
   const pending = getPendingWorkouts();
   if (pending.length === 0) return 0;
@@ -148,14 +163,14 @@ export async function flushPendingWorkouts(): Promise<number> {
   for (const workout of pending) {
     try {
       await workoutApi.log({
-        dayName:        workout.dayName,
-        completedAt:    workout.completedAt || new Date().toISOString(),
-        sets:           workout.sets,
+        dayName:         workout.dayName,
+        completedAt:     workout.completedAt || new Date().toISOString(),
+        sets:            workout.sets,
         perceivedEffort: workout.perceivedEffort,
-        feedback:       workout.feedback || '',
-        rpeCorrections: workout.rpeCorrections || {},
-        duration:       workout.duration,
-        muscleVolume:   workout.muscleVolume,
+        feedback:        workout.feedback || '',
+        rpeCorrections:  workout.rpeCorrections || {},
+        duration:        workout.duration,
+        muscleVolume:    workout.muscleVolume,
       });
       queueClear(workout.sessionId);
       synced++;
@@ -166,7 +181,6 @@ export async function flushPendingWorkouts(): Promise<number> {
   return synced;
 }
 
-/** Total sets currently saved in an in-progress session (for crash recovery UI) */
 export function getInProgressSetCount(sessionId: string): number {
   return readEntry(sessionId)?.sets.length ?? 0;
 }

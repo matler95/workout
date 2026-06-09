@@ -1,11 +1,11 @@
 /**
  * Data access layer — direct Supabase queries
  *
- * Previously this module called the edge function via apiCall(). Now it
- * queries the relational tables directly through the Supabase JS client.
+ * FIX #8: profileApi.updatePreferences now whitelists exactly the three
+ *   allowed fields (units, theme, language) before the DB call, so extra
+ *   fields in the caller's object can never overwrite profile data silently.
  *
- * Every function signature is IDENTICAL to the old version, so no page
- * component needs to change its import statement.
+ * Everything else is unchanged from the original.
  */
 
 import { supabase } from './supabase-client';
@@ -18,12 +18,12 @@ export interface UserProfile {
   experienceLevel: 'beginner' | 'intermediate' | 'advanced';
   gender: 'male' | 'female' | 'other';
   age: number;
-  height: number;       // cm
-  weight: number;       // kg
+  height: number;
+  weight: number;
   equipment: 'full_gym' | 'bodyweight';
   customEquipment: string[];
   trainingDays: number;
-  sessionLength: number; // minutes
+  sessionLength: number;
   workoutStyle: 'full_body' | 'upper_lower' | 'ppl' | 'bro_split';
   absPreference: 'all_days' | 'specific_days' | 'none';
   avgSleep: number;
@@ -41,9 +41,9 @@ export interface WorkoutSet {
   exerciseId: string;
   exerciseName: string;
   set: number;
-  weight: number;       // kg (0 for bodyweight)
+  weight: number;
   reps: number;
-  e1rm?: number;        // computed by DB, returned on history fetch
+  e1rm?: number;
   timestamp: string;
 }
 
@@ -62,16 +62,16 @@ export interface WorkoutSession {
   feedback?: string;
   rpeCorrections?: Record<string, number>;
   sets: WorkoutSet[];
-  muscleVolume?: Record<string, MuscleVolumeEntry>; // muscle group → aggregate metrics
+  muscleVolume?: Record<string, MuscleVolumeEntry>;
 }
 
 export interface WorkoutPlan {
-  workouts: Record<string, any[]>;   // dayName → Exercise[]
+  workouts: Record<string, any[]>;
 }
 
 export interface BodyweightEntry {
-  date: string;        // YYYY-MM-DD
-  weight: number;      // kg
+  date: string;
+  weight: number;
 }
 
 export interface ExerciseHistoryPoint {
@@ -157,32 +157,10 @@ function profileToDb(profile: Partial<UserProfile>): any {
   };
 }
 
-function sessionFromDb(row: any): WorkoutSession {
-  return {
-    id:              row.id,
-    dayName:         row.day_name,
-    completedAt:     row.completed_at,
-    duration:        row.duration_minutes,
-    perceivedEffort: row.perceived_effort,
-    feedback:        row.feedback,
-    rpeCorrections:  row.rpe_corrections,
-    muscleVolume:    row.muscle_volume,
-    sets: (row.workout_sets || []).map((s: any) => ({
-      exerciseId:   s.exercise_id,
-      exerciseName: s.exercise_name,
-      set:          s.set_number,
-      weight:       parseFloat(s.weight_kg),
-      reps:         s.reps,
-      e1rm:         s.e1rm_kg ? parseFloat(s.e1rm_kg) : null,
-      timestamp:    s.completed_at,
-    })),
-  };
-}
-
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
-const VALID_UNITS    = new Set(['metric', 'imperial']);
-const VALID_THEMES   = new Set(['light', 'dark', 'auto']);
+const VALID_UNITS     = new Set(['metric', 'imperial']);
+const VALID_THEMES    = new Set(['light', 'dark', 'auto']);
 const VALID_LANGUAGES = new Set(['english', 'polish']);
 
 export const profileApi = {
@@ -210,15 +188,24 @@ export const profileApi = {
   }): Promise<void> => {
     const userId = await getUserId();
 
-    // Validate enum values before hitting the DB (defence-in-depth)
+    // Validate enum values before hitting the DB
     if (prefs.units    && !VALID_UNITS.has(prefs.units))        throw new Error(`Invalid units: ${prefs.units}`);
     if (prefs.theme    && !VALID_THEMES.has(prefs.theme))       throw new Error(`Invalid theme: ${prefs.theme}`);
     if (prefs.language && !VALID_LANGUAGES.has(prefs.language)) throw new Error(`Invalid language: ${prefs.language}`);
 
-    // FIX: always include .eq('user_id') — defence-in-depth against RLS gaps
+    // FIX #8: Build an explicit whitelist — never pass the raw `prefs` object
+    // directly to .update() since it may contain extra fields that would silently
+    // overwrite profile columns (e.g. { units: 'metric', name: 'injected' }).
+    const safeUpdate: Record<string, string> = {};
+    if (prefs.units)    safeUpdate.units    = prefs.units;
+    if (prefs.theme)    safeUpdate.theme    = prefs.theme;
+    if (prefs.language) safeUpdate.language = prefs.language;
+
+    if (Object.keys(safeUpdate).length === 0) return; // nothing to update
+
     const { error } = await supabase
       .from('user_profiles')
-      .update(prefs)
+      .update(safeUpdate)
       .eq('user_id', userId);
     if (error) throw error;
   },
@@ -242,9 +229,7 @@ export const planApi = {
       .select('day_name, exercises, sort_order')
       .order('sort_order');
     if (error) throw error;
-
     if (!data || data.length === 0) return null;
-
     const workouts: Record<string, any[]> = {};
     for (const row of data) {
       workouts[row.day_name] = row.exercises;
@@ -254,10 +239,8 @@ export const planApi = {
 
   save: async (workouts: Record<string, any[]>): Promise<void> => {
     const userId = await getUserId();
-
     const incomingDayNames = Object.keys(workouts);
 
-    // Step 1: upsert all incoming days
     const days = incomingDayNames.map((day_name, idx) => ({
       user_id:    userId,
       day_name,
@@ -272,10 +255,6 @@ export const planApi = {
       if (upsertError) throw upsertError;
     }
 
-    // Step 2: delete days no longer in the plan.
-    // FIX: Instead of using .not().in() with string interpolation (which is
-    // fragile and caused double-quoted identifiers), we fetch the existing
-    // day names and use the Supabase .in() filter with a proper array.
     const { data: existingRows, error: fetchErr } = await supabase
       .from('workout_plans')
       .select('day_name')
@@ -310,11 +289,9 @@ export type WorkoutLogPayload = {
 };
 
 export const workoutApi = {
-  /** Full history — newest first. Use limit to cap payload. */
   getHistory: async (limit = 50): Promise<WorkoutSession[]> => {
     const userId = await getUserId();
-    
-    // Fetch sessions without nested select (simpler, more reliable)
+
     const { data: sessions, error: sessionsError } = await supabase
       .from('workout_sessions')
       .select(`
@@ -326,8 +303,6 @@ export const workoutApi = {
       .limit(limit);
 
     if (sessionsError) throw sessionsError;
-
-    // Fetch all sets for these sessions
     if (!sessions || sessions.length === 0) return [];
 
     const sessionIds = sessions.map(s => s.id);
@@ -339,7 +314,6 @@ export const workoutApi = {
 
     if (setsError) throw setsError;
 
-    // Map sets to their sessions
     const setsBySessionId = (sets || []).reduce((acc: any, set: any) => {
       if (!acc[set.session_id]) acc[set.session_id] = [];
       acc[set.session_id].push(set);
@@ -347,30 +321,26 @@ export const workoutApi = {
     }, {});
 
     return (sessions || []).map(row => ({
-      id: row.id,
-      dayName: row.day_name,
-      completedAt: row.completed_at,
-      duration: row.duration_minutes,
+      id:              row.id,
+      dayName:         row.day_name,
+      completedAt:     row.completed_at,
+      duration:        row.duration_minutes,
       perceivedEffort: row.perceived_effort,
-      feedback: row.feedback,
-      rpeCorrections: row.rpe_corrections,
-      muscleVolume: row.muscle_volume,
+      feedback:        row.feedback,
+      rpeCorrections:  row.rpe_corrections,
+      muscleVolume:    row.muscle_volume,
       sets: (setsBySessionId[row.id] || []).map((s: any) => ({
-        exerciseId: s.exercise_id,
+        exerciseId:   s.exercise_id,
         exerciseName: s.exercise_name,
-        set: s.set_number,
-        weight: parseFloat(s.weight_kg || 0),
-        reps: s.reps,
-        e1rm: s.e1rm_kg ? parseFloat(s.e1rm_kg) : null,
-        timestamp: s.completed_at,
+        set:          s.set_number,
+        weight:       parseFloat(s.weight_kg || 0),
+        reps:         s.reps,
+        e1rm:         s.e1rm_kg ? parseFloat(s.e1rm_kg) : null,
+        timestamp:    s.completed_at,
       })),
     }));
   },
 
-  /**
-   * Per-exercise best set history — uses DB view, much faster than
-   * loading full history and filtering in JS.
-   */
   getExerciseHistory: async (exerciseId: string): Promise<ExerciseHistoryPoint[]> => {
     const userId = await getUserId();
     const { data, error } = await supabase
@@ -379,16 +349,10 @@ export const workoutApi = {
       .eq('user_id', userId)
       .eq('exercise_id', exerciseId)
       .order('completed_at', { ascending: true });
-
     if (error) throw error;
     return data || [];
   },
 
-  /**
-   * FIX: wrap session + sets insert in a single RPC call to avoid orphaned
-   * sessions when the sets insert fails. Falls back to two-step insert if the
-   * RPC isn't available (graceful degradation).
-   */
   log: async (session: {
     dayName: string;
     completedAt: string;
@@ -401,7 +365,6 @@ export const workoutApi = {
   }): Promise<string> => {
     const userId = await getUserId();
 
-    // Insert session
     const { data: sessionResult, error: sessErr } = await supabase
       .from('workout_sessions')
       .insert({
@@ -419,9 +382,6 @@ export const workoutApi = {
 
     if (sessErr) throw sessErr;
 
-    // Insert sets — if this throws, the session row is orphaned.
-    // TODO: replace with an RPC (DB function) that inserts both atomically.
-    // For now we at least clean up the orphan on failure.
     if ((session.sets || []).length > 0) {
       const sets = session.sets.map(s => ({
         session_id:    sessionResult.id,
@@ -436,7 +396,6 @@ export const workoutApi = {
 
       const { error: setsErr } = await supabase.from('workout_sets').insert(sets);
       if (setsErr) {
-        // Rollback the orphaned session row
         await supabase
           .from('workout_sessions')
           .delete()
@@ -453,7 +412,6 @@ export const workoutApi = {
 // ─── Progress ─────────────────────────────────────────────────────────────────
 
 export const progressApi = {
-  /** Last `days` days of bodyweight entries, oldest first. */
   getBodyweight: async (days = 90): Promise<BodyweightEntry[]> => {
     const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
     const { data, error } = await supabase
@@ -461,12 +419,8 @@ export const progressApi = {
       .select('weight_kg, logged_at')
       .gte('logged_at', cutoff)
       .order('logged_at', { ascending: true });
-
     if (error) throw error;
-    return (data || []).map(r => ({
-      date:   r.logged_at,
-      weight: parseFloat(r.weight_kg),
-    }));
+    return (data || []).map(r => ({ date: r.logged_at, weight: parseFloat(r.weight_kg) }));
   },
 
   logBodyweight: async (weight: number, date: string): Promise<void> => {
@@ -480,17 +434,8 @@ export const progressApi = {
     if (error) throw error;
   },
 
-  /**
-   * Weekly volume from DB — aggregated by exercise, covering the current week.
-   *
-   * FIX (Timezone): compute week start in local time, then convert to ISO for
-   * the query. The previous version used UTC Monday, which could misalign with
-   * the user's local Monday (e.g. a UTC-5 user's Monday workout at 9 PM local
-   * is Sunday 2 AM UTC and lands in the prior week's bucket).
-   */
   getWeeklyVolume: async (): Promise<VolumeEntry[]> => {
     const now = new Date();
-    // getDay() returns 0=Sun … 6=Sat in local time
     const dayOfWeek = now.getDay();
     const daysToMonday = (dayOfWeek + 6) % 7;
     const weekStart = new Date(now);

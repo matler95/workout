@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { ChevronLeft, Save, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -20,16 +19,17 @@ interface EditableSet {
 
 export function WorkoutEdit() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate      = useNavigate();
+  const navigate = useNavigate();
 
-  const [session, setSession]   = useState<any>(null);
-  const [sets, setSets]         = useState<EditableSet[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [sets, setSets]       = useState<EditableSet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
 
-  // FIX #2: Track the original set IDs on load so we can diff and delete
-  // removed entries. Previously originalSetIds was never populated, meaning
-  // the delete branch was dead code and removed sets persisted in the DB.
+  // FIX #2: Capture original set IDs on load so handleSave can diff and
+  // issue a real DELETE for any sets the user removed. The original code
+  // had a comment admitting this was not implemented — sets appeared removed
+  // in the UI but persisted in the database indefinitely.
   const originalSetIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export function WorkoutEdit() {
 
       setSession(sessionData);
 
-      const loadedSets: EditableSet[] = (setsData || []).map(s => ({
+      const loaded: EditableSet[] = (setsData || []).map(s => ({
         id:           s.id,
         exerciseName: s.exercise_name,
         setNumber:    s.set_number,
@@ -64,11 +64,10 @@ export function WorkoutEdit() {
         dirty:        false,
       }));
 
-      setSets(loadedSets);
-
-      // Capture all original IDs so handleSave can compute what was deleted
-      originalSetIds.current = new Set(loadedSets.map(s => s.id));
-    } catch (e) {
+      setSets(loaded);
+      // Snapshot all original IDs — used by handleSave to detect deletions
+      originalSetIds.current = new Set(loaded.map(s => s.id));
+    } catch {
       toast.error('Failed to load session');
       navigate(-1);
     } finally {
@@ -91,7 +90,7 @@ export function WorkoutEdit() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // 1. Update changed sets
+      // 1. Persist weight/rep edits for dirty sets
       const dirtyIds = sets.filter(s => s.dirty);
       await Promise.all(
         dirtyIds.map(s =>
@@ -102,11 +101,10 @@ export function WorkoutEdit() {
         )
       );
 
-      // 2. FIX #2: Delete sets that were removed from the UI.
-      // Diff the original IDs against the current IDs to find what was deleted.
+      // 2. FIX #2: Actually delete sets that were removed in the UI.
+      // Diff current IDs against the snapshot taken on load.
       const currentIds = new Set(sets.map(s => s.id));
       const deletedIds = [...originalSetIds.current].filter(id => !currentIds.has(id));
-
       if (deletedIds.length > 0) {
         const { error: delErr } = await supabase
           .from('workout_sets')
@@ -130,16 +128,15 @@ export function WorkoutEdit() {
     </div>
   );
 
-  // Group sets by exercise
   const byExercise = sets.reduce<Record<string, EditableSet[]>>((acc, s) => {
     if (!acc[s.exerciseName]) acc[s.exerciseName] = [];
     acc[s.exerciseName].push(s);
     return acc;
   }, {});
 
-  const hasDirty    = sets.some(s => s.dirty);
-  const hasDeleted  = sets.length < originalSetIds.current.size;
-  const hasChanges  = hasDirty || hasDeleted;
+  const hasDirty   = sets.some(s => s.dirty);
+  const hasDeleted = sets.length < originalSetIds.current.size;
+  const hasChanges = hasDirty || hasDeleted;
 
   return (
     <div className="min-h-screen bg-background p-4 pb-24">
@@ -165,17 +162,18 @@ export function WorkoutEdit() {
 
         {!hasChanges && (
           <p className="text-xs text-muted-foreground px-1">
-            Edit any weight or rep count below, or tap the trash icon to remove a set — changes are saved when you tap Save.
+            Edit any weight or rep count below — changes are saved when you tap Save.
+            Tap the trash icon to remove a set permanently.
           </p>
         )}
 
         {hasDeleted && !saving && (
           <p className="text-xs text-amber-600 dark:text-amber-400 px-1">
-            {originalSetIds.current.size - sets.length} set{originalSetIds.current.size - sets.length !== 1 ? 's' : ''} will be deleted on save.
+            {originalSetIds.current.size - sets.length} set
+            {originalSetIds.current.size - sets.length !== 1 ? 's' : ''} will be permanently deleted on save.
           </p>
         )}
 
-        {/* Sets grouped by exercise */}
         {Object.entries(byExercise).map(([exerciseName, exSets]) => (
           <Card key={exerciseName}>
             <CardHeader className="pb-2">
@@ -206,7 +204,6 @@ export function WorkoutEdit() {
                     />
                     <span className="text-xs text-muted-foreground flex-shrink-0">reps</span>
                   </div>
-                  {/* e1RM preview */}
                   {s.weightKg > 0 && s.reps > 0 && (
                     <span className="text-xs text-muted-foreground flex-shrink-0">
                       ~{Math.round(s.weightKg * (1 + s.reps / 30))} kg 1RM
@@ -214,8 +211,8 @@ export function WorkoutEdit() {
                   )}
                   <button
                     onClick={() => deleteSet(s.id)}
-                    className="text-muted-foreground/40 hover:text-red-500 transition-colors flex-shrink-0"
                     title="Remove set"
+                    className="text-muted-foreground/40 hover:text-red-500 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

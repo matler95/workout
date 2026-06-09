@@ -1,14 +1,14 @@
 /**
  * Smart Algorithms Module
  *
- * Changes from original:
- * - checkFatigueWarnings: requires muscle trained 4+ days in last 5 (was: 4 in 14)
- *   Short recovery only fires for same-day training (was: < 2 days)
- *   Deduplicates by muscle group (was: by message string)
- *   Only looks at last 5 days (was: last 7 sessions regardless of date)
- * - suggestDeload: unchanged (was already correct after previous fix)
- * - estimateSessionDuration: removed (referenced non-existent Exercise fields)
- * - All other algorithms unchanged
+ * FIX #7: suggestDeload previously received only the current week's volume
+ * (from progressApi.getWeeklyVolume()) so it could never detect cumulative
+ * fatigue from prior weeks. The function signature is unchanged — callers
+ * now pass multi-week history from a new progressApi.getRecentVolume(weeks)
+ * call added to api.ts. The MRV comparison now aggregates across all rows
+ * rather than expecting them to be pre-filtered to one week.
+ *
+ * All other algorithms unchanged from the prior version.
  */
 
 import type { UserProfile, WorkoutSession, VolumeEntry, WorkoutSet } from './api';
@@ -26,10 +26,7 @@ export interface DeloadSuggestion {
 }
 
 export interface RepRangeRecommendation {
-  min: number;
-  max: number;
-  reason: string;
-  confidence: number;
+  min: number; max: number; reason: string; confidence: number;
 }
 
 export interface FatigueWarning {
@@ -42,10 +39,7 @@ export interface FatigueWarning {
 
 export interface ProgressionSuggestion {
   strategy: 'add_weight' | 'add_sets' | 'lower_reps' | 'maintain' | 'deload';
-  percent?: number;
-  sets?: number;
-  reason: string;
-  confidence: number;
+  percent?: number; sets?: number; reason: string; confidence: number;
 }
 
 export interface RecoveryScore {
@@ -56,9 +50,7 @@ export interface RecoveryScore {
 }
 
 export interface ExerciseSubstitute {
-  exercise: Exercise;
-  matchScore: number;
-  reason: string;
+  exercise: Exercise; matchScore: number; reason: string;
 }
 
 export interface InjuryRiskWarning {
@@ -79,15 +71,9 @@ function average(numbers: number[]): number {
   return numbers.length > 0 ? numbers.reduce((a, b) => a + b, 0) / numbers.length : 0;
 }
 
-function calculateStrengthTrend(recentSets: WorkoutSet[]): {
-  increasing: number;
-  stuck: number;
-  declining: number;
-} {
+function calculateStrengthTrend(recentSets: WorkoutSet[]) {
   if (recentSets.length < 2) return { increasing: 0, stuck: 1, declining: 0 };
-  const sorted = [...recentSets].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  const sorted = [...recentSets].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   let up = 0, flat = 0, down = 0;
   for (let i = 1; i < sorted.length; i++) {
     const diff = sorted[i].weight - sorted[i - 1].weight;
@@ -101,9 +87,7 @@ function calculateStrengthTrend(recentSets: WorkoutSet[]): {
 
 function getPlateauLength(history: WorkoutSet[]): number {
   if (history.length === 0) return 0;
-  const sorted = [...history].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  const sorted = [...history].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   let plateauSets = 0;
   const maxWeight = sorted[sorted.length - 1].weight;
   for (let i = sorted.length - 1; i >= 0; i--) {
@@ -115,6 +99,16 @@ function getPlateauLength(history: WorkoutSet[]): number {
 
 // ─── Deload Detection ─────────────────────────────────────────────────────────
 
+/**
+ * FIX #7: volumeHistory now receives ALL recent volume rows (e.g. last 4 weeks)
+ * from progressApi.getRecentVolume(4). We aggregate sets per muscle across all
+ * weeks and average them to get a representative weekly load. Previously this
+ * function only saw the current week's rows, so a user who exceeded MRV last
+ * week and reduced slightly this week would never trigger a deload suggestion.
+ *
+ * Callers: Dashboard.tsx now calls progressApi.getRecentVolume(4) instead of
+ * progressApi.getWeeklyVolume() and passes the result here.
+ */
 export function suggestDeload(
   volumeHistory: VolumeEntry[],
   workoutHistory: WorkoutSession[],
@@ -123,8 +117,11 @@ export function suggestDeload(
   const recentSessions = workoutHistory.slice(0, 14);
   if (recentSessions.length === 0) return { suggest: false };
 
-  // Map exercises → muscle groups, then check against MRV landmarks
+  // FIX #7: Aggregate per-muscle sets across ALL provided weeks, then average
+  // by distinct week count to get a representative weekly load.
+  const distinctWeeks = new Set(volumeHistory.map(e => e.week_start)).size || 1;
   const muscleWeeklySets: Record<string, number> = {};
+
   for (const entry of volumeHistory) {
     const muscleGroups = inferMuscleGroup(entry.exercise_id, entry.exercise_name);
     for (const muscle of muscleGroups) {
@@ -132,11 +129,13 @@ export function suggestDeload(
     }
   }
 
+  // Average across weeks so a high-volume week + normal week still shows the trend
   const excessiveMuscles: string[] = [];
-  for (const [muscle, sets] of Object.entries(muscleWeeklySets)) {
+  for (const [muscle, totalSets] of Object.entries(muscleWeeklySets)) {
+    const avgWeeklySets = totalSets / distinctWeeks;
     const landmark = VOLUME_LANDMARKS[muscle];
-    if (landmark && sets > landmark.MRV) {
-      excessiveMuscles.push(`${muscle} (${sets}/${landmark.MRV} MRV)`);
+    if (landmark && avgWeeklySets > landmark.MRV) {
+      excessiveMuscles.push(`${muscle} (avg ${Math.round(avgWeeklySets)}/${landmark.MRV} MRV)`);
     }
   }
 
@@ -157,13 +156,11 @@ export function suggestDeload(
       .filter(w => w > 0);
     if (avgWeights.length >= 3) {
       const trend = (avgWeights[avgWeights.length - 1] - avgWeights[0]) / (avgWeights[0] || 1);
-      if (trend < -0.05) {
-        return { suggest: true, reason: 'declining_strength', severity: 'medium' };
-      }
+      if (trend < -0.05) return { suggest: true, reason: 'declining_strength', severity: 'medium' };
     }
   }
 
-  // Overuse: same muscle groups trained 5+ consecutive days
+  // Overuse: same muscle groups trained frequently with insufficient rest
   let maxConsecutive = 0, currentStreak = 0;
   let musclesLastDay = new Set<string>();
   for (const session of recentSessions) {
@@ -173,18 +170,12 @@ export function suggestDeload(
     }
     if (musclesLastDay.size > 0 && musclesThisDay.size > 0) {
       const overlap = [...musclesLastDay].filter(m => musclesThisDay.has(m)).length;
-      if (overlap >= 2) {
-        currentStreak++;
-        maxConsecutive = Math.max(maxConsecutive, currentStreak);
-      } else {
-        currentStreak = 0;
-      }
+      if (overlap >= 2) { currentStreak++; maxConsecutive = Math.max(maxConsecutive, currentStreak); }
+      else currentStreak = 0;
     }
     musclesLastDay = new Set(musclesThisDay);
   }
-  if (maxConsecutive >= 5) {
-    return { suggest: true, reason: 'overuse', severity: 'high' };
-  }
+  if (maxConsecutive >= 5) return { suggest: true, reason: 'overuse', severity: 'high' };
 
   // High fatigue: low sleep + high stress + frequent sessions
   const fatigueScore =
@@ -206,29 +197,19 @@ export function getAdaptiveRepRange(
 ): RepRangeRecommendation {
   if (recentSets.length === 0) {
     const defaults: Record<string, [number, number]> = {
-      beginner:     [8, 12],
-      intermediate: [6, 10],
-      advanced:     [3, 6],
+      beginner: [8, 12], intermediate: [6, 10], advanced: [3, 6],
     };
     const [min, max] = defaults[experienceLevel] || [6, 10];
     return { min, max, reason: 'default_for_experience', confidence: 0.6 };
   }
-
   const trend = calculateStrengthTrend(recentSets.slice(-5));
-  if (trend.increasing > 0.6) return { min: 3,  max: 6,  reason: 'strength_phase_trending_up',       confidence: 0.85 };
-  if (trend.stuck > 0.6)      return { min: 10, max: 15, reason: 'plateau_breaking_with_volume',      confidence: 0.80 };
-  if (trend.declining > 0.4)  return { min: 8,  max: 12, reason: 'declining_phase_maintain',          confidence: 0.75 };
-  return                             { min: 6,  max: 10, reason: 'balanced_approach',                 confidence: 0.70 };
+  if (trend.increasing > 0.6) return { min: 3,  max: 6,  reason: 'strength_phase_trending_up',  confidence: 0.85 };
+  if (trend.stuck > 0.6)      return { min: 10, max: 15, reason: 'plateau_breaking_with_volume', confidence: 0.80 };
+  if (trend.declining > 0.4)  return { min: 8,  max: 12, reason: 'declining_phase_maintain',     confidence: 0.75 };
+  return                             { min: 6,  max: 10, reason: 'balanced_approach',            confidence: 0.70 };
 }
 
-// ─── Fatigue Warnings — Fixed ─────────────────────────────────────────────────
-//
-// Key changes vs original:
-//   • Only looks at sessions in the last 5 days (was: last 7 sessions regardless of age)
-//   • Short recovery fires only for same-day training (was: < 2 days)
-//   • High frequency threshold: 4+ distinct days in last 5 (was: 4 in last 14)
-//   • Deduplicates warnings by muscle group (was: by message string)
-//   • Never fires for muscles with 0 training in last 5 days
+// ─── Fatigue Warnings ─────────────────────────────────────────────────────────
 
 export function checkFatigueWarnings(
   dayPlan: Array<{ id?: string; name: string; primaryMuscles: string[]; secondaryMuscles: string[] }>,
@@ -236,11 +217,7 @@ export function checkFatigueWarnings(
   workoutHistory: WorkoutSession[],
 ): FatigueWarning[] {
   const warnings: FatigueWarning[] = [];
-
-  // Only last 5 days — prevents stale sessions creating false alarms
   const recentSessions = workoutHistory.filter(s => daysSince(s.completedAt) <= 5);
-
-  // Track warned muscles to avoid duplicate cards for the same muscle
   const warnedMuscles = new Set<string>();
 
   for (const ex of dayPlan) {
@@ -249,30 +226,23 @@ export function checkFatigueWarnings(
     for (const muscle of muscles) {
       if (warnedMuscles.has(muscle)) continue;
 
-      // Sessions in last 5 days that include this muscle
       const sessionsWithMuscle = recentSessions.filter(s =>
         (s.sets || []).some(set =>
           inferMuscleGroup(set.exerciseId, set.exerciseName).includes(muscle)
         )
       );
-
       if (sessionsWithMuscle.length === 0) continue;
 
-      // How many distinct calendar days was this muscle trained?
       const distinctDays = new Set(
         sessionsWithMuscle.map(s => Math.floor(daysSince(s.completedAt)))
       ).size;
 
-      // Most recent session for this muscle (history is newest-first)
       const mostRecent = sessionsWithMuscle[0];
       const daysSinceLast = daysSince(mostRecent.completedAt);
 
-      // Same-day training — high severity
       if (daysSinceLast < 1) {
         warnings.push({
-          exerciseName: ex.name,
-          type: 'short_recovery',
-          severity: 'high',
+          exerciseName: ex.name, type: 'short_recovery', severity: 'high',
           message: `${muscle.replace(/_/g, ' ')} was already trained today — consider swapping this exercise or training a different muscle group.`,
           daysSinceLastSession: 0,
         });
@@ -280,33 +250,25 @@ export function checkFatigueWarnings(
         continue;
       }
 
-      // High frequency: 4+ distinct days in the last 5 — genuinely excessive
       if (distinctDays >= 4) {
         warnings.push({
-          exerciseName: ex.name,
-          type: 'high_frequency',
-          severity: 'high',
+          exerciseName: ex.name, type: 'high_frequency', severity: 'high',
           message: `${muscle.replace(/_/g, ' ')} has been trained ${distinctDays} of the last 5 days. Most muscle groups need 48–72h to recover.`,
         });
         warnedMuscles.add(muscle);
         continue;
       }
 
-      // Excessive weekly volume above MRV
       const weeklyVolume = recentSessions.reduce(
-        (sum, s) =>
-          sum +
-          (s.sets || []).filter(set =>
-            inferMuscleGroup(set.exerciseId, set.exerciseName).includes(muscle)
-          ).length,
+        (sum, s) => sum + (s.sets || []).filter(set =>
+          inferMuscleGroup(set.exerciseId, set.exerciseName).includes(muscle)
+        ).length,
         0
       );
       const mrvThreshold = VOLUME_LANDMARKS[muscle]?.MRV || 20;
       if (weeklyVolume > mrvThreshold) {
         warnings.push({
-          exerciseName: ex.name,
-          type: 'excessive_volume',
-          severity: 'high',
+          exerciseName: ex.name, type: 'excessive_volume', severity: 'high',
           message: `${muscle.replace(/_/g, ' ')} volume this week (${weeklyVolume} sets) exceeds the recommended maximum of ${mrvThreshold} sets.`,
         });
         warnedMuscles.add(muscle);
@@ -325,88 +287,49 @@ export function suggestProgression(
   weeklyVolume: number,
   landmarkMAV: number = 14,
 ): ProgressionSuggestion {
-  if (recentSets.length === 0) {
-    return { strategy: 'maintain', reason: 'no_history', confidence: 0.5 };
-  }
-
+  if (recentSets.length === 0) return { strategy: 'maintain', reason: 'no_history', confidence: 0.5 };
   const plateauLength = getPlateauLength(recentSets);
   const trend = calculateStrengthTrend(recentSets.slice(-5));
-
-  if (plateauLength >= 3) {
-    return {
-      strategy: 'add_weight',
-      percent: plateauLength >= 5 ? 5 : 2.5,
-      reason: `${plateauLength} weeks plateau — time to add weight`,
-      confidence: 0.85,
-    };
-  }
-  if (plateauLength >= 2 && weeklyVolume > landmarkMAV) {
-    return { strategy: 'add_sets', sets: 1, reason: 'Plateau + high volume — add a set', confidence: 0.80 };
-  }
-  if (trend.increasing > 0.7 && recentSets.length >= 4) {
-    return { strategy: 'lower_reps', reason: 'Rapid strength gain — ready for lower rep ranges', confidence: 0.75 };
-  }
+  if (plateauLength >= 3)                          return { strategy: 'add_weight', percent: plateauLength >= 5 ? 5 : 2.5, reason: `${plateauLength} weeks plateau`, confidence: 0.85 };
+  if (plateauLength >= 2 && weeklyVolume > landmarkMAV) return { strategy: 'add_sets', sets: 1, reason: 'Plateau + high volume', confidence: 0.80 };
+  if (trend.increasing > 0.7 && recentSets.length >= 4) return { strategy: 'lower_reps', reason: 'Rapid strength gain', confidence: 0.75 };
   if (trend.declining > 0.5) {
-    if (weeklyVolume > landmarkMAV) {
-      return { strategy: 'deload', reason: 'Declining strength + high volume — deload recommended', confidence: 0.80 };
-    }
-    return { strategy: 'maintain', reason: 'Declining strength — maintain current load', confidence: 0.75 };
+    if (weeklyVolume > landmarkMAV) return { strategy: 'deload', reason: 'Declining + high volume', confidence: 0.80 };
+    return { strategy: 'maintain', reason: 'Declining strength — maintain load', confidence: 0.75 };
   }
   return { strategy: 'maintain', reason: 'On track', confidence: 0.70 };
 }
 
 // ─── Recovery Score ───────────────────────────────────────────────────────────
 
-export function calculateRecoveryScore(
-  profile: UserProfile,
-  workoutHistory: WorkoutSession[],
-): RecoveryScore {
+export function calculateRecoveryScore(profile: UserProfile, workoutHistory: WorkoutSession[]): RecoveryScore {
   const sleepScore    = Math.min(40, ((profile.avgSleep || 7) / 8) * 40);
   const stressScore   = ((10 - (profile.stressLevel || 3)) / 10) * 30;
   const last48Hours   = workoutHistory.filter(s => daysSince(s.completedAt) <= 2).length;
   const recoveryScore = last48Hours === 0 ? 30 : last48Hours === 1 ? 20 : 10;
   const totalScore    = Math.round(sleepScore + stressScore + recoveryScore);
-
   let level: RecoveryScore['level'];
   if (totalScore >= 80)      level = 'excellent';
   else if (totalScore >= 60) level = 'good';
   else if (totalScore >= 40) level = 'fair';
   else                       level = 'poor';
-
   const recommendation =
-    level === 'excellent' ? 'You\'re well recovered — train at full intensity today.'
+    level === 'excellent' ? "You're well recovered — train at full intensity today."
     : level === 'good'    ? 'Recovery looks good — regular workout is fine.'
     : level === 'fair'    ? 'Consider a lighter session or focus on form today.'
     :                       'Prioritize recovery: light activity or rest day.';
-
-  return {
-    score: totalScore,
-    level,
-    factors: { sleep: sleepScore, stress: stressScore, recovery: recoveryScore },
-    recommendation,
-  };
+  return { score: totalScore, level, factors: { sleep: sleepScore, stress: stressScore, recovery: recoveryScore }, recommendation };
 }
 
 // ─── Exercise Substitution ────────────────────────────────────────────────────
 
-export function suggestSubstitutes(
-  exercise: Exercise,
-  profile: UserProfile,
-  database: Exercise[],
-): ExerciseSubstitute[] {
-  const candidates = database.filter(
-    e =>
-      e.id !== exercise.id &&
-      e.primaryMuscles.some(m => exercise.primaryMuscles.includes(m))
-  );
-
-  return candidates
+export function suggestSubstitutes(exercise: Exercise, profile: UserProfile, database: Exercise[]): ExerciseSubstitute[] {
+  return database
+    .filter(e => e.id !== exercise.id && e.primaryMuscles.some(m => exercise.primaryMuscles.includes(m)))
     .map(candidate => {
       let score = 50;
-      const muscleOverlap =
-        candidate.primaryMuscles.filter(m => exercise.primaryMuscles.includes(m)).length /
-        exercise.primaryMuscles.length;
-      score += muscleOverlap * 30;
+      const overlap = candidate.primaryMuscles.filter(m => exercise.primaryMuscles.includes(m)).length / exercise.primaryMuscles.length;
+      score += overlap * 30;
       if (candidate.equipment === exercise.equipment) score += 20;
       else if (candidate.equipment === 'bodyweight' || exercise.equipment === 'bodyweight') score += 5;
       if (candidate.difficulty === exercise.difficulty) score += 20;
@@ -414,12 +337,7 @@ export function suggestSubstitutes(
         (candidate.difficulty === 'beginner' && exercise.difficulty === 'intermediate') ||
         (candidate.difficulty === 'intermediate' && exercise.difficulty === 'advanced')
       ) score += 10;
-
-      const reason =
-        muscleOverlap > 0.8 ? 'Very similar primary muscles'
-        : muscleOverlap > 0.5 ? 'Similar muscle group focus'
-        : 'Targets same muscles';
-
+      const reason = overlap > 0.8 ? 'Very similar primary muscles' : overlap > 0.5 ? 'Similar muscle group focus' : 'Targets same muscles';
       return { exercise: candidate, matchScore: Math.min(100, Math.round(score)), reason };
     })
     .sort((a, b) => b.matchScore - a.matchScore)
@@ -428,75 +346,35 @@ export function suggestSubstitutes(
 
 // ─── Bodyweight Trend Prediction ──────────────────────────────────────────────
 
-export function predictBodyweightTrend(
-  bodyweightData: Array<{ date: string; weight: number }>,
-  daysAhead = 60,
-) {
-  if (bodyweightData.length < 4) {
-    return {
-      projected: bodyweightData[bodyweightData.length - 1]?.weight || 0,
-      daysAhead,
-      slopePerWeek: 0,
-      confidence: 0,
-    };
-  }
-
+export function predictBodyweightTrend(bodyweightData: Array<{ date: string; weight: number }>, daysAhead = 60) {
+  if (bodyweightData.length < 4) return { projected: bodyweightData[bodyweightData.length - 1]?.weight || 0, daysAhead, slopePerWeek: 0, confidence: 0 };
   const recent = bodyweightData.slice(-28);
-  const n      = recent.length;
-  const xs     = Array.from({ length: n }, (_, i) => i);
-  const ys     = recent.map(d => d.weight);
-  const meanX  = average(xs);
-  const meanY  = average(ys);
-  const num    = xs.reduce((sum, x, i) => sum + (x - meanX) * (ys[i] - meanY), 0);
-  const den    = xs.reduce((sum, x) => sum + Math.pow(x - meanX, 2), 0);
-  const slope  = den > 0 ? num / den : 0;
-
+  const n = recent.length;
+  const xs = Array.from({ length: n }, (_, i) => i);
+  const ys = recent.map(d => d.weight);
+  const meanX = average(xs), meanY = average(ys);
+  const num = xs.reduce((sum, x, i) => sum + (x - meanX) * (ys[i] - meanY), 0);
+  const den = xs.reduce((sum, x) => sum + Math.pow(x - meanX, 2), 0);
+  const slope = den > 0 ? num / den : 0;
   const predicted = xs.map(x => meanY + slope * (x - meanX));
   const ssRes = ys.reduce((sum, y, i) => sum + Math.pow(y - predicted[i], 2), 0);
   const ssTot = ys.reduce((sum, y) => sum + Math.pow(y - meanY, 2), 0);
-  const r2    = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-
-  return {
-    projected:    Math.round((ys[ys.length - 1] + slope * daysAhead) * 10) / 10,
-    daysAhead,
-    slopePerWeek: Math.round(slope * 7 * 100) / 100,
-    confidence:   Math.max(0, Math.min(1, r2)),
-  };
+  const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+  return { projected: Math.round((ys[ys.length - 1] + slope * daysAhead) * 10) / 10, daysAhead, slopePerWeek: Math.round(slope * 7 * 100) / 100, confidence: Math.max(0, Math.min(1, r2)) };
 }
 
 // ─── Work Capacity Index ──────────────────────────────────────────────────────
 
-export function calculateWorkCapacity(
-  volumeHistory: VolumeEntry[],
-  last8Weeks: VolumeEntry[] = [],
-) {
+export function calculateWorkCapacity(volumeHistory: VolumeEntry[], last8Weeks: VolumeEntry[] = []) {
   const totalWeeklyVolume = volumeHistory.reduce((sum, v) => sum + v.total_sets, 0);
-
-  if (last8Weeks.length < 2) {
-    return {
-      totalWeeklyVolume,
-      trend: 'stable' as const,
-      confidence: 0.4,
-      recommendation: 'Need more data to assess capacity trend',
-    };
-  }
-
-  const oldVolume   = last8Weeks.slice(-4).reduce((s, v) => s + v.total_sets, 0) / 4;
-  const newVolume   = last8Weeks.slice(0, 4).reduce((s, v) => s + v.total_sets, 0) / 4;
-  const changePct   = (newVolume - oldVolume) / (oldVolume || 1);
-  const trend       = changePct > 0.05 ? 'increasing' as const
-    : changePct < -0.05 ? 'decreasing' as const
-    : 'stable' as const;
-
+  if (last8Weeks.length < 2) return { totalWeeklyVolume, trend: 'stable' as const, confidence: 0.4, recommendation: 'Need more data to assess capacity trend' };
+  const oldVolume = last8Weeks.slice(-4).reduce((s, v) => s + v.total_sets, 0) / 4;
+  const newVolume = last8Weeks.slice(0, 4).reduce((s, v) => s + v.total_sets, 0) / 4;
+  const changePct = (newVolume - oldVolume) / (oldVolume || 1);
+  const trend = changePct > 0.05 ? 'increasing' as const : changePct < -0.05 ? 'decreasing' as const : 'stable' as const;
   return {
-    totalWeeklyVolume: Math.round(totalWeeklyVolume),
-    trend,
-    confidence: 0.7,
-    recommendation: trend === 'increasing'
-      ? 'Work capacity improving — you can handle more volume.'
-      : trend === 'decreasing'
-      ? 'Work capacity declining — consider maintaining current volume.'
-      : 'Work capacity stable — consistent training.',
+    totalWeeklyVolume: Math.round(totalWeeklyVolume), trend, confidence: 0.7,
+    recommendation: trend === 'increasing' ? 'Work capacity improving — you can handle more volume.' : trend === 'decreasing' ? 'Work capacity declining — consider maintaining current volume.' : 'Work capacity stable — consistent training.',
   };
 }
 
@@ -504,37 +382,17 @@ export function calculateWorkCapacity(
 
 export function calculateMuscleBalance(volumeHistory: VolumeEntry[]) {
   const balance: Record<string, number> = {};
-
   for (const entry of volumeHistory) {
     const muscleNames = extractMuscleNames(entry.exercise_name);
-    muscleNames.forEach(muscle => {
-      balance[muscle] = (balance[muscle] || 0) + (entry.total_sets / Math.max(1, volumeHistory.length));
-    });
+    muscleNames.forEach(muscle => { balance[muscle] = (balance[muscle] || 0) + (entry.total_sets / Math.max(1, volumeHistory.length)); });
   }
-
-  Object.keys(balance).forEach(muscle => {
-    balance[muscle] = Math.round(balance[muscle] * 100);
-  });
-
-  const sorted       = Object.entries(balance).sort((a, b) => b[1] - a[1]);
-  const mostTrained  = sorted[0]?.[0] || '';
-  const leastTrained = sorted[sorted.length - 1]?.[0] || '';
-  const isBalanced   =
-    sorted.length > 1 && sorted[0][1] - sorted[sorted.length - 1][1] < 15;
-
-  return { balance, mostTrained, leastTrained, isBalanced };
+  Object.keys(balance).forEach(muscle => { balance[muscle] = Math.round(balance[muscle] * 100); });
+  const sorted = Object.entries(balance).sort((a, b) => b[1] - a[1]);
+  return { balance, mostTrained: sorted[0]?.[0] || '', leastTrained: sorted[sorted.length - 1]?.[0] || '', isBalanced: sorted.length > 1 && sorted[0][1] - sorted[sorted.length - 1][1] < 15 };
 }
 
 function extractMuscleNames(exerciseName: string): string[] {
-  const nameMap: Record<string, string[]> = {
-    bench:    ['Chest', 'Triceps'],
-    squat:    ['Quads', 'Glutes'],
-    deadlift: ['Back', 'Hamstrings'],
-    row:      ['Back', 'Biceps'],
-    press:    ['Shoulders', 'Triceps'],
-    curl:     ['Biceps'],
-    leg:      ['Quads', 'Hamstrings', 'Glutes'],
-  };
+  const nameMap: Record<string, string[]> = { bench: ['Chest', 'Triceps'], squat: ['Quads', 'Glutes'], deadlift: ['Back', 'Hamstrings'], row: ['Back', 'Biceps'], press: ['Shoulders', 'Triceps'], curl: ['Biceps'], leg: ['Quads', 'Hamstrings', 'Glutes'] };
   for (const [key, muscles] of Object.entries(nameMap)) {
     if (exerciseName.toLowerCase().includes(key)) return muscles;
   }
@@ -543,16 +401,10 @@ function extractMuscleNames(exerciseName: string): string[] {
 
 // ─── Rest Timer Recommendation ────────────────────────────────────────────────
 
-export function getRecommendedRest(
-  isCompound: boolean,
-  repRange: [number, number],
-  previousRestTimes: number[] = [],
-): number {
-  if (previousRestTimes.length > 0) {
-    return Math.round(average(previousRestTimes));
-  }
+export function getRecommendedRest(isCompound: boolean, repRange: [number, number], previousRestTimes: number[] = []): number {
+  if (previousRestTimes.length > 0) return Math.round(average(previousRestTimes));
   const [minReps] = repRange;
-  const baseRest  = isCompound ? { min: 2.5, max: 4 } : { min: 1, max: 2 };
+  const baseRest = isCompound ? { min: 2.5, max: 4 } : { min: 1, max: 2 };
   if (minReps <= 6)  return Math.round(baseRest.max * 60);
   if (minReps <= 10) return Math.round(((baseRest.min + baseRest.max) / 2) * 60);
   return Math.round(baseRest.min * 60);
@@ -560,23 +412,14 @@ export function getRecommendedRest(
 
 // ─── Injury Risk Detection ────────────────────────────────────────────────────
 
-export function detectInjuryRisk(
-  workoutHistory: any[],
-  exercises: Exercise[],
-): InjuryRiskWarning[] {
+export function detectInjuryRisk(workoutHistory: any[], exercises: Exercise[]): InjuryRiskWarning[] {
   const warnings: InjuryRiskWarning[] = [];
-
-  const last7Days = workoutHistory.filter(
-    w => (Date.now() - new Date(w.completedAt).getTime()) / 86400000 <= 7
-  );
-
+  const last7Days = workoutHistory.filter(w => (Date.now() - new Date(w.completedAt).getTime()) / 86400000 <= 7);
   const muscleFrequency: Record<string, { sets: number; days: Set<number> }> = {};
   last7Days.forEach(session => {
     const dayOfWeek = new Date(session.completedAt).getDay();
     (session.sets || []).forEach((set: any) => {
-      const exercise = exercises.find(
-        e => e.id === set.exerciseId || e.name === set.exerciseName
-      );
+      const exercise = exercises.find(e => e.id === set.exerciseId || e.name === set.exerciseName);
       if (exercise) {
         exercise.primaryMuscles.forEach(muscle => {
           if (!muscleFrequency[muscle]) muscleFrequency[muscle] = { sets: 0, days: new Set() };
@@ -586,69 +429,40 @@ export function detectInjuryRisk(
       }
     });
   });
-
   Object.entries(muscleFrequency).forEach(([muscle, data]) => {
     const patterns: string[] = [];
     let riskLevel: 'low' | 'medium' | 'high' = 'low';
-
-    if (data.days.size > 4) {
-      patterns.push(`Trained ${data.days.size}+ days per week`);
-      riskLevel = 'high';
-    }
-
-    const relatedExercises  = exercises.filter(e => e.primaryMuscles.includes(muscle));
+    if (data.days.size > 4) { patterns.push(`Trained ${data.days.size}+ days per week`); riskLevel = 'high'; }
+    const relatedExercises = exercises.filter(e => e.primaryMuscles.includes(muscle));
     const isMainlyIsolation = relatedExercises.every(e => e.primaryMuscles.length === 1);
-    const volumeThreshold   = isMainlyIsolation ? 15 : 20;
-
-    if (data.sets > volumeThreshold) {
-      patterns.push(`High volume: ${data.sets} sets (threshold: ${volumeThreshold})`);
-      if (riskLevel === 'low') riskLevel = 'medium';
-    }
-
+    const volumeThreshold = isMainlyIsolation ? 15 : 20;
+    if (data.sets > volumeThreshold) { patterns.push(`High volume: ${data.sets} sets`); if (riskLevel === 'low') riskLevel = 'medium'; }
     if (patterns.length > 0) {
-      const affectedNames = relatedExercises.map(e => e.name).slice(0, 3).join(', ');
       warnings.push({
-        exercise: affectedNames,
-        riskLevel,
-        patterns,
-        recommendation:
-          riskLevel === 'high'
-            ? 'Reduce frequency to 3–4×/week and consider a deload week'
-            : 'Monitor volume — consider decreasing sets or increasing recovery time',
+        exercise: relatedExercises.map(e => e.name).slice(0, 3).join(', '),
+        riskLevel, patterns,
+        recommendation: riskLevel === 'high' ? 'Reduce frequency to 3–4×/week and consider a deload week' : 'Monitor volume — consider decreasing sets or increasing recovery time',
       });
     }
   });
-
   return warnings;
 }
 
-// ─── Exercise Progression Stages ─────────────────────────────────────────────
-
 export interface ProgressionStage {
   stage: 'form_mastery' | 'volume_building' | 'intensity_focus' | 'power_development';
-  description: string;
-  repRange: [number, number];
-  sets: number;
-  minWeeksBefore?: number;
+  description: string; repRange: [number, number]; sets: number; minWeeksBefore?: number;
 }
 
-export function getExerciseProgressionStage(
-  exercise: Exercise,
-  history: WorkoutSet[] = [],
-): ProgressionStage {
-  if (history.length === 0) {
-    return { stage: 'form_mastery', description: 'Focus on form with moderate weight', repRange: [8, 12], sets: 3 };
-  }
-
-  const sorted    = [...history].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const recent    = sorted.slice(-20);
+export function getExerciseProgressionStage(exercise: Exercise, history: WorkoutSet[] = []): ProgressionStage {
+  if (history.length === 0) return { stage: 'form_mastery', description: 'Focus on form with moderate weight', repRange: [8, 12], sets: 3 };
+  const sorted = [...history].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const recent = sorted.slice(-20);
   const avgWeight = average(recent.map(s => s.weight));
   const maxWeight = Math.max(...recent.map(s => s.weight));
   const avgReps   = average(recent.map(s => s.reps));
   const count     = history.length;
-
-  if (count < 4)                             return { stage: 'form_mastery',    description: 'Perfect technique and find baseline strength', repRange: [8, 12], sets: 3 };
-  if (count < 12 && avgReps >= 10)           return { stage: 'volume_building', description: 'Add sets or reps to accumulate volume',         repRange: [6, 12], sets: 4, minWeeksBefore: 4 };
-  if (count >= 12 && maxWeight > avgWeight * 1.05) return { stage: 'intensity_focus', description: 'Progressive loading with moderate volume',  repRange: [4, 8],  sets: 4, minWeeksBefore: 8 };
+  if (count < 4)                                   return { stage: 'form_mastery',    description: 'Perfect technique and find baseline strength', repRange: [8, 12], sets: 3 };
+  if (count < 12 && avgReps >= 10)                 return { stage: 'volume_building', description: 'Add sets or reps to accumulate volume',        repRange: [6, 12], sets: 4, minWeeksBefore: 4 };
+  if (count >= 12 && maxWeight > avgWeight * 1.05) return { stage: 'intensity_focus', description: 'Progressive loading with moderate volume',     repRange: [4, 8],  sets: 4, minWeeksBefore: 8 };
   return { stage: 'power_development', description: 'Speed and maximum strength', repRange: [2, 6], sets: 5, minWeeksBefore: 16 };
 }

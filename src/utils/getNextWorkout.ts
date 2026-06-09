@@ -1,10 +1,12 @@
 /**
  * getNextWorkout — skips rest days, resilient to renamed workout days
  *
- * Changes:
- * - Rest days (exercises = [{ __rest: true }]) are filtered out of the cycle.
- *   getNextWorkout only returns training days.
- * - Original rename-resilience logic preserved.
+ * FIX #5: isToday was always returned as `false` when history existed,
+ * regardless of whether the suggested next workout day should be done today.
+ * Fix: if the most recent completed session was done on a previous calendar
+ * day (not today), the next workout in the rotation is "Today's Workout".
+ * If the most recent session was done today, the next day is "Next Workout"
+ * (user already trained today).
  */
 
 interface WorkoutPlanShape {
@@ -21,10 +23,19 @@ interface NextWorkout {
   isToday: boolean;
 }
 
-// A day is a rest day if its exercises array is [{ __rest: true }]
 function isRestDay(workoutPlan: WorkoutPlanShape, dayName: string): boolean {
   const exs = workoutPlan.workouts[dayName];
   return Array.isArray(exs) && exs.length === 1 && (exs[0] as any).__rest === true;
+}
+
+function isToday(isoDate: string): boolean {
+  const d = new Date(isoDate);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth()    === now.getMonth()    &&
+    d.getDate()     === now.getDate()
+  );
 }
 
 export function getNextWorkout(
@@ -33,17 +44,15 @@ export function getNextWorkout(
 ): NextWorkout | null {
   if (!workoutPlan?.workouts) return null;
 
-  // Only cycle through training days — rest days are skipped entirely
   const allDays      = Object.keys(workoutPlan.workouts);
   const trainingDays = allDays.filter(d => !isRestDay(workoutPlan, d));
   if (trainingDays.length === 0) return null;
 
-  // No history — suggest first training day
+  // No history → first training day, treat as today
   if (workoutHistory.length === 0) {
     return { day: trainingDays[0], isToday: true };
   }
 
-  // Map training day name → index for O(1) lookup
   const dayIndexByName = new Map<string, number>(
     trainingDays.map((name, idx) => [name, idx])
   );
@@ -53,10 +62,14 @@ export function getNextWorkout(
     const idx = dayIndexByName.get(session.dayName);
     if (idx !== undefined) {
       const nextIdx = (idx + 1) % trainingDays.length;
-      return { day: trainingDays[nextIdx], isToday: false };
+      // FIX #5: isToday is true only when the last session was NOT today —
+      // meaning the user hasn't trained yet today and should do the next day.
+      // If the last session was today, they already trained, so isToday=false.
+      const lastSessionWasToday = isToday(session.completedAt);
+      return { day: trainingDays[nextIdx], isToday: !lastSessionWasToday };
     }
   }
 
   // No history matched current plan — start from beginning
-  return { day: trainingDays[0], isToday: false };
+  return { day: trainingDays[0], isToday: true };
 }

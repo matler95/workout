@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,10 +11,17 @@ export function Plan() {
   const [profile, setProfile]         = useState<any>(null);
   const [workoutPlan, setWorkoutPlan] = useState<any>(null);
   const [loading, setLoading]         = useState(true);
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // FIX #11: Same race condition as Dashboard — location.key change and
+  // visibilitychange both fire on return from ActiveWorkout, causing two
+  // concurrent fetch rounds that race to setState.
+  const loadingRef = useRef(false);
 
   const loadData = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       const [prof, plan] = await Promise.all([profileApi.get(), planApi.get()]);
@@ -24,13 +31,12 @@ export function Plan() {
       console.error('Failed to load plan:', e);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, []);
 
-  // Re-fetch on route change (back-navigation from WorkoutBuilder)
   useEffect(() => { loadData(); }, [location.key, loadData]);
 
-  // Re-fetch when tab becomes visible (returning from ActiveWorkout)
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') loadData();
@@ -104,7 +110,6 @@ export function Plan() {
             const exercises = workoutPlan.workouts[dayName] || [];
             const isRest    = exercises.length === 1 && (exercises[0] as any).__rest === true;
 
-            // Rest day card
             if (isRest) {
               return (
                 <Card key={dayName} className="border-2 bg-muted/30 shadow-soft border-dashed border-2 border-muted">
@@ -121,12 +126,10 @@ export function Plan() {
               );
             }
 
-            // Step C fix: use per-exercise set counts instead of a fixed value
             const totalSets = exercises.reduce(
               (sum: number, ex: any) => sum + (ex.sets ?? (profile?.experienceLevel === 'beginner' ? 2 : 3)),
               0
             );
-            // 10 min warmup + avg 2.75 min per set (work + rest) + 5 min cooldown
             const estimatedMin = Math.round(10 + totalSets * 2.75 + 5);
 
             const themeClass = (() => {

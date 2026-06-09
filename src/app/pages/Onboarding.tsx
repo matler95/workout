@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
 import { Textarea } from '../components/ui/textarea';
-import { OptionGroup, OptionButton } from '../components/ui/OptionButton';
+import { OptionGroup } from '../components/ui/OptionButton';
 import { profileApi, progressApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -50,6 +50,7 @@ function validateDemographics(data: OnboardingData): string | null {
 function validateAvailability(data: OnboardingData): string | null {
   if (data.trainingDays < 1 || data.trainingDays > 7)
     return 'Training days must be between 1 and 7.';
+  // FIX #6: DB CHECK constraint is 15–180; slider was capped at 120. Now both agree.
   if (data.sessionLength < 15 || data.sessionLength > 180)
     return 'Session length must be between 15 and 180 minutes.';
   return null;
@@ -147,15 +148,13 @@ export function Onboarding() {
 
         <CardContent className="space-y-6">
 
-          {/* Step 1 — Name */}
           {step === 1 && card("What's your name?", "Let's personalise your experience",
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" value={data.name} onChange={e => setData({...data, name: e.target.value})} placeholder="John Doe" autoFocus />
+              <Input id="name" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} placeholder="John Doe" autoFocus />
             </div>
           )}
 
-          {/* Step 2 — Goal */}
           {step === 2 && card("What's your primary goal?", undefined,
             <OptionGroup
               value={data.primaryGoal as any}
@@ -171,7 +170,6 @@ export function Onboarding() {
             />
           )}
 
-          {/* Step 3 — Experience */}
           {step === 3 && card("What's your experience level?", undefined,
             <OptionGroup
               value={data.experienceLevel as any}
@@ -185,7 +183,6 @@ export function Onboarding() {
             />
           )}
 
-          {/* Step 4 — Demographics */}
           {step === 4 && card('Tell us about yourself', undefined,
             <div className="space-y-4">
               <div className="space-y-2">
@@ -205,61 +202,62 @@ export function Onboarding() {
                 <div className="space-y-2">
                   <Label htmlFor="age">Age</Label>
                   <Input id="age" type="number" inputMode="numeric" min={13} max={100}
-                    value={data.age} onChange={e => setData({...data, age: e.target.value})} placeholder="25" />
+                    value={data.age} onChange={e => setData({ ...data, age: e.target.value })} placeholder="25" />
                   <p className="text-xs text-muted-foreground">13–100</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="height">Height (cm)</Label>
                   <Input id="height" type="number" inputMode="decimal" min={100} max={250}
-                    value={data.height} onChange={e => setData({...data, height: e.target.value})} placeholder="175" />
+                    value={data.height} onChange={e => setData({ ...data, height: e.target.value })} placeholder="175" />
                   <p className="text-xs text-muted-foreground">100–250 cm</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="weight">Weight (kg)</Label>
                   <Input id="weight" type="number" inputMode="decimal" min={30} max={300}
-                    value={data.weight} onChange={e => setData({...data, weight: e.target.value})} placeholder="70" />
+                    value={data.weight} onChange={e => setData({ ...data, weight: e.target.value })} placeholder="70" />
                   <p className="text-xs text-muted-foreground">30–300 kg</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 5 — Equipment */}
           {step === 5 && card('What equipment do you have?', undefined,
             <OptionGroup
               value={data.equipment as any}
               onChange={v => setData({ ...data, equipment: v })}
               options={[
-                { value: 'full_gym',   label: 'Full Gym',         sub: 'Barbells, cables, machines, dumbbells' },
-                { value: 'bodyweight', label: 'Bodyweight Only',  sub: 'No equipment needed' },
+                { value: 'full_gym',   label: 'Full Gym',        sub: 'Barbells, cables, machines, dumbbells' },
+                { value: 'bodyweight', label: 'Bodyweight Only', sub: 'No equipment needed' },
               ]}
               cols={1}
             />
           )}
 
-          {/* Step 6 — Availability */}
           {step === 6 && (
             <div className="space-y-6">
               <CardTitle>Training Availability</CardTitle>
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Training days per week: <span className="font-semibold text-foreground">{data.trainingDays}</span></Label>
-                  <Slider value={[data.trainingDays]} onValueChange={([v]) => setData({...data, trainingDays: v})} min={1} max={7} step={1} />
+                  <Slider value={[data.trainingDays]} onValueChange={([v]) => setData({ ...data, trainingDays: v })} min={1} max={7} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>1 day</span><span>7 days</span></div>
                   {data.trainingDays === 1 && (
                     <p className="text-xs text-amber-600">One session per week is a great start — full-body training works best at this frequency.</p>
                   )}
                 </div>
                 <div className="space-y-2">
+                  {/* FIX #6: max raised from 120 → 180 to match DB CHECK constraint (15–180).
+                      The previous cap of 120 meant users who wanted 2- or 3-hour sessions
+                      could not set them, and the validation error message said 180 while the
+                      slider only went to 120 — a confusing mismatch. */}
                   <Label>Session length: <span className="font-semibold text-foreground">{data.sessionLength} min</span></Label>
-                  <Slider value={[data.sessionLength]} onValueChange={([v]) => setData({...data, sessionLength: v})} min={15} max={120} step={15} />
-                  <div className="flex justify-between text-xs text-muted-foreground"><span>15 min</span><span>120 min</span></div>
+                  <Slider value={[data.sessionLength]} onValueChange={([v]) => setData({ ...data, sessionLength: v })} min={15} max={180} step={15} />
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>15 min</span><span>180 min</span></div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 7 — Workout Style */}
           {step === 7 && card('Preferred Workout Style', undefined,
             <div className="space-y-3">
               <OptionGroup
@@ -281,7 +279,6 @@ export function Onboarding() {
             </div>
           )}
 
-          {/* Step 8 — Abs */}
           {step === 8 && card('Ab Training Preference', undefined,
             <OptionGroup
               value={data.absPreference as any}
@@ -295,17 +292,15 @@ export function Onboarding() {
             />
           )}
 
-          {/* Step 9 — Recovery & Lifestyle */}
           {step === 9 && (
             <div className="space-y-6">
               <CardTitle>Recovery & Lifestyle</CardTitle>
               <div className="space-y-5">
                 <div className="space-y-2">
                   <Label>Average sleep: <span className="font-semibold text-foreground">{data.avgSleep}h</span></Label>
-                  <Slider value={[data.avgSleep]} onValueChange={([v]) => setData({...data, avgSleep: v})} min={4} max={10} step={0.5} />
+                  <Slider value={[data.avgSleep]} onValueChange={([v]) => setData({ ...data, avgSleep: v })} min={4} max={10} step={0.5} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>4h</span><span>10h</span></div>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Activity outside the gym</Label>
                   <OptionGroup
@@ -320,13 +315,11 @@ export function Onboarding() {
                     cols={2}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Stress level: <span className="font-semibold text-foreground">{data.stressLevel}/10</span></Label>
-                  <Slider value={[data.stressLevel]} onValueChange={([v]) => setData({...data, stressLevel: v})} min={1} max={10} step={1} />
+                  <Slider value={[data.stressLevel]} onValueChange={([v]) => setData({ ...data, stressLevel: v })} min={1} max={10} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>Low</span><span>High</span></div>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Job activity</Label>
                   <OptionGroup
@@ -340,22 +333,20 @@ export function Onboarding() {
                     cols={1}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Cardio sessions per week: <span className="font-semibold text-foreground">{data.cardioSessions}</span></Label>
-                  <Slider value={[data.cardioSessions]} onValueChange={([v]) => setData({...data, cardioSessions: v})} min={0} max={7} step={1} />
+                  <Slider value={[data.cardioSessions]} onValueChange={([v]) => setData({ ...data, cardioSessions: v })} min={0} max={7} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground"><span>0</span><span>7</span></div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 10 — Injuries */}
           {step === 10 && card('Movement & History', 'Any injuries or limitations we should know about?',
             <div className="space-y-2">
               <Label htmlFor="injuries">Injuries or limitations (optional)</Label>
               <Textarea id="injuries" value={data.injuries}
-                onChange={e => setData({...data, injuries: e.target.value})}
+                onChange={e => setData({ ...data, injuries: e.target.value })}
                 placeholder="e.g., lower back pain, shoulder impingement, knee issues..." rows={4} />
             </div>
           )}
