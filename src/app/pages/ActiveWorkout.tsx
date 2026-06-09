@@ -16,11 +16,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import {
-  Clock, Check, Trophy, SkipForward,
-  Minus, Plus, X, TrendingUp, TrendingDown, HelpCircle,
+  Clock, Check, Trophy, X, TrendingUp, TrendingDown,
+  HelpCircle, MoreVertical, ArrowDown, SkipForward, Minus, Plus,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -87,10 +94,7 @@ function loadWorkoutStart(): number {
   try { const v = sessionStorage.getItem(WORKOUT_START_KEY); return v ? Number(v) : Date.now(); } catch { return Date.now(); }
 }
 
-// ─── FIX 1: Stable exercise key helper ────────────────────────────────────────
-// Plan exercises stored in JSONB may have id: undefined if they were added
-// before the exercise ID audit. Fall back to the name so the progression
-// engine can still match history entries (which also key by name in that case).
+// ─── Stable exercise key helper ────────────────────────────────────────────────
 
 function exerciseKey(ex: { id?: string; name: string }): string {
   return (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
@@ -100,7 +104,6 @@ function exerciseKey(ex: { id?: string; name: string }): string {
 
 function SuggestionPill({ plan }: { plan: ExercisePlan }) {
   if (plan.source === 'bodyweight') return null;
-
   const { action, suggestedWeight } = plan;
   if (!action || action === 'insufficient_data') return null;
 
@@ -196,10 +199,17 @@ export function ActiveWorkout() {
   const navigate = useNavigate();
   const dayName  = location.state?.dayName as string | undefined;
 
+  // Original full list (never mutated after load — used for plan lookup and warmup)
   const [exercises, setExercises]           = useState<any[]>([]);
+  // Mutable queue of remaining exercises for this session
+  const [exerciseQueue, setExerciseQueue]   = useState<any[]>([]);
+  // Keys of exercises the user pushed back at least once (to show badge)
+  const [deferredIds, setDeferredIds]       = useState<Set<string>>(new Set());
+  // Total exercises originally planned (for progress %)
+  const [totalPlanned, setTotalPlanned]     = useState(0);
+
   const [plans, setPlans]                   = useState<Record<string, ExercisePlan>>({});
   const [currentPhase, setCurrentPhase]     = useState<'warmup' | 'exercise' | 'feedback'>('warmup');
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [currentSet, setCurrentSet]         = useState(1);
   const [restTimer, setRestTimer]           = useState(0);
   const [completedSets, setCompletedSets]   = useState<SetLog[]>([]);
@@ -215,7 +225,10 @@ export function ActiveWorkout() {
 
   const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const offlineSessionId   = useRef<string>(generateSessionId());
-  const startTimeRef = useRef<number>(loadWorkoutStart());
+  const startTimeRef       = useRef<number>(loadWorkoutStart());
+
+  // Derived: current exercise is always queue[0]
+  const currentExercise = exerciseQueue[0];
 
   useEffect(() => {
     if (!dayName) { navigate('/plan', { replace: true }); return; }
@@ -223,7 +236,7 @@ export function ActiveWorkout() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [dayName]);
 
-  // Restore timer from sessionStorage on mount / visibility change
+  // Restore timer on mount / visibility change
   useEffect(() => {
     const savedStart = loadRestStart();
     if (savedStart !== null) {
@@ -289,13 +302,13 @@ export function ActiveWorkout() {
 
       const exs: any[] = planResult?.workouts?.[dayName!] || [];
       setExercises(exs);
+      setExerciseQueue([...exs]);
+      setTotalPlanned(exs.length);
 
       const historySuggestions = computeAllSuggestions(history as WorkoutLog[]);
       const builtPlans: Record<string, ExercisePlan> = {};
 
       for (const ex of exs) {
-        // FIX 1: use stable key — never rely on id alone since JSONB exercises
-        // may have been saved without an id field.
         const key  = exerciseKey(ex);
         const tier = classifyExercise(ex.name);
         const [repLo, repHi] = getRepTarget(tier);
@@ -322,8 +335,6 @@ export function ActiveWorkout() {
             mode: getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', tier),
           };
         } else if (profile) {
-          // FIX 1: pass the stable key as exerciseId so startingWeights can
-          // look up the WEIGHT_BY_ID map correctly even when ex.id is undefined.
           const estimate = estimateStartingWeight(ex.name, profile, ex.id || undefined);
           builtPlans[key] = {
             suggestedWeight: estimate.weight,
@@ -368,6 +379,51 @@ export function ActiveWorkout() {
     }
   };
 
+  // ── Queue management ──────────────────────────────────────────────────────────
+
+  /**
+   * Push current exercise to the back of the queue.
+   * Clears the rest timer and advances to the next exercise.
+   */
+  const handleDoLater = () => {
+    if (exerciseQueue.length <= 1) {
+      // Only one exercise left — can't defer, just tell the user
+      toast.info('This is the last exercise — finish or skip it.');
+      return;
+    }
+    const [current, ...rest] = exerciseQueue;
+    const key = exerciseKey(current);
+    setDeferredIds(prev => new Set([...prev, key]));
+    const newQueue = [...rest, current];
+    setExerciseQueue(newQueue);
+    setCurrentSet(1);
+    setRestTimer(0);
+    setShowExtraWeight(false);
+    clearRestStart();
+    applyPlanToInputs(newQueue[0], plans);
+    toast('Moved to end — you\'ll come back to it.', { icon: '🔄' });
+  };
+
+  /**
+   * Skip current exercise entirely for this session.
+   * Removes it from the queue without adding a set log.
+   */
+  const handleSkipEntirely = () => {
+    const newQueue = exerciseQueue.slice(1);
+    if (newQueue.length === 0) {
+      // No exercises left → go to feedback
+      setCurrentPhase('feedback');
+      return;
+    }
+    setExerciseQueue(newQueue);
+    setCurrentSet(1);
+    setRestTimer(0);
+    setShowExtraWeight(false);
+    clearRestStart();
+    applyPlanToInputs(newQueue[0], plans);
+    toast('Exercise skipped for today.', { icon: '⏭' });
+  };
+
   // ── Exit ─────────────────────────────────────────────────────────────────────
 
   const handleExitChoice = async (choice: ExitChoice) => {
@@ -400,14 +456,15 @@ export function ActiveWorkout() {
   // ── Set / exercise flow ──────────────────────────────────────────────────────
 
   const handleSetComplete = () => {
+    if (!currentExercise) return;
+
     const weight = parseFloat(customWeight) || 0;
     const reps   = parseInt(customReps) || 0;
     if (reps <= 0) { toast.error('Enter reps'); return; }
 
-    const ex      = exercises[currentExerciseIndex];
-    const key     = exerciseKey(ex);
+    const key     = exerciseKey(currentExercise);
     const plan    = plans[key];
-    const mode    = plan?.mode ?? getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', classifyExercise(ex.name));
+    const mode    = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipmentType || currentExercise.equipment || 'full_gym', classifyExercise(currentExercise.name));
     const isBodyweightMode = mode === 'bodyweight';
 
     if (!isBodyweightMode && weight <= 0) { toast.error('Enter weight'); return; }
@@ -416,13 +473,9 @@ export function ActiveWorkout() {
       ? (showExtraWeight ? weight : 0)
       : weight;
 
-    // FIX 1: exerciseId is always a non-empty string — falls back to name.
-    // This is what gets written to workout_sets.exercise_id in the DB.
-    // The progression engine keys history by (exerciseId || exerciseName),
-    // so using the same stable key here ensures future sessions match correctly.
     const newSet: SetLog = {
-      exerciseId:   key,            // stable: ex.id || ex.name
-      exerciseName: ex.name,
+      exerciseId:   key,
+      exerciseName: currentExercise.name,
       set:          currentSet,
       weight:       loggedWeight,
       reps,
@@ -444,21 +497,22 @@ export function ActiveWorkout() {
       setCurrentSet(currentSet + 1);
       startRestTimer();
     } else {
-      advanceExercise(newCompleted);
+      // Finished all sets for this exercise — advance queue
+      advanceQueue(newCompleted);
     }
   };
 
-  const advanceExercise = (current: SetLog[]) => {
-    if (currentExerciseIndex < exercises.length - 1) {
-      const nextIdx = currentExerciseIndex + 1;
-      setCurrentExerciseIndex(nextIdx);
+  const advanceQueue = (current: SetLog[]) => {
+    const newQueue = exerciseQueue.slice(1);
+    if (newQueue.length === 0) {
+      setCurrentPhase('feedback');
+    } else {
+      setExerciseQueue(newQueue);
       setCurrentSet(1);
       setRestTimer(0);
       setShowExtraWeight(false);
       clearRestStart();
-      applyPlanToInputs(exercises[nextIdx], plans);
-    } else {
-      setCurrentPhase('feedback');
+      applyPlanToInputs(newQueue[0], plans);
     }
   };
 
@@ -479,7 +533,6 @@ export function ActiveWorkout() {
       }
 
       const muscleVolume = calculateMuscleVolume(completedSets);
-
       const now      = new Date().toISOString();
       const duration = Math.round((Date.now() - startTimeRef.current) / 60000);
 
@@ -496,7 +549,6 @@ export function ActiveWorkout() {
       });
 
       queueClear(offlineSessionId.current);
-
       clearRestStart();
       try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
 
@@ -511,7 +563,7 @@ export function ActiveWorkout() {
     }
   };
 
-  // ── Loading / empty guards ──────────────────────────────────────────────────
+  // ── Guards ──────────────────────────────────────────────────────────────────
 
   if (!dayName) return null;
 
@@ -583,6 +635,7 @@ export function ActiveWorkout() {
               <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
             </div>
 
+            {/* RPE explanation */}
             {(() => {
               const adjusted = exercises.filter(ex => {
                 const plan = plans[exerciseKey(ex)];
@@ -590,15 +643,13 @@ export function ActiveWorkout() {
               });
               if (adjusted.length === 0) return null;
               return (
-                <div className="flex items-start gap-2">
-                  <button
-                    onClick={() => setShowRPEInfo(v => !v)}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>How are weights chosen?</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowRPEInfo(v => !v)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>How are weights chosen?</span>
+                </button>
               );
             })()}
             {showRPEInfo && (
@@ -609,6 +660,7 @@ export function ActiveWorkout() {
               </div>
             )}
 
+            {/* Exercise list preview */}
             <div className="space-y-1">
               {exercises.map((ex, i) => (
                 <div
@@ -644,6 +696,10 @@ export function ActiveWorkout() {
               ))}
             </div>
 
+            <p className="text-xs text-muted-foreground text-center">
+              You can reorder or skip exercises any time during the workout.
+            </p>
+
             <Button
               className="w-full rounded-xl h-12 font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg shadow-emerald-500/25"
               size="lg"
@@ -666,8 +722,9 @@ export function ActiveWorkout() {
   // ── Feedback screen ─────────────────────────────────────────────────────────
 
   if (currentPhase === 'feedback') {
-    const totalVolume    = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
-    const durationMin    = Math.round((Date.now() - startTimeRef.current) / 60000);
+    const totalVolume = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
+    const durationMin = Math.round((Date.now() - startTimeRef.current) / 60000);
+    const skippedCount = totalPlanned - new Set(completedSets.map(s => s.exerciseId)).size;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
@@ -679,6 +736,11 @@ export function ActiveWorkout() {
                 <Trophy className="w-8 h-8 text-white" />
               </div>
               <h2 className="text-xl font-semibold">Workout Complete!</h2>
+              {skippedCount > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {skippedCount} exercise{skippedCount > 1 ? 's' : ''} skipped today
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -759,30 +821,38 @@ export function ActiveWorkout() {
 
   // ── Exercise screen ─────────────────────────────────────────────────────────
 
-  const currentExercise     = exercises[currentExerciseIndex];
+  if (!currentExercise) return null;
+
   const currentKey          = exerciseKey(currentExercise);
   const plan                = plans[currentKey];
   const tier                = classifyExercise(currentExercise.name);
   const [repLo, repHi]      = plan?.suggestedReps ?? getRepTarget(tier);
   const exerciseSets        = completedSets.filter(s => s.exerciseId === currentKey);
   const setsForThisExercise = plan?.sets ?? 3;
-  const totalSetsAll        = exercises.reduce(
+  const isDeferred          = deferredIds.has(currentKey);
+
+  // Progress: sets completed out of total planned sets
+  const totalSetsAll = exercises.reduce(
     (sum, ex) => sum + (plans[exerciseKey(ex)]?.sets ?? 3),
     0
   );
-  const progressPct     = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
-  const weightMode      = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipmentType || currentExercise.equipment || 'full_gym', tier);
-  const modeConfig      = getWeightModeConfig(weightMode);
-  const isBodyweight    = weightMode === 'bodyweight';
-  const plates          = !isBodyweight ? plateSuggestion(parseFloat(customWeight) || 0, weightMode) : '';
+  const progressPct = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
+
+  const weightMode   = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipmentType || currentExercise.equipment || 'full_gym', tier);
+  const modeConfig   = getWeightModeConfig(weightMode);
+  const isBodyweight = weightMode === 'bodyweight';
+  const plates       = !isBodyweight ? plateSuggestion(parseFloat(customWeight) || 0, weightMode) : '';
 
   const repFeedback = (() => {
     const r = parseInt(customReps);
     if (!r || isNaN(r)) return null;
-    if (r > repHi)  return { msg: `${r} reps — above target, consider adding weight next set`, color: 'text-blue-600 dark:text-blue-400' };
-    if (r < repLo)  return { msg: `${r} reps — below target, reduce weight if needed`, color: 'text-amber-600 dark:text-amber-400' };
+    if (r > repHi) return { msg: `${r} reps — above target, consider adding weight next set`, color: 'text-blue-600 dark:text-blue-400' };
+    if (r < repLo) return { msg: `${r} reps — below target, reduce weight if needed`, color: 'text-amber-600 dark:text-amber-400' };
     return { msg: `${r} reps ✓`, color: 'text-emerald-600 dark:text-emerald-400' };
   })();
+
+  // Remaining exercises after the current one (for "up next" panel)
+  const upNextQueue = exerciseQueue.slice(1);
 
   return (
     <div className="min-h-screen bg-background pb-page">
@@ -792,7 +862,7 @@ export function ActiveWorkout() {
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">{dayName}</p>
             <p className="font-semibold text-sm">
-              Ex. {currentExerciseIndex + 1}/{exercises.length} · Set {currentSet}/{setsForThisExercise}
+              {exerciseQueue.length} left · Set {currentSet}/{setsForThisExercise}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -846,7 +916,7 @@ export function ActiveWorkout() {
         </div>
       )}
 
-      <div className={`max-w-2xl mx-auto px-4 space-y-4 ${restTimer > 0 ? 'pt-4' : 'pt-4'}`}>
+      <div className="max-w-2xl mx-auto px-4 space-y-4 pt-4">
         <Card>
           <CardHeader className="pb-3">
             <div className="flex justify-between items-start">
@@ -854,6 +924,12 @@ export function ActiveWorkout() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-xl leading-tight">{currentExercise.name}</CardTitle>
                   {plan && <SuggestionPill plan={plan} />}
+                  {/* Badge when this exercise was deferred earlier in the session */}
+                  {isDeferred && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                      🔄 Coming back to this
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {currentExercise.primaryMuscles?.map((m: string) => (
@@ -864,14 +940,35 @@ export function ActiveWorkout() {
                   Target: {repLo}–{repHi} reps
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => advanceExercise(completedSets)}
-                className="text-muted-foreground flex-shrink-0"
-              >
-                <SkipForward className="w-4 h-4" />
-              </Button>
+
+              {/* Exercise action menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground flex-shrink-0">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={handleDoLater}
+                    disabled={exerciseQueue.length <= 1}
+                    className="gap-2"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                    Do later
+                    <span className="ml-auto text-xs text-muted-foreground">moves to end</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleSkipEntirely}
+                    className="gap-2 text-muted-foreground"
+                  >
+                    <SkipForward className="w-4 h-4" />
+                    Skip today
+                    <span className="ml-auto text-xs text-muted-foreground">removes it</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardHeader>
 
@@ -1032,19 +1129,30 @@ export function ActiveWorkout() {
           </Card>
         )}
 
-        {currentExerciseIndex < exercises.length - 1 && (
+        {/* Up next — reflects live queue order */}
+        {upNextQueue.length > 0 && (
           <Card>
             <CardContent className="pt-3 pb-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Up next</p>
               <div className="space-y-1.5">
-                {exercises.slice(currentExerciseIndex + 1, currentExerciseIndex + 4).map((ex, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0">
-                      {currentExerciseIndex + 2 + i}
-                    </span>
-                    <span className="flex-1">{ex.name}</span>
-                  </div>
-                ))}
+                {upNextQueue.slice(0, 4).map((ex, i) => {
+                  const key = exerciseKey(ex);
+                  const isDefEx = deferredIds.has(key);
+                  return (
+                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0">
+                        {i + 2}
+                      </span>
+                      <span className="flex-1">{ex.name}</span>
+                      {isDefEx && (
+                        <span className="text-xs text-violet-500 dark:text-violet-400 flex-shrink-0">moved</span>
+                      )}
+                    </div>
+                  );
+                })}
+                {upNextQueue.length > 4 && (
+                  <p className="text-xs text-muted-foreground pl-7">+{upNextQueue.length - 4} more</p>
+                )}
               </div>
             </CardContent>
           </Card>
