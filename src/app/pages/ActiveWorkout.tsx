@@ -568,7 +568,9 @@ export function ActiveWorkout() {
     const tier     = classifyExercise(exercise.name);
     const [repLo, repHi] = getRepTarget(tier);
     const mode = getWeightMode(
-      exercise.selectedEquipmentType ?? equipmentType ?? exercise.equipmentType ?? 'other',
+      exercise.name,
+      (exercise as any).selectedEquipmentType ?? equipmentType ?? exercise.equipmentType ?? 'full_gym',
+      tier, 
     );
     const histKey = buildHistoryKey(exercise.id || exercise.name, exercise.name, equipmentType);
     const existing = plans[histKey];
@@ -596,7 +598,7 @@ export function ActiveWorkout() {
     setPlans(prev => ({ ...prev, [histKey]: newPlan }));
     // Mark as ad-hoc so it doesn't count against skipped exercises
     setAdHocIds(prev => new Set(prev).add(exercise.id || exercise.name));
-    toast.success(`\${exercise.name} added to queue`);
+    toast.success(`${exercise.name} added to queue`);
   };
 
   const handleReorder = (newQueue: any[]) => {
