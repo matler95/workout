@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
 import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, CheckCircle, Info, Minus, BedDouble } from 'lucide-react';
+import { Search, Plus, Trash2, CheckCircle, Info, Minus, BedDouble, Dumbbell } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import {
   buildSuggestionMap,
   smartSetCount,
@@ -16,10 +17,24 @@ import {
   type SuggestionMap,
 } from '../../utils/smartSetCount';
 import type { WorkoutLog } from '../../../utils/progressiveOverload';
+import {
+  getMovementGroups,
+  getVariantsForMovement,
+  getEquipmentOptionsForMovement,
+  getMovementDisplayName,
+  getDefaultVariant,
+  movementHasMultipleEquipmentOptions,
+  groupExercisesByMovement,
+} from '../../utils/exerciseGrouping';
+import { getMovementId } from '../../data/exercises';
+import { formatEquipmentLabel } from '../../utils/exerciseWeightMode';
 
 // Exercise as stored in the plan — extends base Exercise with user-configured sets
+// Phase 1.4: added selectedEquipmentType and movementId for equipment-aware tracking
 export interface ExerciseWithSets extends Exercise {
   sets: number;
+  selectedEquipmentType?: string;
+  movementId?: string;
 }
 
 // ─── Muscle group normalization ───────────────────────────────────────────────
@@ -101,6 +116,54 @@ function getAvailableMuscles(dayType: string): string[] {
   return [...muscles].sort();
 }
 
+// ─── Equipment Picker Dialog ──────────────────────────────────────────────────
+
+interface EquipmentPickerDialogProps {
+  movementId: string | null;
+  onSelect: (variant: Exercise, equipmentType: string) => void;
+  onClose: () => void;
+}
+
+function EquipmentPickerDialog({ movementId, onSelect, onClose }: EquipmentPickerDialogProps) {
+  if (!movementId) return null;
+
+  const displayName  = getMovementDisplayName(movementId);
+  const options      = getEquipmentOptionsForMovement(movementId);
+  const variants     = getVariantsForMovement(movementId);
+
+  return (
+    <Dialog open={!!movementId} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm mx-auto rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base">{displayName}</DialogTitle>
+          <p className="text-xs text-muted-foreground mt-1">Choose equipment type</p>
+        </DialogHeader>
+        <div className="flex flex-col gap-2 mt-2">
+          {options.map(equip => {
+            const variant = variants.find(v => v.equipmentType === equip);
+            if (!variant) return null;
+            return (
+              <button
+                key={equip}
+                onClick={() => { onSelect(variant, equip); onClose(); }}
+                className="flex items-center gap-3 w-full px-4 py-3 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-all text-left group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10">
+                  <Dumbbell className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{formatEquipmentLabel(equip)}</p>
+                  <p className="text-xs text-muted-foreground truncate">{variant.name}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function WorkoutBuilder() {
@@ -112,6 +175,9 @@ export function WorkoutBuilder() {
   const [loading, setLoading]                     = useState(true);
   const [saving, setSaving]                       = useState(false);
   const [selectedMuscle, setSelectedMuscle]       = useState<string | null>(null);
+
+  // Phase 1.4: equipment picker state
+  const [equipmentPickerMovement, setEquipmentPickerMovement] = useState<string | null>(null);
 
   // ── Smart set count state ──────────────────────────────────────────────────
   const [suggestionMap, setSuggestionMap]         = useState<SuggestionMap>({});
@@ -129,7 +195,6 @@ export function WorkoutBuilder() {
       ]);
       setProfile(prof);
 
-      // Build the suggestion map once — reused for every addExercise call
       const hist = history as WorkoutLog[];
       setWorkoutHistory(hist);
       setSuggestionMap(buildSuggestionMap(hist));
@@ -174,8 +239,10 @@ export function WorkoutBuilder() {
     });
   };
 
-  const getFilteredExercises = (): { suggested: Exercise[]; rest: Exercise[] } => {
-    const all = exerciseDatabase.filter(ex => {
+  const getFilteredExercises = () => {
+    // Phase 1.4: Return grouped movement list (deduplicated by movementId)
+    // rather than the flat per-variant list.
+    const baseList = exerciseDatabase.filter(ex => {
       if (profile?.equipment === 'bodyweight' && ex.equipment !== 'bodyweight') return false;
       if (profile?.experienceLevel === 'beginner' && ex.difficulty === 'advanced') return false;
       if (searchQuery) {
@@ -192,25 +259,39 @@ export function WorkoutBuilder() {
       ex.secondaryMuscles.includes(selectedMuscle)
     );
 
+    // Deduplicate by movementId — keep one representative per movement
+    const grouped = groupExercisesByMovement(baseList);
+    const deduped: Exercise[] = [];
+    for (const variants of grouped.values()) {
+      // Pick best representative: prefer first variant whose difficulty matches profile
+      const rep = getDefaultVariant(
+        getMovementId(variants[0]),
+        profile?.equipmentType,
+      ) ?? variants[0];
+      deduped.push(rep);
+    }
+
     const dayType = getDayType(currentDay);
-    const suggested = all.filter(ex => {
+    const suggested = deduped.filter(ex => {
       if (dayType === 'push')  return ex.category === 'push';
       if (dayType === 'pull')  return ex.category === 'pull';
       if (dayType === 'legs')  return ex.category === 'legs';
       if (dayType === 'upper') return ex.category === 'push' || ex.category === 'pull';
       return true;
     });
-    const suggestedIds = new Set(suggested.map(e => e.id));
-    return { suggested, rest: all.filter(e => !suggestedIds.has(e.id)) };
+    const suggestedIds = new Set(suggested.map(e => getMovementId(e)));
+    return { suggested, rest: deduped.filter(e => !suggestedIds.has(getMovementId(e))) };
   };
 
-  const addExercise = (exercise: Exercise) => {
+  // Phase 1.4: called after user picks equipment in the dialog (or immediately if single-variant)
+  const addExercise = (exercise: Exercise, equipmentType?: string) => {
     const current = selectedExercises[currentDay] || [];
-    if (current.some(e => e.id === exercise.id)) { toast.error('Already added'); return; }
+    const mid = getMovementId(exercise);
+    // Prevent adding the same movement twice (regardless of variant chosen)
+    if (current.some(e => getMovementId(e) === mid)) { toast.error('Already added'); return; }
 
-    // ── Smart set count: use history-aware logic instead of hardcoded default ──
-    // Pass exercisesInDay + 1 (the exercise being added) so the time budget
-    // calculation reflects the actual plan size.
+    const resolvedEquip = equipmentType ?? exercise.equipmentType;
+
     const exercisesInDay = current.length + 1;
     const sets = smartSetCount(
       exercise.id,
@@ -221,8 +302,25 @@ export function WorkoutBuilder() {
       exercisesInDay,
     );
 
-    const withSets: ExerciseWithSets = { ...exercise, sets };
+    const withSets: ExerciseWithSets = {
+      ...exercise,
+      sets,
+      selectedEquipmentType: resolvedEquip,
+      movementId: mid,
+    };
     setSelectedExercises(prev => ({ ...prev, [currentDay]: [...current, withSets] }));
+  };
+
+  // Phase 1.4: entry point for the "Add" button click in ExerciseRow
+  const handleAddClick = (ex: Exercise) => {
+    const mid = getMovementId(ex);
+    if (movementHasMultipleEquipmentOptions(mid)) {
+      // Open equipment picker — addExercise called after selection
+      setEquipmentPickerMovement(mid);
+    } else {
+      // Single-variant movement → auto-select
+      addExercise(ex, ex.equipmentType);
+    }
   };
 
   const updateSets = (day: string, idx: number, delta: number) => {
@@ -294,6 +392,13 @@ export function WorkoutBuilder() {
 
   return (
     <div className="min-h-screen bg-background pb-20 overflow-x-hidden">
+      {/* Equipment picker dialog */}
+      <EquipmentPickerDialog
+        movementId={equipmentPickerMovement}
+        onSelect={(variant, equip) => addExercise(variant, equip)}
+        onClose={() => setEquipmentPickerMovement(null)}
+      />
+
       {/* Header */}
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 px-4 py-3 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center min-w-0">
@@ -410,6 +515,11 @@ export function WorkoutBuilder() {
                                log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
                              ));
 
+                          // Phase 1.4: show movement name + equipment label
+                          const displayName = ex.selectedEquipmentType
+                            ? `${getMovementDisplayName(getMovementId(ex))} (${formatEquipmentLabel(ex.selectedEquipmentType)})`
+                            : ex.name;
+
                           return (
                             <div
                               key={idx}
@@ -428,11 +538,10 @@ export function WorkoutBuilder() {
                                 >▼</button>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{ex.name}</p>
+                                <p className="font-medium text-sm truncate">{displayName}</p>
                                 <p className="text-xs text-muted-foreground truncate">
                                   {ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}
                                 </p>
-                                {/* Smart set reason hint */}
                                 {hasHistory && (
                                   <p className="text-xs text-primary/60 truncate mt-0.5">{reason}</p>
                                 )}
@@ -536,18 +645,25 @@ export function WorkoutBuilder() {
                               ✨ Suggested for {currentDay}
                             </p>
                           </div>
-                          {suggested.map(ex => (
-                            <ExerciseRow
-                              key={ex.id}
-                              ex={ex}
-                              added={currentExercises.some(e => e.id === ex.id)}
-                              onAdd={() => addExercise(ex)}
-                              previewSets={smartSetCount(ex.id, ex.name, suggestionMap, workoutHistory, profile, currentExercises.length)}
-                              hasHistory={workoutHistory.some(log =>
-                                log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
-                              )}
-                            />
-                          ))}
+                          {suggested.map(ex => {
+                            const mid = getMovementId(ex);
+                            const isAdded = currentExercises.some(e => getMovementId(e) === mid);
+                            const hasMultiEquip = movementHasMultipleEquipmentOptions(mid);
+                            return (
+                              <ExerciseRow
+                                key={mid}
+                                ex={ex}
+                                movementId={mid}
+                                added={isAdded}
+                                hasMultipleEquipment={hasMultiEquip}
+                                onAdd={() => handleAddClick(ex)}
+                                previewSets={smartSetCount(ex.id, ex.name, suggestionMap, workoutHistory, profile, currentExercises.length)}
+                                hasHistory={workoutHistory.some(log =>
+                                  log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
+                                )}
+                              />
+                            );
+                          })}
                         </>
                       )}
                       {rest.length > 0 && (
@@ -557,18 +673,25 @@ export function WorkoutBuilder() {
                               <p className="text-xs text-muted-foreground">Other exercises</p>
                             </div>
                           )}
-                          {rest.map(ex => (
-                            <ExerciseRow
-                              key={ex.id}
-                              ex={ex}
-                              added={currentExercises.some(e => e.id === ex.id)}
-                              onAdd={() => addExercise(ex)}
-                              previewSets={smartSetCount(ex.id, ex.name, suggestionMap, workoutHistory, profile, currentExercises.length)}
-                              hasHistory={workoutHistory.some(log =>
-                                log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
-                              )}
-                            />
-                          ))}
+                          {rest.map(ex => {
+                            const mid = getMovementId(ex);
+                            const isAdded = currentExercises.some(e => getMovementId(e) === mid);
+                            const hasMultiEquip = movementHasMultipleEquipmentOptions(mid);
+                            return (
+                              <ExerciseRow
+                                key={mid}
+                                ex={ex}
+                                movementId={mid}
+                                added={isAdded}
+                                hasMultipleEquipment={hasMultiEquip}
+                                onAdd={() => handleAddClick(ex)}
+                                previewSets={smartSetCount(ex.id, ex.name, suggestionMap, workoutHistory, profile, currentExercises.length)}
+                                hasHistory={workoutHistory.some(log =>
+                                  log.sets.some(s => s.exerciseId === ex.id || s.exerciseName === ex.name)
+                                )}
+                              />
+                            );
+                          })}
                         </>
                       )}
                       {suggested.length === 0 && rest.length === 0 && (
@@ -595,17 +718,24 @@ function fallbackSets(profile: any): number {
 
 function ExerciseRow({
   ex,
+  movementId,
   added,
+  hasMultipleEquipment,
   onAdd,
   previewSets,
   hasHistory,
 }: {
   ex: Exercise;
+  movementId: string;
   added: boolean;
+  hasMultipleEquipment: boolean;
   onAdd: () => void;
   previewSets: number;
   hasHistory: boolean;
 }) {
+  // Phase 1.4: display the clean movement name (without equipment prefix)
+  const displayName = getMovementDisplayName(movementId);
+
   return (
     <div
       className={`flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-muted/50 transition-colors ${
@@ -613,7 +743,13 @@ function ExerciseRow({
       }`}
     >
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm truncate">{ex.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="font-medium text-sm truncate">{displayName}</p>
+          {/* Phase 1.4: equipment picker indicator */}
+          {hasMultipleEquipment && !added && (
+            <span className="text-xs text-muted-foreground flex-shrink-0">· pick equip.</span>
+          )}
+        </div>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs text-muted-foreground truncate">
             {ex.primaryMuscles.map(m => m.replace(/_/g, ' ')).join(', ')}
@@ -627,7 +763,6 @@ function ExerciseRow({
           }`}>
             {ex.difficulty}
           </span>
-          {/* Preview set count — shows what will be assigned on add */}
           <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
             hasHistory
               ? 'bg-primary/10 text-primary font-medium'

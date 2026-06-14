@@ -28,11 +28,13 @@ import { toast } from 'sonner';
 import {
   Clock, Check, Trophy, X, TrendingUp, TrendingDown,
   HelpCircle, MoreVertical, ArrowDown, SkipForward, Minus, Plus,
+  ChevronDown, ChevronUp, ArrowUp, ArrowUpDown, PlusCircle, Volume2, VolumeX,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
   classifyExercise,
   getRepTarget,
+  buildHistoryKey,
   type ProgressionSuggestion,
   type WorkoutLog,
 } from '../../../utils/progressiveOverload';
@@ -44,33 +46,46 @@ import {
 import { calculateMuscleVolume } from '../../utils/volumeTracking';
 import {
   getWeightMode, getWeightModeConfig, formatWeight, plateSuggestion,
+  formatEquipmentLabel,
   type WeightMode,
 } from '../../utils/exerciseWeightMode';
+import { getMovementId } from '../../data/exercises';
+import { getMovementDisplayName } from '../../utils/exerciseGrouping';
 import {
   generateSessionId, queueStart, queueUpdate,
   queueMarkPending, queueClear,
 } from '../../utils/offlineQueue';
 import Celebration from '../components/ui/celebration';
+import {
+  maybePlayTimerDone, maybePlaySetComplete,
+  getSoundEnabled, setSoundEnabled, unlockAudio,
+} from '../../utils/timerSound';
+import { AddExerciseDrawer, type AddExerciseResult } from '../components/AddExerciseDrawer';
+import { SetCompletePulse } from '../components/ui/SetCompletePulse';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface SetLog {
-  exerciseId: string;
-  exerciseName: string;
-  set: number;
-  weight: number;
-  reps: number;
-  timestamp: string;
+  exerciseId:    string;
+  exerciseName:  string;
+  set:           number;
+  weight:        number;
+  reps:          number;
+  timestamp:     string;
+  /** Phase 2: equipment type for equipment-aware history keys */
+  equipmentType?: string;
 }
 
 interface ExercisePlan {
-  suggestedWeight: number;
-  suggestedReps: [number, number];
-  sets: number;
-  source: 'history' | 'estimated' | 'bodyweight';
-  action?: ProgressionSuggestion['action'];
-  isFirstSession: boolean;
-  mode: WeightMode;
+  suggestedWeight:  number;
+  suggestedReps:    [number, number];
+  sets:             number;
+  source:           'history' | 'estimated' | 'bodyweight';
+  action?:          ProgressionSuggestion['action'];
+  isFirstSession:   boolean;
+  mode:             WeightMode;
+  /** Phase 2: equipment type used to build the history key */
+  equipmentType?:   string;
 }
 
 // ─── Timer persistence ─────────────────────────────────────────────────────────
@@ -94,9 +109,23 @@ function loadWorkoutStart(): number {
   try { const v = sessionStorage.getItem(WORKOUT_START_KEY); return v ? Number(v) : Date.now(); } catch { return Date.now(); }
 }
 
-// ─── Stable exercise key helper ────────────────────────────────────────────────
+// ─── Phase 2: Stable exercise key helper ──────────────────────────────────────
 
-function exerciseKey(ex: { id?: string; name: string }): string {
+/**
+ * Builds the history key for an exercise plan entry.
+ * Uses composite key when equipmentType is known.
+ */
+function exerciseHistoryKey(ex: {
+  id?: string;
+  name: string;
+  equipmentType?: string;
+}): string {
+  const baseId = (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
+  return buildHistoryKey(baseId, ex.name, ex.equipmentType);
+}
+
+/** Plain base ID (no equipment suffix) — used for plan lookup */
+function exerciseBaseKey(ex: { id?: string; name: string }): string {
   return (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
 }
 
@@ -190,44 +219,137 @@ function ExitDialog({
   );
 }
 
+// ─── Phase 5: Reorder dialog ───────────────────────────────────────────────────
+
+function ReorderDialog({
+  open,
+  queue,
+  onClose,
+  onReorder,
+}: {
+  open: boolean;
+  queue: any[];
+  onClose: () => void;
+  onReorder: (newQueue: any[]) => void;
+}) {
+  const [localQueue, setLocalQueue] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (open) setLocalQueue([...queue]);
+  }, [open, queue]);
+
+  const move = (idx: number, dir: -1 | 1) => {
+    const newQ = [...localQueue];
+    const target = idx + dir;
+    if (target < 0 || target >= newQ.length) return;
+    [newQ[idx], newQ[target]] = [newQ[target], newQ[idx]];
+    setLocalQueue(newQ);
+  };
+
+  return (
+    <AlertDialog open={open}>
+      <AlertDialogContent className="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reorder Exercises</AlertDialogTitle>
+          <AlertDialogDescription>
+            Drag or use arrows to change the order for this session.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-2 my-2 max-h-64 overflow-y-auto">
+          {localQueue.map((ex, i) => (
+            <div
+              key={exerciseBaseKey(ex)}
+              className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg"
+            >
+              <div className="flex flex-col gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                  className="text-muted-foreground/60 hover:text-foreground disabled:opacity-20 leading-none p-0.5"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => move(i, 1)}
+                  disabled={i === localQueue.length - 1}
+                  className="text-muted-foreground/60 hover:text-foreground disabled:opacity-20 leading-none p-0.5"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                </button>
+              </div>
+              <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0 font-medium">
+                {i + 1}
+              </span>
+              <span className="text-sm flex-1 truncate">{ex.name}</span>
+            </div>
+          ))}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onClose}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { onReorder(localQueue); onClose(); }}>
+            Apply
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 const REST_DURATION = 120;
 
 export function ActiveWorkout() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const dayName  = location.state?.dayName as string | undefined;
+  const navigate  = useNavigate();
+  const dayName   = location.state?.dayName as string | undefined;
 
-  // Original full list (never mutated after load — used for plan lookup and warmup)
-  const [exercises, setExercises]           = useState<any[]>([]);
-  // Mutable queue of remaining exercises for this session
-  const [exerciseQueue, setExerciseQueue]   = useState<any[]>([]);
-  // Keys of exercises the user pushed back at least once (to show badge)
-  const [deferredIds, setDeferredIds]       = useState<Set<string>>(new Set());
-  // Total exercises originally planned (for progress %)
-  const [totalPlanned, setTotalPlanned]     = useState(0);
+  const [exercises, setExercises]         = useState<any[]>([]);
+  const [exerciseQueue, setExerciseQueue] = useState<any[]>([]);
+  const [deferredIds, setDeferredIds]     = useState<Set<string>>(new Set());
+  // Phase 3.4: track ad-hoc (mid-workout added) exercise IDs
+  const [adHocIds, setAdHocIds]           = useState<Set<string>>(new Set());
+  const [totalPlanned, setTotalPlanned]   = useState(0);
 
-  const [plans, setPlans]                   = useState<Record<string, ExercisePlan>>({});
-  const [currentPhase, setCurrentPhase]     = useState<'warmup' | 'exercise' | 'feedback'>('warmup');
-  const [currentSet, setCurrentSet]         = useState(1);
-  const [restTimer, setRestTimer]           = useState(0);
-  const [completedSets, setCompletedSets]   = useState<SetLog[]>([]);
-  const [feedback, setFeedback]             = useState('');
+  const [plans, setPlans]                 = useState<Record<string, ExercisePlan>>({});
+  const [currentPhase, setCurrentPhase]   = useState<'warmup' | 'exercise' | 'feedback'>('warmup');
+  const [currentSet, setCurrentSet]       = useState(1);
+  const [restTimer, setRestTimer]         = useState(0);
+  const [completedSets, setCompletedSets] = useState<SetLog[]>([]);
+  const [feedback, setFeedback]           = useState('');
   const [perceivedEffort, setPerceivedEffort] = useState(6);
-  const [customWeight, setCustomWeight]     = useState('');
-  const [customReps, setCustomReps]         = useState('');
-  const [loading, setLoading]               = useState(true);
-  const [showExitDialog, setShowExitDialog] = useState(false);
-  const [showConfetti, setShowConfetti]     = useState(false);
+  const [customWeight, setCustomWeight]   = useState('');
+  const [customReps, setCustomReps]       = useState('');
+  const [loading, setLoading]             = useState(true);
+  const [showExitDialog, setShowExitDialog]     = useState(false);
+  const [showReorderDialog, setShowReorderDialog] = useState(false);
+  // Phase 5.4: set complete pulse animation
+  const [showPulse, setShowPulse]             = useState(false);
+
+  // Phase 5.2: sound preference — read from localStorage, toggle in UI
+  const [soundEnabled, setSoundEnabledState] = useState(() => getSoundEnabled());
+  const toggleSound = () => {
+    setSoundEnabledState(prev => {
+      const next = !prev;
+      setSoundEnabled(next);
+      return next;
+    });
+  };
+
+  // Phase 3.2: mid-workout add exercise
+  const [showAddExercise, setShowAddExercise]     = useState(false);
+  const [showConfetti, setShowConfetti]   = useState(false);
   const [showExtraWeight, setShowExtraWeight] = useState(false);
-  const [showRPEInfo, setShowRPEInfo]         = useState(false);
+  const [showRPEInfo, setShowRPEInfo]     = useState(false);
+  // Phase 4: collapsible instructions — collapsed by default
+  const [showInstructions, setShowInstructions] = useState(false);
 
-  const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
-  const offlineSessionId   = useRef<string>(generateSessionId());
-  const startTimeRef       = useRef<number>(loadWorkoutStart());
+  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const offlineSessionId = useRef<string>(generateSessionId());
+  const startTimeRef     = useRef<number>(loadWorkoutStart());
+  // Phase 3.3: stable ref so handleAddExercise has fresh profile without stale closures
+  const profileRef       = useRef<any>(null);
 
-  // Derived: current exercise is always queue[0]
   const currentExercise = exerciseQueue[0];
 
   useEffect(() => {
@@ -236,7 +358,11 @@ export function ActiveWorkout() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [dayName]);
 
-  // Restore timer on mount / visibility change
+  // Phase 4: reset instructions collapsed state when exercise changes
+  useEffect(() => {
+    setShowInstructions(false);
+  }, [currentExercise?.id, currentExercise?.name]);
+
   useEffect(() => {
     const savedStart = loadRestStart();
     if (savedStart !== null) {
@@ -263,7 +389,6 @@ export function ActiveWorkout() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  // Rest timer tick
   useEffect(() => {
     if (restTimer <= 0) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -276,6 +401,7 @@ export function ActiveWorkout() {
         if (t <= 1) {
           clearInterval(timerRef.current!);
           clearRestStart();
+          maybePlayTimerDone();   // Phase 5.2
           toast.success('Rest done — go!');
           return 0;
         }
@@ -300,6 +426,7 @@ export function ActiveWorkout() {
         profileApi.get(),
       ]);
 
+      profileRef.current = profile;   // keep ref in sync for handleAddExercise
       const exs: any[] = planResult?.workouts?.[dayName!] || [];
       setExercises(exs);
       setExerciseQueue([...exs]);
@@ -309,11 +436,27 @@ export function ActiveWorkout() {
       const builtPlans: Record<string, ExercisePlan> = {};
 
       for (const ex of exs) {
-        const key  = exerciseKey(ex);
-        const tier = classifyExercise(ex.name);
+        // Phase 2: use composite key (with equipmentType) for history lookup
+        const histKey  = exerciseHistoryKey(ex);
+        const baseKey  = exerciseBaseKey(ex);
+        const tier     = classifyExercise(ex.name);
         const [repLo, repHi] = getRepTarget(tier);
         const planSets = (ex.sets && ex.sets >= 1 && ex.sets <= 6) ? ex.sets : 3;
-        const historySuggestion = historySuggestions[key];
+
+        // Try composite key first, fall back to base key (legacy history)
+        const historySuggestion =
+          historySuggestions[histKey] ??
+          historySuggestions[baseKey];
+
+        // Phase 2: resolve equipment type from exercise definition
+        const equipType: string | undefined =
+          ex.selectedEquipmentType ?? ex.equipmentType ?? undefined;
+
+        const mode = getWeightMode(
+          ex.name,
+          ex.selectedEquipmentType ?? ex.equipmentType ?? ex.equipment ?? 'full_gym',
+          tier,
+        );
 
         if (historySuggestion && historySuggestion.action !== 'insufficient_data') {
           let w: number = historySuggestion.currentWeight;
@@ -325,33 +468,36 @@ export function ActiveWorkout() {
             case 'increase_reps':   reps = historySuggestion.suggestedReps   ?? reps; break;
           }
 
-          builtPlans[key] = {
+          builtPlans[histKey] = {
             suggestedWeight: w,
-            suggestedReps: reps,
-            sets: planSets,
-            source: tier === 'bodyweight' ? 'bodyweight' : 'history',
-            action: historySuggestion.action,
-            isFirstSession: false,
-            mode: getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', tier),
+            suggestedReps:   reps,
+            sets:            planSets,
+            source:          tier === 'bodyweight' ? 'bodyweight' : 'history',
+            action:          historySuggestion.action,
+            isFirstSession:  false,
+            mode,
+            equipmentType:   equipType,
           };
         } else if (profile) {
           const estimate = estimateStartingWeight(ex.name, profile, ex.id || undefined);
-          builtPlans[key] = {
+          builtPlans[histKey] = {
             suggestedWeight: estimate.weight,
-            suggestedReps: estimate.reps,
-            sets: planSets,
-            source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
-            isFirstSession: true,
-            mode: estimate.mode,
+            suggestedReps:   estimate.reps,
+            sets:            planSets,
+            source:          tier === 'bodyweight' ? 'bodyweight' : 'estimated',
+            isFirstSession:  true,
+            mode:            estimate.mode,
+            equipmentType:   equipType,
           };
         } else {
-          builtPlans[key] = {
+          builtPlans[histKey] = {
             suggestedWeight: 0,
-            suggestedReps: [repLo, repHi],
-            sets: planSets,
-            source: tier === 'bodyweight' ? 'bodyweight' : 'estimated',
-            isFirstSession: true,
-            mode: getWeightMode(ex.name, ex.equipmentType || ex.equipment || 'full_gym', tier),
+            suggestedReps:   [repLo, repHi],
+            sets:            planSets,
+            source:          tier === 'bodyweight' ? 'bodyweight' : 'estimated',
+            isFirstSession:  true,
+            mode,
+            equipmentType:   equipType,
           };
         }
       }
@@ -367,7 +513,8 @@ export function ActiveWorkout() {
   };
 
   const applyPlanToInputs = (ex: any, allPlans: Record<string, ExercisePlan>) => {
-    const plan = allPlans[exerciseKey(ex)];
+    const key  = exerciseHistoryKey(ex);
+    const plan = allPlans[key] ?? allPlans[exerciseBaseKey(ex)];
     if (!plan) { setCustomWeight(''); setCustomReps(''); return; }
     if (plan.mode === 'bodyweight') {
       setCustomWeight('0');
@@ -381,18 +528,13 @@ export function ActiveWorkout() {
 
   // ── Queue management ──────────────────────────────────────────────────────────
 
-  /**
-   * Push current exercise to the back of the queue.
-   * Clears the rest timer and advances to the next exercise.
-   */
   const handleDoLater = () => {
     if (exerciseQueue.length <= 1) {
-      // Only one exercise left — can't defer, just tell the user
       toast.info('This is the last exercise — finish or skip it.');
       return;
     }
     const [current, ...rest] = exerciseQueue;
-    const key = exerciseKey(current);
+    const key = exerciseBaseKey(current);
     setDeferredIds(prev => new Set([...prev, key]));
     const newQueue = [...rest, current];
     setExerciseQueue(newQueue);
@@ -404,14 +546,9 @@ export function ActiveWorkout() {
     toast('Moved to end — you\'ll come back to it.', { icon: '🔄' });
   };
 
-  /**
-   * Skip current exercise entirely for this session.
-   * Removes it from the queue without adding a set log.
-   */
   const handleSkipEntirely = () => {
     const newQueue = exerciseQueue.slice(1);
     if (newQueue.length === 0) {
-      // No exercises left → go to feedback
       setCurrentPhase('feedback');
       return;
     }
@@ -422,6 +559,54 @@ export function ActiveWorkout() {
     clearRestStart();
     applyPlanToInputs(newQueue[0], plans);
     toast('Exercise skipped for today.', { icon: '⏭' });
+  };
+
+  // Phase 5: apply reordered queue
+  // Phase 3.3: add an exercise mid-workout — build a plan entry and append to queue
+  const handleAddExercise = ({ exercise, equipmentType }: AddExerciseResult) => {
+    const profile = profileRef.current;
+    const tier     = classifyExercise(exercise.name);
+    const [repLo, repHi] = getRepTarget(tier);
+    const mode = getWeightMode(
+      exercise.selectedEquipmentType ?? equipmentType ?? exercise.equipmentType ?? 'other',
+    );
+    const histKey = buildHistoryKey(exercise.id || exercise.name, exercise.name, equipmentType);
+    const existing = plans[histKey];
+    let suggestedWeight = existing?.suggestedWeight ?? 0;
+    let source: 'history' | 'estimated' | 'bodyweight' = existing?.source ?? 'estimated';
+    if (!existing) {
+      try {
+        const est = estimateStartingWeight(exercise.name, profile, exercise.id || undefined);
+        suggestedWeight = est.weight;
+        source = est.isBodyweight ? 'bodyweight' : 'estimated';
+      } catch { suggestedWeight = 0; }
+    }
+    const newPlan: ExercisePlan = {
+      suggestedWeight,
+      suggestedReps: [repLo, repHi],
+      sets: 3,
+      source,
+      action: existing?.action,
+      isFirstSession: !existing,
+      mode,
+      equipmentType,
+    };
+    const exWithEquip = { ...exercise, selectedEquipmentType: equipmentType };
+    setExerciseQueue(prev => [...prev, exWithEquip]);
+    setPlans(prev => ({ ...prev, [histKey]: newPlan }));
+    // Mark as ad-hoc so it doesn't count against skipped exercises
+    setAdHocIds(prev => new Set(prev).add(exercise.id || exercise.name));
+    toast.success(`\${exercise.name} added to queue`);
+  };
+
+  const handleReorder = (newQueue: any[]) => {
+    setExerciseQueue(newQueue);
+    setCurrentSet(1);
+    setRestTimer(0);
+    setShowExtraWeight(false);
+    clearRestStart();
+    applyPlanToInputs(newQueue[0], plans);
+    toast('Exercise order updated.', { icon: '↕️' });
   };
 
   // ── Exit ─────────────────────────────────────────────────────────────────────
@@ -453,6 +638,25 @@ export function ActiveWorkout() {
     navigate('/plan');
   };
 
+  // ── Phase 3: Additional sets (log extra set beyond plan) ──────────────────────
+
+  const handleAddExtraSet = () => {
+    if (!currentExercise) return;
+    const key     = exerciseHistoryKey(currentExercise);
+    const plan    = plans[key] ?? plans[exerciseBaseKey(currentExercise)];
+    const newPlan = { ...plan, sets: (plan?.sets ?? 3) + 1 };
+    setPlans(prev => ({ ...prev, [key]: newPlan }));
+    // Pre-fill with last logged weight/reps for this exercise
+    const lastSet = [...completedSets]
+      .filter(s => s.exerciseId === (key.includes('::') ? key.split('::')[0] : key))
+      .pop();
+    if (lastSet) {
+      setCustomWeight(lastSet.weight > 0 ? String(lastSet.weight) : customWeight);
+      setCustomReps(String(lastSet.reps));
+    }
+    toast('Extra set added.', { icon: '➕' });
+  };
+
   // ── Set / exercise flow ──────────────────────────────────────────────────────
 
   const handleSetComplete = () => {
@@ -462,9 +666,15 @@ export function ActiveWorkout() {
     const reps   = parseInt(customReps) || 0;
     if (reps <= 0) { toast.error('Enter reps'); return; }
 
-    const key     = exerciseKey(currentExercise);
-    const plan    = plans[key];
-    const mode    = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipmentType || currentExercise.equipment || 'full_gym', classifyExercise(currentExercise.name));
+    const histKey  = exerciseHistoryKey(currentExercise);
+    const baseKey  = exerciseBaseKey(currentExercise);
+    const plan     = plans[histKey] ?? plans[baseKey];
+    const tier     = classifyExercise(currentExercise.name);
+    const mode     = plan?.mode ?? getWeightMode(
+      currentExercise.name,
+      currentExercise.selectedEquipmentType ?? currentExercise.equipmentType ?? currentExercise.equipment ?? 'full_gym',
+      tier,
+    );
     const isBodyweightMode = mode === 'bodyweight';
 
     if (!isBodyweightMode && weight <= 0) { toast.error('Enter weight'); return; }
@@ -474,30 +684,37 @@ export function ActiveWorkout() {
       : weight;
 
     const newSet: SetLog = {
-      exerciseId:   key,
-      exerciseName: currentExercise.name,
-      set:          currentSet,
-      weight:       loggedWeight,
+      exerciseId:    baseKey,
+      exerciseName:  currentExercise.name,
+      set:           currentSet,
+      weight:        loggedWeight,
       reps,
-      timestamp:    new Date().toISOString(),
+      timestamp:     new Date().toISOString(),
+      // Phase 2: attach equipment type for composite history key
+      equipmentType: plan?.equipmentType,
     };
 
+    unlockAudio();                                // Phase 5.2: ensure iOS audio unlocked on gesture
+    maybePlaySetComplete();                       // Phase 5.2: soft tick on set log
+    // Phase 5.4: brief pulse animation
+    setShowPulse(true);
+    setTimeout(() => setShowPulse(false), 700);
     const newCompleted = [...completedSets, newSet];
     setCompletedSets(newCompleted);
     queueUpdate(offlineSessionId.current, newCompleted);
 
-    const setsForThisExercise = plan?.sets ?? 3;
     const modeForToast = plan?.mode ?? 'dumbbell';
     const weightDisplay = isBodyweightMode
       ? (showExtraWeight && weight > 0 ? `+${weight} kg, ` : '')
-      : `${weight} ${modeForToast === 'dumbbell' ? 'kg/side' : modeForToast === 'smith' ? 'kg plates' : 'kg'}, `;
+      : `${weight} ${modeForToast === 'dumbbell' ? 'kg/side' : modeForToast === 'machine' ? 'kg' : modeForToast === 'smith' ? 'kg plates' : 'kg'}, `;
     toast.success(`Set ${currentSet} ✓ — ${weightDisplay}${reps} reps`);
+
+    const setsForThisExercise = plan?.sets ?? 3;
 
     if (currentSet < setsForThisExercise) {
       setCurrentSet(currentSet + 1);
       startRestTimer();
     } else {
-      // Finished all sets for this exercise — advance queue
       advanceQueue(newCompleted);
     }
   };
@@ -520,15 +737,15 @@ export function ActiveWorkout() {
     try {
       const rpeCorrections: Record<string, number> = {};
       for (const ex of exercises) {
-        const key  = exerciseKey(ex);
-        const plan = plans[key];
+        const histKey = exerciseHistoryKey(ex);
+        const plan    = plans[histKey] ?? plans[exerciseBaseKey(ex)];
         if (plan?.isFirstSession && plan.source === 'estimated') {
           const { newWeight } = applyFirstSessionRPECorrection(
             plan.suggestedWeight,
             perceivedEffort,
             classifyExercise(ex.name),
           );
-          rpeCorrections[key] = newWeight;
+          rpeCorrections[histKey] = newWeight;
         }
       }
 
@@ -604,12 +821,7 @@ export function ActiveWorkout() {
         <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl shadow-black/10">
           <CardContent className="pt-4 space-y-4">
             <div className="flex justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={() => navigate('/plan')}
-              >
+              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => navigate('/plan')}>
                 <X className="w-4 h-4 mr-1" /> Cancel
               </Button>
             </div>
@@ -635,10 +847,10 @@ export function ActiveWorkout() {
               <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
             </div>
 
-            {/* RPE explanation */}
             {(() => {
               const adjusted = exercises.filter(ex => {
-                const plan = plans[exerciseKey(ex)];
+                const histKey = exerciseHistoryKey(ex);
+                const plan    = plans[histKey] ?? plans[exerciseBaseKey(ex)];
                 return plan && !plan.isFirstSession && plan.action !== 'insufficient_data';
               });
               if (adjusted.length === 0) return null;
@@ -655,45 +867,42 @@ export function ActiveWorkout() {
             {showRPEInfo && (
               <div className="bg-muted/60 rounded-xl p-3 text-xs text-muted-foreground leading-relaxed">
                 Weights are based on your last session. If you rated a session as very easy or very hard,
-                the weight was automatically adjusted for today. Your effort rating after this workout
-                will fine-tune it further.
+                the weight was automatically adjusted for today.
               </div>
             )}
 
-            {/* Exercise list preview */}
             <div className="space-y-1">
-              {exercises.map((ex, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 text-sm py-1.5 border-b border-border/50 last:border-0"
-                >
-                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 font-medium">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1">{ex.name}</span>
-                  {(() => {
-                    const p = plans[exerciseKey(ex)];
-                    if (!p) return null;
-                    const wStr = formatWeight(p.suggestedWeight, p.mode ?? 'dumbbell');
-                    if (p.action === 'increase_weight') return (
-                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">↑ {wStr}</span>
-                    );
-                    if (p.action === 'deload') return (
-                      <span className="text-xs text-amber-600 dark:text-amber-400">↓ {wStr}</span>
-                    );
-                    if (p.source === 'estimated' && p.suggestedWeight > 0) return (
-                      <span className="text-xs text-muted-foreground">{wStr}</span>
-                    );
-                    if (p.source === 'history' && p.action === 'maintain' && p.suggestedWeight > 0) return (
-                      <span className="text-xs text-muted-foreground">{wStr}</span>
-                    );
-                    if (p.mode === 'bodyweight') return (
-                      <span className="text-xs text-muted-foreground">{p.suggestedReps[0]}–{p.suggestedReps[1]} reps</span>
-                    );
-                    return null;
-                  })()}
-                </div>
-              ))}
+              {exercises.map((ex, i) => {
+                const histKey = exerciseHistoryKey(ex);
+                const p       = plans[histKey] ?? plans[exerciseBaseKey(ex)];
+                return (
+                  <div key={i} className="flex items-center gap-2 text-sm py-1.5 border-b border-border/50 last:border-0">
+                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs flex-shrink-0 font-medium">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1">{ex.name}</span>
+                    {p && (() => {
+                      const wStr = formatWeight(p.suggestedWeight, p.mode ?? 'dumbbell');
+                      if (p.action === 'increase_weight') return (
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">↑ {wStr}</span>
+                      );
+                      if (p.action === 'deload') return (
+                        <span className="text-xs text-amber-600 dark:text-amber-400">↓ {wStr}</span>
+                      );
+                      if (p.source === 'estimated' && p.suggestedWeight > 0) return (
+                        <span className="text-xs text-muted-foreground">{wStr}</span>
+                      );
+                      if (p.source === 'history' && p.action === 'maintain' && p.suggestedWeight > 0) return (
+                        <span className="text-xs text-muted-foreground">{wStr}</span>
+                      );
+                      if (p.mode === 'bodyweight') return (
+                        <span className="text-xs text-muted-foreground">{p.suggestedReps[0]}–{p.suggestedReps[1]} reps</span>
+                      );
+                      return null;
+                    })()}
+                  </div>
+                );
+              })}
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
@@ -722,13 +931,17 @@ export function ActiveWorkout() {
   // ── Feedback screen ─────────────────────────────────────────────────────────
 
   if (currentPhase === 'feedback') {
-    const totalVolume = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
-    const durationMin = Math.round((Date.now() - startTimeRef.current) / 60000);
-    const skippedCount = totalPlanned - new Set(completedSets.map(s => s.exerciseId)).size;
+    const totalVolume   = completedSets.reduce((s, x) => s + x.weight * x.reps, 0);
+    const durationMin   = Math.round((Date.now() - startTimeRef.current) / 60000);
+    // Phase 3.4: ad-hoc exercises are never counted as skipped
+    const plannedIds    = exercises.filter(e => !adHocIds.has(e.id || e.name)).map(e => e.id || e.name);
+    const completedIds  = new Set(completedSets.map(s => s.exerciseId));
+    const skippedCount  = plannedIds.filter(id => !completedIds.has(id)).length;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center p-4 relative">
         <Celebration show={showConfetti} />
+      <SetCompletePulse show={showPulse} />
         <Card className="w-full max-w-md relative z-10 border-0 shadow-2xl">
           <CardContent className="pt-6 space-y-4">
             <div className="text-center">
@@ -745,9 +958,9 @@ export function ActiveWorkout() {
 
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
-                { value: completedSets.length, label: 'sets' },
-                { value: new Set(completedSets.map(s => s.exerciseId)).size, label: 'exercises' },
-                { value: `${durationMin}m`, label: 'duration' },
+                { value: completedSets.length,                                          label: 'sets' },
+                { value: new Set(completedSets.map(s => s.exerciseId)).size,           label: 'exercises' },
+                { value: `${durationMin}m`,                                             label: 'duration' },
               ].map(({ value, label }) => (
                 <div key={label} className="bg-green-50 dark:bg-green-950/30 rounded-lg py-3">
                   <div className="text-xl font-bold text-green-700 dark:text-green-300">{value}</div>
@@ -767,9 +980,7 @@ export function ActiveWorkout() {
             )}
 
             <div>
-              <label className="text-sm font-medium mb-2 block">
-                How hard was it? (RPE 1–10)
-              </label>
+              <label className="text-sm font-medium mb-2 block">How hard was it? (RPE 1–10)</label>
               <div className="flex gap-1">
                 {[1,2,3,4,5,6,7,8,9,10].map(n => (
                   <button
@@ -823,25 +1034,31 @@ export function ActiveWorkout() {
 
   if (!currentExercise) return null;
 
-  const currentKey          = exerciseKey(currentExercise);
-  const plan                = plans[currentKey];
+  const histKey             = exerciseHistoryKey(currentExercise);
+  const baseKey             = exerciseBaseKey(currentExercise);
+  const plan                = plans[histKey] ?? plans[baseKey];
   const tier                = classifyExercise(currentExercise.name);
   const [repLo, repHi]      = plan?.suggestedReps ?? getRepTarget(tier);
-  const exerciseSets        = completedSets.filter(s => s.exerciseId === currentKey);
+  const exerciseSets        = completedSets.filter(s => s.exerciseId === baseKey);
   const setsForThisExercise = plan?.sets ?? 3;
-  const isDeferred          = deferredIds.has(currentKey);
+  const isDeferred          = deferredIds.has(baseKey);
 
-  // Progress: sets completed out of total planned sets
   const totalSetsAll = exercises.reduce(
-    (sum, ex) => sum + (plans[exerciseKey(ex)]?.sets ?? 3),
+    (sum, ex) => sum + (plans[exerciseHistoryKey(ex)]?.sets ?? plans[exerciseBaseKey(ex)]?.sets ?? 3),
     0
   );
   const progressPct = Math.round((completedSets.length / Math.max(1, totalSetsAll)) * 100);
 
-  const weightMode   = plan?.mode ?? getWeightMode(currentExercise.name, currentExercise.equipmentType || currentExercise.equipment || 'full_gym', tier);
+  const weightMode   = plan?.mode ?? getWeightMode(
+    currentExercise.name,
+    currentExercise.selectedEquipmentType ?? currentExercise.equipmentType ?? currentExercise.equipment ?? 'full_gym',
+    tier,
+  );
   const modeConfig   = getWeightModeConfig(weightMode);
   const isBodyweight = weightMode === 'bodyweight';
-  const plates       = !isBodyweight ? plateSuggestion(parseFloat(customWeight) || 0, weightMode) : '';
+  const plates       = !isBodyweight && weightMode !== 'machine'
+    ? plateSuggestion(parseFloat(customWeight) || 0, weightMode)
+    : '';
 
   const repFeedback = (() => {
     const r = parseInt(customReps);
@@ -851,11 +1068,12 @@ export function ActiveWorkout() {
     return { msg: `${r} reps ✓`, color: 'text-emerald-600 dark:text-emerald-400' };
   })();
 
-  // Remaining exercises after the current one (for "up next" panel)
   const upNextQueue = exerciseQueue.slice(1);
 
   return (
     <div className="min-h-screen bg-background pb-page">
+      {/* Phase 5.4: set-complete pulse — overlaid on exercise screen */}
+      <SetCompletePulse show={showPulse} />
       {/* Sticky header */}
       <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10 px-4 py-2.5">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
@@ -888,6 +1106,22 @@ export function ActiveWorkout() {
         onChoice={handleExitChoice}
       />
 
+      {/* Phase 3.2: Add exercise drawer */}
+      <AddExerciseDrawer
+        open={showAddExercise}
+        onClose={() => setShowAddExercise(false)}
+        onAdd={handleAddExercise}
+        existingExerciseIds={new Set(exerciseQueue.map((e: any) => e.id || e.name))}
+      />
+
+      {/* Phase 5: Reorder dialog */}
+      <ReorderDialog
+        open={showReorderDialog}
+        queue={exerciseQueue}
+        onClose={() => setShowReorderDialog(false)}
+        onReorder={handleReorder}
+      />
+
       {/* Rest timer */}
       {restTimer > 0 && (
         <div className="sticky top-[57px] z-10 bg-blue-600 dark:bg-blue-700">
@@ -905,6 +1139,17 @@ export function ActiveWorkout() {
                   style={{ width: `${((REST_DURATION - restTimer) / REST_DURATION) * 100}%` }}
                 />
               </div>
+              {/* Phase 5.2: sound toggle in rest timer bar */}
+              <button
+                onClick={toggleSound}
+                className="text-white/70 hover:text-white transition-colors p-1"
+                aria-label={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
+              >
+                {soundEnabled
+                  ? <Volume2 className="w-4 h-4" />
+                  : <VolumeX className="w-4 h-4" />
+                }
+              </button>
               <button
                 onClick={() => { setRestTimer(0); clearRestStart(); }}
                 className="text-white/80 hover:text-white text-xs font-medium py-1 px-2 rounded bg-white/20 hover:bg-white/30 transition-colors"
@@ -922,9 +1167,20 @@ export function ActiveWorkout() {
             <div className="flex justify-between items-start">
               <div className="flex-1 pr-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <CardTitle className="text-xl leading-tight">{currentExercise.name}</CardTitle>
+                  <CardTitle className="text-xl leading-tight">
+                    {(() => {
+                      // Phase 2.6: show "Movement (Equipment)" when equipment was explicitly selected
+                      const equip = currentExercise.selectedEquipmentType ?? currentExercise.equipmentType;
+                      const mid   = getMovementId(currentExercise);
+                      const movName = getMovementDisplayName(mid);
+                      // Only show equipment suffix if we have a clean movement name (differs from full name)
+                      const showEquip = equip && movName.toLowerCase() !== currentExercise.name.toLowerCase();
+                      return showEquip
+                        ? <>{movName} <span className="text-base font-normal text-muted-foreground">({formatEquipmentLabel(equip!)})</span></>
+                        : currentExercise.name;
+                    })()}
+                  </CardTitle>
                   {plan && <SuggestionPill plan={plan} />}
-                  {/* Badge when this exercise was deferred earlier in the session */}
                   {isDeferred && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
                       🔄 Coming back to this
@@ -938,17 +1194,30 @@ export function ActiveWorkout() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Target: {repLo}–{repHi} reps
+                  {/* Phase 1.3: show equipment mode label */}
+                  {weightMode !== 'bodyweight' && (
+                    <span className="ml-2 text-muted-foreground/60">· {modeConfig.inputLabel}</span>
+                  )}
                 </p>
               </div>
 
-              {/* Exercise action menu */}
+              {/* Exercise action menu — Phase 5: reorder button prominent */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground flex-shrink-0">
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-52">
+                  {/* Phase 5: Reorder as first option — most useful mid-workout action */}
+                  <DropdownMenuItem
+                    onClick={() => setShowReorderDialog(true)}
+                    className="gap-2"
+                  >
+                    <ArrowUpDown className="w-4 h-4" />
+                    Reorder exercises
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={handleDoLater}
                     disabled={exerciseQueue.length <= 1}
@@ -966,6 +1235,14 @@ export function ActiveWorkout() {
                     <SkipForward className="w-4 h-4" />
                     Skip today
                     <span className="ml-auto text-xs text-muted-foreground">removes it</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowAddExercise(true)}
+                    className="gap-2 text-primary"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    Add exercise
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1082,6 +1359,7 @@ export function ActiveWorkout() {
               Complete Set {currentSet}
             </Button>
 
+            {/* Phase 3: Completed sets log + Add extra set button */}
             {exerciseSets.length > 0 && (
               <div className="border-t pt-3">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">This exercise</p>
@@ -1103,29 +1381,54 @@ export function ActiveWorkout() {
                             }
                             if (weightMode === 'dumbbell') return `${s.weight} kg/side × ${s.reps}`;
                             if (weightMode === 'smith')    return `${s.weight} kg plates × ${s.reps}`;
+                            // Phase 1.3: machine shows plain kg
                             return `${s.weight} kg × ${s.reps}`;
                           })()}
                         </span>
-                        {e1rm && weightMode !== 'bodyweight' && (
+                        {e1rm && weightMode !== 'bodyweight' && weightMode !== 'machine' && (
                           <span className="text-xs text-muted-foreground">~{e1rm} kg 1RM</span>
                         )}
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Phase 3: Add extra set — only show after all planned sets logged */}
+                {currentSet > setsForThisExercise && (
+                  <button
+                    onClick={handleAddExtraSet}
+                    className="mt-2 text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add another set
+                  </button>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
+        {/* Phase 4: Collapsible instructions — collapsed by default */}
         {currentExercise.instructions && (
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">How to perform</p>
-              <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
-                {currentExercise.instructions}
+            <button
+              onClick={() => setShowInstructions(v => !v)}
+              className="w-full flex items-center justify-between px-6 py-3 text-left"
+            >
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+                How to perform
               </p>
-            </CardContent>
+              {showInstructions
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              }
+            </button>
+            {showInstructions && (
+              <CardContent className="pt-0 pb-4">
+                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
+                  {currentExercise.instructions}
+                </p>
+              </CardContent>
+            )}
           </Card>
         )}
 
@@ -1133,11 +1436,19 @@ export function ActiveWorkout() {
         {upNextQueue.length > 0 && (
           <Card>
             <CardContent className="pt-3 pb-3">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Up next</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Up next</p>
+                {/* Phase 5: quick reorder button in up-next panel */}
+                <button
+                  onClick={() => setShowReorderDialog(true)}
+                  className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                >
+                  <ArrowUpDown className="w-3 h-3" /> Reorder
+                </button>
+              </div>
               <div className="space-y-1.5">
                 {upNextQueue.slice(0, 4).map((ex, i) => {
-                  const key = exerciseKey(ex);
-                  const isDefEx = deferredIds.has(key);
+                  const isDefEx = deferredIds.has(exerciseBaseKey(ex));
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs flex-shrink-0">

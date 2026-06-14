@@ -1,38 +1,31 @@
 /**
  * Offline Queue — workout set persistence
  *
- * FIX #10: Stale in-progress sessions were never cleaned up. If a user
- * started a workout, killed the app without finishing, then started a new
- * workout, the old in-progress entry stayed in localStorage indefinitely.
- * getInProgressWorkout() would return the old stale session, and there was
- * no way to clean it up short of clearing all localStorage.
+ * Phase 2: WorkoutSet now carries optional equipmentType.
+ * All queue operations pass it through transparently.
  *
- * Fix: queueStart now marks any existing in-progress sessions as abandoned
- * before creating the new one. A separate pruneAbandoned() helper (called on
- * app startup) removes in-progress sessions older than 24 h.
+ * FIX #10 (preserved): Stale in-progress sessions are pruned on startup.
  */
 
 import { workoutApi, type WorkoutSet, type MuscleVolumeEntry } from './api';
 
 export interface QueuedWorkout {
-  sessionId:       string;
-  dayName:         string;
-  startedAt:       string;
-  completedAt?:    string;
-  sets:            WorkoutSet[];
+  sessionId:        string;
+  dayName:          string;
+  startedAt:        string;
+  completedAt?:     string;
+  sets:             WorkoutSet[];
   perceivedEffort?: number;
-  feedback?:       string;
-  rpeCorrections?: Record<string, number>;
-  duration?:       number;
-  muscleVolume?:   Record<string, MuscleVolumeEntry>;
-  status:          'in_progress' | 'abandoned' | 'pending_sync' | 'synced';
+  feedback?:        string;
+  rpeCorrections?:  Record<string, number>;
+  duration?:        number;
+  muscleVolume?:    Record<string, MuscleVolumeEntry>;
+  status:           'in_progress' | 'abandoned' | 'pending_sync' | 'synced';
 }
 
 const INDEX_KEY = 'offline_workout_index';
 const PREFIX    = 'offline_workout_';
 const STALE_MS  = 24 * 60 * 60 * 1000; // 24 hours
-
-// ── Read / write helpers ───────────────────────────────────────────────────────
 
 function readIndex(): string[] {
   try { return JSON.parse(localStorage.getItem(INDEX_KEY) || '[]'); }
@@ -61,24 +54,11 @@ function deleteEntry(id: string) {
   } catch {}
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────────
-
 export function generateSessionId(): string {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/**
- * FIX #10: Before creating a new in-progress session, mark any existing
- * in-progress sessions as 'abandoned'. This prevents getInProgressWorkout()
- * from returning a stale session from a previous app launch.
- *
- * We don't delete them immediately in case they contain valuable set data
- * (the CrashRecoveryBanner only surfaces 'pending_sync' entries, so abandoned
- * entries are invisible to the user but can be recovered by support if needed).
- * They will be pruned by pruneAbandoned() on the next app startup.
- */
 export function queueStart(sessionId: string, dayName: string): void {
-  // Abandon any lingering in-progress sessions
   for (const id of readIndex()) {
     const entry = readEntry(id);
     if (entry?.status === 'in_progress') {
@@ -136,11 +116,6 @@ export function getInProgressWorkout(): QueuedWorkout | null {
   return null;
 }
 
-/**
- * FIX #10: Remove in-progress and abandoned sessions older than STALE_MS (24 h).
- * Called once on app startup (main.tsx) before flushPendingWorkouts so the index
- * stays lean and getInProgressWorkout() never returns truly stale data.
- */
 export function pruneAbandoned(): void {
   const now = Date.now();
   for (const id of readIndex()) {

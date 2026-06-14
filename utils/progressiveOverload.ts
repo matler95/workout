@@ -1,18 +1,19 @@
-/**
+﻿/**
  * Progressive Overload Engine
  *
- * FIX #2 (previous): WorkoutLog carries rpeCorrections so first-session
- *   calibrations propagate to the next suggestion.
+ * Phase 2 changes:
+ *   - WorkoutLog sets now carry optional `equipmentType` field
+ *   - computeAllSuggestions groups history by composite key:
+ *       `${exerciseId}::${equipmentType}` when equipmentType is present
+ *       `${exerciseId}` (legacy fallback) when equipmentType is absent
+ *   - This means barbell bench press and dumbbell bench press get separate
+ *     progression curves, not merged together
+ *   - BACKWARD COMPATIBLE: old rows without equipmentType use the plain
+ *     exerciseId key, matching existing stored suggestion results
  *
- * FIX #4 (this patch): One-session dead zone eliminated.
- *   Previously, sessions.length < 2 always returned action:'maintain' with
- *   confidence:'low' and no directional guidance. Now the engine generates a
- *   low-confidence directional suggestion based on the available data:
- *     - RPE from the session (if provided)
- *     - Avg reps vs the target range
- *     - Whether there is an RPE correction override
- *   This gives the user something actionable after their first session instead
- *   of just "come back after your second session."
+ * Previous fixes preserved:
+ *   - FIX #2: rpeCorrections propagation
+ *   - FIX #4: One-session directional suggestion
  */
 
 export type ExerciseTier =
@@ -53,7 +54,7 @@ export interface ProgressionSuggestion {
   tip?: string;
 }
 
-// ─── Exercise classification ──────────────────────────────────────────────────
+// --- Exercise classification --------------------------------------------------
 
 const HEAVY_BARBELL_KEYWORDS = [
   'barbell', 'squat', 'deadlift', 'bench press', 'overhead press',
@@ -110,16 +111,6 @@ export function avgRepsAtTopWeight(sets: SessionSetData[]): number {
   return topHalf.reduce((sum, s) => sum + s.reps, 0) / topHalf.length;
 }
 
-/**
- * Intra-session fatigue detection
- *
- * Detects if the user got significantly fatigued DURING the session
- * by checking if rep count dropped >20% from first to last set at the same weight.
- *
- * Returns: { fatigued: boolean, decline: number (0-1), firstSetReps: number, lastSetReps: number }
- *
- * High fatigue during session = needs deload soon
- */
 export function detectIntraSessionFatigue(sets: SessionSetData[]): {
   fatigued: boolean;
   decline: number;
@@ -130,13 +121,11 @@ export function detectIntraSessionFatigue(sets: SessionSetData[]): {
     return { fatigued: false, decline: 0, firstSetReps: 0, lastSetReps: 0 };
   }
 
-  // Sort by weight descending, then by order (earlier sets first)
   const sorted = [...sets].sort((a, b) => {
     if (b.weight !== a.weight) return b.weight - a.weight;
-    return 0; // maintain insertion order for same weight
+    return 0;
   });
 
-  // Compare top-weight sets: first to last
   const topWeight = sorted[0].weight;
   const topWeightSets = sorted.filter(s => s.weight === topWeight);
 
@@ -146,11 +135,7 @@ export function detectIntraSessionFatigue(sets: SessionSetData[]): {
 
   const firstSetReps = topWeightSets[0].reps;
   const lastSetReps = topWeightSets[topWeightSets.length - 1].reps;
-
-  // Decline as a fraction: (first - last) / first
   const decline = (firstSetReps - lastSetReps) / firstSetReps;
-
-  // Threshold: >20% decline = fatigued
   const fatigued = decline > 0.2;
 
   return { fatigued, decline, firstSetReps, lastSetReps };
@@ -197,21 +182,53 @@ function isStalling(e1RMs: number[], windowSize = 3): boolean {
   return (last - first) / first < 0.01;
 }
 
-// ─── FIX #4: One-session directional suggestion ───────────────────────────────
-//
-// When only a single session exists we can still give useful guidance.
-// We have three signals:
-//   1. avgReps vs target range  → weight too light / too heavy / about right
-//   2. perceivedEffort (RPE)    → subjective difficulty
-//   3. rpeCorrection override   → already handled by computeAllSuggestions
-//
-// Rules (conservative — confidence is always 'low'):
-//   RPE ≤ 4 AND reps > repHi   → suggest increase_weight (too easy on both counts)
-//   RPE ≤ 4                    → suggest increase_weight (felt very easy)
-//   reps > repHi               → suggest increase_reps target for now, weight next
-//   RPE ≥ 9                    → suggest deload (too hard on first exposure)
-//   reps < repLo               → maintain, focus on hitting rep floor
-//   otherwise                  → maintain, aiming for top of rep range
+// --- Phase 2: Composite history key ------------------------------------------
+
+/**
+ * Builds the history key for a set.
+ *
+ * With equipment type (Phase 2 new rows):
+ *   "barbellbenchpress-mediumgrip::barbell"
+ *   "dumbbellbenchpress::dumbbell"
+ *   "legpress::machine"
+ *
+ * Without equipment type (legacy rows, backward compat):
+ *   "barbellbenchpress-mediumgrip"
+ *   "legpress"
+ *
+ * This ensures old progression history is never lost and new history
+ * is separated cleanly by equipment variant.
+ */
+export function buildHistoryKey(
+  exerciseId: string,
+  exerciseName: string,
+  equipmentType?: string,
+): string {
+  const base = (exerciseId && exerciseId.trim() !== '') ? exerciseId : exerciseName;
+  if (equipmentType && equipmentType.trim() !== '') {
+    return `${base}::${equipmentType}`;
+  }
+  return base;
+}
+
+/**
+ * Extracts the base exercise key (without equipment suffix) from a history key.
+ * Used when looking up legacy data alongside new equipment-aware data.
+ */
+export function stripEquipmentSuffix(historyKey: string): string {
+  const idx = historyKey.lastIndexOf('::');
+  return idx === -1 ? historyKey : historyKey.slice(0, idx);
+}
+
+/**
+ * Extracts the equipment type from a composite key, if present.
+ */
+export function extractEquipmentType(historyKey: string): string | undefined {
+  const idx = historyKey.lastIndexOf('::');
+  return idx === -1 ? undefined : historyKey.slice(idx + 2);
+}
+
+// --- One-session directional suggestion (FIX #4) -----------------------------
 
 function buildOneSuggestion(
   exerciseName: string,
@@ -223,9 +240,8 @@ function buildOneSuggestion(
   const currentWeight = topSetWeight(session.sets);
   const currentE1RM   = sessionE1RM(session.sets);
   const avgReps       = avgRepsAtTopWeight(session.sets);
-  const rpe           = session.perceivedEffort ?? 6; // default: moderate
+  const rpe           = session.perceivedEffort ?? 6;
 
-  // Bodyweight: only rep guidance
   if (tier === 'bodyweight') {
     if (avgReps > repHi && rpe <= 6) {
       return {
@@ -236,7 +252,7 @@ function buildOneSuggestion(
         previousE1RM: null,
         e1RMTrend: 'unknown',
         confidence: 'low',
-        reasoning: `First session: you averaged ${Math.round(avgReps)} reps — above the ${repHi}-rep ceiling at RPE ${rpe}. Aim for ${repLo + 2}–${repHi + 2} reps next time.`,
+        reasoning: `First session: you averaged ${Math.round(avgReps)} reps - above the ${repHi}-rep ceiling at RPE ${rpe}. Aim for ${repLo + 2}-${repHi + 2} reps next time.`,
         tip: 'One session isn\'t enough to confirm progress, but this is a good sign.',
       };
     }
@@ -248,11 +264,10 @@ function buildOneSuggestion(
       previousE1RM: null,
       e1RMTrend: 'unknown',
       confidence: 'low',
-      reasoning: `First session: ${Math.round(avgReps)} reps. Keep working toward ${repHi} clean reps before progressing. Complete a second session to get a more reliable suggestion.`,
+      reasoning: `First session: ${Math.round(avgReps)} reps. Keep working toward ${repHi} clean reps before progressing.`,
     };
   }
 
-  // Weighted: RPE + rep range signal
   if ((rpe <= 4 && avgReps > repHi) || rpe <= 3) {
     const increment = computeIncrease(tier, currentWeight);
     const suggested = Math.round((currentWeight + increment) * 10) / 10;
@@ -265,8 +280,8 @@ function buildOneSuggestion(
       previousE1RM: null,
       e1RMTrend: 'unknown',
       confidence: 'low',
-      reasoning: `First session: RPE ${rpe}/10${avgReps > repHi ? ` and ${Math.round(avgReps)} reps (above the ${repHi}-rep ceiling)` : ''}. Starting weight looks conservative — try ${suggested} kg next session.`,
-      tip: 'Low confidence: one session is not enough to confirm this. Adjust if it feels wrong.',
+      reasoning: `First session: RPE ${rpe}/10${avgReps > repHi ? ` and ${Math.round(avgReps)} reps (above the ${repHi}-rep ceiling)` : ''}. Starting weight looks conservative - try ${suggested} kg next session.`,
+      tip: 'Low confidence: one session is not enough to confirm this.',
     };
   }
 
@@ -281,7 +296,7 @@ function buildOneSuggestion(
       previousE1RM: null,
       e1RMTrend: 'unknown',
       confidence: 'low',
-      reasoning: `First session: RPE ${rpe}/10 — the starting weight may be too high. Try ${reduced} kg next session to build form and confidence.`,
+      reasoning: `First session: RPE ${rpe}/10 - the starting weight may be too high. Try ${reduced} kg next session.`,
       tip: 'Starting lighter is always safer than starting too heavy.',
     };
   }
@@ -308,11 +323,10 @@ function buildOneSuggestion(
       previousE1RM: null,
       e1RMTrend: 'unknown',
       confidence: 'low',
-      reasoning: `First session: ${Math.round(avgReps)} reps — below the ${repLo}–${repHi} target. Focus on hitting ${repLo} clean reps before adding weight. Complete a second session for a better suggestion.`,
+      reasoning: `First session: ${Math.round(avgReps)} reps - below the ${repLo}-${repHi} target. Focus on hitting ${repLo} clean reps before adding weight.`,
     };
   }
 
-  // In range and moderate RPE — textbook first session
   return {
     action: 'maintain',
     currentWeight,
@@ -321,10 +335,12 @@ function buildOneSuggestion(
     previousE1RM: null,
     e1RMTrend: 'unknown',
     confidence: 'low',
-    reasoning: `First session: ${Math.round(avgReps)} reps at ${currentWeight} kg (RPE ${rpe}/10) — right in the target range. Complete a second session at the same weight to confirm before progressing.`,
-    tip: 'Good first session. One more at this weight and the engine will have enough data to make a confident recommendation.',
+    reasoning: `First session: ${Math.round(avgReps)} reps at ${currentWeight} kg (RPE ${rpe}/10) - right in the target range. Complete a second session to confirm before progressing.`,
+    tip: 'Good first session. One more at this weight and the engine will have enough data.',
   };
 }
+
+// --- Main suggestion engine ---------------------------------------------------
 
 export function computeSuggestion(
   exerciseName: string,
@@ -341,7 +357,7 @@ export function computeSuggestion(
       previousE1RM: null,
       e1RMTrend: 'unknown',
       confidence: 'low',
-      reasoning: 'No history yet — establish a baseline first.',
+      reasoning: 'No history yet - establish a baseline first.',
     };
   }
 
@@ -354,7 +370,6 @@ export function computeSuggestion(
   const avgReps       = avgRepsAtTopWeight(lastSession.sets);
   const lastRPE       = lastSession.perceivedEffort ?? 5;
 
-  // FIX #4.1: Detect intra-session fatigue (new)
   const fatigueMeasure = detectIntraSessionFatigue(lastSession.sets);
   const highIntraSessionFatigue = fatigueMeasure.fatigued;
 
@@ -369,12 +384,10 @@ export function computeSuggestion(
   const stalling       = sessions.length >= 3 && isStalling(allE1RMs, 3);
   const regressedBadly = previousE1RM !== null && currentE1RM < previousE1RM * 0.93;
 
-  // FIX #4: delegate single-session path to the new directional helper
   if (sessions.length === 1) {
     return buildOneSuggestion(exerciseName, lastSession);
   }
 
-  // NEW: High intra-session fatigue is a strong deload signal
   if (highIntraSessionFatigue && lastRPE >= 7) {
     const pctDecline = Math.round(fatigueMeasure.decline * 100);
     const reduced = computeDeloadWeight(tier, currentWeight);
@@ -387,7 +400,7 @@ export function computeSuggestion(
       previousE1RM,
       e1RMTrend,
       confidence: 'high',
-      reasoning: `You had significant fatigue during the session — reps dropped ${pctDecline}% from first to last set (${fatigueMeasure.firstSetReps} → ${fatigueMeasure.lastSetReps}). A deload will help you recover.`,
+      reasoning: `Significant fatigue during session - reps dropped ${pctDecline}% from first to last set (${fatigueMeasure.firstSetReps} ↑ ${fatigueMeasure.lastSetReps}). A deload will help you recover.`,
       tip: 'When reps drop mid-session, your body is signaling it needs recovery.',
     };
   }
@@ -402,8 +415,8 @@ export function computeSuggestion(
       previousE1RM,
       e1RMTrend,
       confidence: 'high',
-      reasoning: `Your strength dropped more than 7% vs last session. A short deload (reduce weight ~10%) will help you recover and come back stronger.`,
-      tip: 'Deloads are planned recovery — not failure.',
+      reasoning: `Your strength dropped more than 7% vs last session. A short deload (reduce weight ~10%) will help you recover.`,
+      tip: 'Deloads are planned recovery - not failure.',
     };
   }
 
@@ -417,8 +430,8 @@ export function computeSuggestion(
       previousE1RM,
       e1RMTrend,
       confidence: 'medium',
-      reasoning: `RPE was ${lastRPE}/10 last session and strength has plateaued for 3 sessions. Try a light deload week to reset fatigue.`,
-      tip: 'Fatigue masks fitness — rest reveals it.',
+      reasoning: `RPE was ${lastRPE}/10 last session and strength has plateaued for 3 sessions. Try a light deload week.`,
+      tip: 'Fatigue masks fitness - rest reveals it.',
     };
   }
 
@@ -433,7 +446,7 @@ export function computeSuggestion(
         previousE1RM,
         e1RMTrend,
         confidence: sessions.length >= 2 ? 'high' : 'medium',
-        reasoning: `You averaged ${Math.round(avgReps)} reps — above the ${repHi}-rep ceiling. Bump your target to ${repLo + 2}–${repHi + 2} reps next session.`,
+        reasoning: `You averaged ${Math.round(avgReps)} reps - above the ${repHi}-rep ceiling. Bump your target to ${repLo + 2}-${repHi + 2} reps next session.`,
         tip: 'Once you can do more than 20 bodyweight reps consistently, consider adding a weighted vest.',
       };
     }
@@ -445,7 +458,7 @@ export function computeSuggestion(
       previousE1RM,
       e1RMTrend,
       confidence: 'medium',
-      reasoning: `You're at ${Math.round(avgReps)} reps — keep working toward ${repHi} clean reps before progressing.`,
+      reasoning: `You're at ${Math.round(avgReps)} reps - keep working toward ${repHi} clean reps before progressing.`,
     };
   }
 
@@ -485,7 +498,7 @@ export function computeSuggestion(
       previousE1RM,
       e1RMTrend,
       confidence: 'medium',
-      reasoning: `You're below the target rep range (${repLo}–${repHi}) and haven't improved in 3 sessions. Try a 10% reduction to rebuild momentum.`,
+      reasoning: `You're below the target rep range (${repLo}-${repHi}) and haven't improved in 3 sessions. Try a 10% reduction to rebuild momentum.`,
     };
   }
 
@@ -501,7 +514,7 @@ export function computeSuggestion(
   };
 }
 
-// ─── Reasoning helpers ────────────────────────────────────────────────────────
+// --- Reasoning helpers --------------------------------------------------------
 
 function buildIncreaseReasoning(
   tier: ExerciseTier,
@@ -518,7 +531,7 @@ function buildIncreaseReasoning(
     isolation: 'isolation exercise',
     bodyweight: 'bodyweight movement',
   }[tier];
-  return `You averaged ${Math.round(avgReps)} reps — above the ${repHi}-rep ceiling. For a ${tierLabel}, a ${
+  return `You averaged ${Math.round(avgReps)} reps - above the ${repHi}-rep ceiling. For a ${tierLabel}, a ${
     tier === 'heavy_barbell' ? `flat +${increment} kg` : `${pct}% increase (+${increment} kg)`
   } is appropriate. Try ${suggested} kg next session.`;
 }
@@ -531,25 +544,25 @@ function buildMaintainReasoning(
   trend: string,
 ): string {
   if (avgReps < repLo) {
-    return `You're averaging ${Math.round(avgReps)} reps — below the ${repLo}–${repHi} target range. Stay at ${weight} kg and focus on technique until you hit ${repLo} clean reps.`;
+    return `You're averaging ${Math.round(avgReps)} reps - below the ${repLo}-${repHi} target range. Stay at ${weight} kg and focus on technique until you hit ${repLo} clean reps.`;
   }
   const trendPhrase = trend === 'up' ? 'and your estimated strength is trending up' :
     trend === 'flat' ? 'consistency is your current focus' : '';
-  return `Good work — you're within the ${repLo}–${repHi} rep target at ${weight} kg ${trendPhrase}. Keep building volume before increasing the load.`.trim();
+  return `Good work - you're within the ${repLo}-${repHi} rep target at ${weight} kg ${trendPhrase}. Keep building volume before increasing the load.`.trim();
 }
 
 function buildTip(tier: ExerciseTier, increment: number, current: number): string {
   if (tier === 'heavy_barbell') {
-    return `${increment} kg is the smallest standard plate increment — respect it. Consistent small jumps compound into big strength gains.`;
+    return `${increment} kg is the smallest standard plate increment - respect it. Consistent small jumps compound into big strength gains.`;
   }
   if (tier === 'isolation') {
-    return `Small isolation increases (${increment} kg) keep joint stress manageable. If ${increment} kg feels like too much, try adding one extra set first.`;
+    return `Small isolation increases (${increment} kg) keep joint stress manageable.`;
   }
   const pct = Math.round((increment / current) * 100);
   return `A ${pct}% increase keeps progress sustainable without spiking injury risk.`;
 }
 
-// ─── WorkoutLog type ──────────────────────────────────────────────────────────
+// --- WorkoutLog type ----------------------------------------------------------
 
 export interface WorkoutLog {
   dayName: string;
@@ -559,50 +572,66 @@ export interface WorkoutLog {
     exerciseName: string;
     weight: number;
     reps: number;
+    /** Phase 2: optional equipment type - enables composite history key */
+    equipmentType?: string;
   }>;
   perceivedEffort?: number;
   rpeCorrections?: Record<string, number>;
 }
 
+// --- Phase 2: Equipment-aware computeAllSuggestions --------------------------
+
 export function computeAllSuggestions(
   workoutHistory: WorkoutLog[],
 ): Record<string, ProgressionSuggestion> {
-  const byExercise: Record<string, { name: string; sessions: SessionData[]; rpeCorrection?: number }> = {};
+  const byKey: Record<string, {
+    name: string;
+    sessions: SessionData[];
+    rpeCorrection?: number;
+  }> = {};
 
   const sorted = [...workoutHistory].sort(
     (a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
   );
 
   for (const log of sorted) {
+    // Group sets within this log by their composite key
     const exerciseSets: Record<string, { sets: SessionSetData[]; name: string }> = {};
+
     for (const s of (log.sets || [])) {
-      const key = s.exerciseId || s.exerciseName;
-      if (!exerciseSets[key]) exerciseSets[key] = { sets: [], name: s.exerciseName };
+      // Phase 2: use composite key when equipmentType is present
+      const key = buildHistoryKey(s.exerciseId, s.exerciseName, s.equipmentType);
+
+      if (!exerciseSets[key]) {
+        exerciseSets[key] = { sets: [], name: s.exerciseName };
+      }
       exerciseSets[key].sets.push({ weight: s.weight, reps: s.reps });
     }
 
     for (const [key, { sets, name }] of Object.entries(exerciseSets)) {
-      if (!byExercise[key]) byExercise[key] = { name, sessions: [] };
-      byExercise[key].sessions.push({
+      if (!byKey[key]) byKey[key] = { name, sessions: [] };
+      byKey[key].sessions.push({
         completedAt: log.completedAt,
         sets,
         perceivedEffort: log.perceivedEffort,
       });
+
+      // rpeCorrections still keyed by base exerciseId (pre-Phase-2 format)
+      // Try both the full composite key and the base key
+      const baseKey = stripEquipmentSuffix(key);
       if (log.rpeCorrections?.[key] !== undefined) {
-        byExercise[key].rpeCorrection = log.rpeCorrections[key];
+        byKey[key].rpeCorrection = log.rpeCorrections[key];
+      } else if (log.rpeCorrections?.[baseKey] !== undefined) {
+        byKey[key].rpeCorrection = log.rpeCorrections[baseKey];
       }
     }
   }
 
   const result: Record<string, ProgressionSuggestion> = {};
 
-  for (const [key, { name, sessions, rpeCorrection }] of Object.entries(byExercise)) {
+  for (const [key, { name, sessions, rpeCorrection }] of Object.entries(byKey)) {
     const suggestion = computeSuggestion(name, sessions);
 
-    // RPE correction override: if a saved rpeCorrection exists for this
-    // exercise, use it as the suggested weight regardless of session count.
-    // Previously this only fired for sessions.length === 1, silently
-    // ignoring corrections logged across multiple sessions.
     if (
       rpeCorrection !== undefined &&
       rpeCorrection > 0 &&
@@ -615,8 +644,8 @@ export function computeAllSuggestions(
           action: rpeCorrection !== suggestion.currentWeight ? 'increase_weight' : 'maintain',
           suggestedWeight: rpeCorrection,
           reasoning: sessions.length <= 1
-            ? `Starting weight adjusted to ${rpeCorrection} kg based on your effort rating from the first session. Complete another session to refine further.`
-            : `Weight adjusted to ${rpeCorrection} kg based on your RPE calibration. The progressive override from your initial calibration is being applied.`,
+            ? `Starting weight adjusted to ${rpeCorrection} kg based on your effort rating from the first session.`
+            : `Weight adjusted to ${rpeCorrection} kg based on your RPE calibration.`,
           confidence: sessions.length <= 1 ? 'medium' : suggestion.confidence,
         };
         continue;
@@ -628,3 +657,5 @@ export function computeAllSuggestions(
 
   return result;
 }
+
+

@@ -1,11 +1,14 @@
 /**
  * Data access layer — direct Supabase queries
  *
- * FIX #8: profileApi.updatePreferences now whitelists exactly the three
- *   allowed fields (units, theme, language) before the DB call, so extra
- *   fields in the caller's object can never overwrite profile data silently.
+ * Phase 2 changes:
+ *   - WorkoutSet now carries optional `equipmentType` field
+ *   - workoutApi.log() writes equipment_type to workout_sets table
+ *   - workoutApi.getHistory() reads equipment_type back from DB
+ *   - Backward compatible: old rows without equipment_type return undefined
  *
- * Everything else is unchanged from the original.
+ * Phase 1 / FIX #8: profileApi.updatePreferences whitelists exactly the three
+ *   allowed fields (units, theme, language).
  */
 
 import { supabase } from './supabase-client';
@@ -45,6 +48,8 @@ export interface WorkoutSet {
   reps: number;
   e1rm?: number;
   timestamp: string;
+  /** Phase 2: equipment type for this set — enables equipment-aware history keys */
+  equipmentType?: string;
 }
 
 export interface MuscleVolumeEntry {
@@ -81,6 +86,7 @@ export interface ExerciseHistoryPoint {
   weight_kg: number;
   reps: number;
   e1rm_kg: number;
+  equipment_type?: string;
 }
 
 export interface VolumeEntry {
@@ -188,20 +194,16 @@ export const profileApi = {
   }): Promise<void> => {
     const userId = await getUserId();
 
-    // Validate enum values before hitting the DB
     if (prefs.units    && !VALID_UNITS.has(prefs.units))        throw new Error(`Invalid units: ${prefs.units}`);
     if (prefs.theme    && !VALID_THEMES.has(prefs.theme))       throw new Error(`Invalid theme: ${prefs.theme}`);
     if (prefs.language && !VALID_LANGUAGES.has(prefs.language)) throw new Error(`Invalid language: ${prefs.language}`);
 
-    // FIX #8: Build an explicit whitelist — never pass the raw `prefs` object
-    // directly to .update() since it may contain extra fields that would silently
-    // overwrite profile columns (e.g. { units: 'metric', name: 'injected' }).
     const safeUpdate: Record<string, string> = {};
     if (prefs.units)    safeUpdate.units    = prefs.units;
     if (prefs.theme)    safeUpdate.theme    = prefs.theme;
     if (prefs.language) safeUpdate.language = prefs.language;
 
-    if (Object.keys(safeUpdate).length === 0) return; // nothing to update
+    if (Object.keys(safeUpdate).length === 0) return;
 
     const { error } = await supabase
       .from('user_profiles')
@@ -308,7 +310,8 @@ export const workoutApi = {
     const sessionIds = sessions.map(s => s.id);
     const { data: sets, error: setsError } = await supabase
       .from('workout_sets')
-      .select('*')
+      // Phase 2: include equipment_type in select
+      .select('*, equipment_type')
       .in('session_id', sessionIds)
       .order('completed_at', { ascending: true });
 
@@ -337,6 +340,8 @@ export const workoutApi = {
         reps:         s.reps,
         e1rm:         s.e1rm_kg ? parseFloat(s.e1rm_kg) : null,
         timestamp:    s.completed_at,
+        // Phase 2: pass through equipment_type (may be null for old rows)
+        equipmentType: s.equipment_type ?? undefined,
       })),
     }));
   },
@@ -345,7 +350,7 @@ export const workoutApi = {
     const userId = await getUserId();
     const { data, error } = await supabase
       .from('best_sets_per_session')
-      .select('session_id, exercise_name, completed_at, weight_kg, reps, e1rm_kg')
+      .select('session_id, exercise_name, completed_at, weight_kg, reps, e1rm_kg, equipment_type')
       .eq('user_id', userId)
       .eq('exercise_id', exerciseId)
       .order('completed_at', { ascending: true });
@@ -392,6 +397,8 @@ export const workoutApi = {
         weight_kg:     s.weight || 0,
         reps:          s.reps,
         completed_at:  s.timestamp || new Date().toISOString(),
+        // Phase 2: write equipment_type if present
+        equipment_type: s.equipmentType ?? null,
       }));
 
       const { error: setsErr } = await supabase.from('workout_sets').insert(sets);

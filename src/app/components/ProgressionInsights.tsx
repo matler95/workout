@@ -48,7 +48,10 @@ function buildChartMap(history: WorkoutLog[]): Record<string, ChartPoint[]> {
     // Group by stable key within this session
     const byKey: Record<string, { weight: number; reps: number; e1rm: number }> = {};
     for (const s of (log.sets || [])) {
-      const key = s.exerciseId || s.exerciseName;
+      // Phase 2.7: composite key — matches computeAllSuggestions
+      const key = (s.equipmentType && s.equipmentType.trim() !== '')
+        ? `${s.exerciseId || s.exerciseName}::${s.equipmentType}`
+        : (s.exerciseId || s.exerciseName);
       const e1rm = s.weight > 0 && s.reps > 0
         ? s.weight * (1 + s.reps / 30)
         : 0;

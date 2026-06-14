@@ -19,6 +19,7 @@ interface SetLog {
   exerciseId: string; exerciseName: string;
   set: number; weight: number; reps: number;
   e1rm?: number | null; timestamp: string;
+  equipmentType?: string;
 }
 interface WorkoutLog {
   id?: string; dayName: string; completedAt: string;
@@ -34,6 +35,7 @@ function toEngineHistory(logs: WorkoutLog[]): EngineWorkoutLog[] {
     sets: (log.sets || []).map(s => ({
       exerciseId: s.exerciseId, exerciseName: s.exerciseName,
       weight: s.weight, reps: s.reps,
+      equipmentType: s.equipmentType,
     })),
   }));
 }
@@ -91,9 +93,11 @@ export function Progress() {
       // Group sets within this session by their stable key
       const byKey: Record<string, { name: string; sets: SetLog[] }> = {};
       for (const s of (log.sets || [])) {
-        // FIX #12: use exerciseId as the stable key, fall back to exerciseName
-        // (exactly matching computeAllSuggestions in progressiveOverload.ts)
-        const key = s.exerciseId || s.exerciseName;
+        // Phase 2.6: composite key — matches computeAllSuggestions in progressiveOverload.ts
+        // Old sets without equipmentType fall back to plain exerciseId (backward-compat)
+        const key = (s.equipmentType && s.equipmentType.trim() !== '')
+          ? `${s.exerciseId || s.exerciseName}::${s.equipmentType}`
+          : (s.exerciseId || s.exerciseName);
         if (!byKey[key]) byKey[key] = { name: s.exerciseName, sets: [] };
         byKey[key].sets.push(s);
       }
@@ -101,7 +105,15 @@ export function Progress() {
       for (const [key, { name, sets }] of Object.entries(byKey)) {
         const best = sets.reduce((max, s) => s.weight > max.weight ? s : max, sets[0]);
         const e1rm = best.e1rm ?? Math.round(best.weight * (1 + best.reps / 30));
-        if (!map[key]) map[key] = { displayName: name, data: [] };
+        // Phase 2.6: for composite keys, show 'Movement Name (Equipment)'
+        const displayName = key.includes('::')
+          ? (() => {
+              const [,eq] = key.split('::');
+              const labels: Record<string,string> = { barbell: 'Barbell', dumbbell: 'Dumbbell', smith: 'Smith Machine', machine: 'Machine', cable: 'Cable', kettlebell: 'Kettlebell', band: 'Band', bodyweight: 'Bodyweight' };
+              return `${name} (${labels[eq] ?? eq})`;
+            })()
+          : name;
+        if (!map[key]) map[key] = { displayName, data: [] };
         map[key].data.push({ date, weight: best.weight, reps: best.reps, e1rm });
       }
     }

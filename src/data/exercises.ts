@@ -1,6 +1,11 @@
 ﻿export interface Exercise {
   id: string;
   name: string;
+  /** Groups exercise variants that are the same movement with different equipment.
+   *  e.g. "Barbell Bench Press" and "Dumbbell Bench Press" both get movementId "bench-press".
+   *  Computed at runtime via deriveMovementId() — not stored in each record to avoid
+   *  manual maintenance of 400+ entries. Read via getMovementId(exercise). */
+  movementId?: string;
   category: 'push' | 'pull' | 'legs' | 'abs' | 'full_body';
   primaryMuscles: string[];
   secondaryMuscles: string[];
@@ -10,6 +15,204 @@
   notes?: string;
   tempo?: string;
   instructions: string;
+}
+
+// ─── Movement ID derivation ────────────────────────────────────────────────────
+
+/**
+ * Manual overrides for exercises where automated derivation produces wrong grouping.
+ * Key: exercise.id — Value: desired movementId slug
+ */
+const MOVEMENT_ID_OVERRIDES: Record<string, string> = {
+  // Bench press variants → bench-press
+  'barbellbenchpress-mediumgrip':              'bench-press',
+  'barbellguillotinebenchpress':               'bench-press',
+  'barbellinlinebenchpress-mediumgrip':        'bench-press',
+  'closegripbarbellbenchpress':                'bench-press',
+  'widegripbarbellbenchpress':                 'bench-press',
+  'widegripdeclinebarbellbenchpress':          'bench-press',
+  'declinebarbellbenchpress':                  'bench-press',
+  'declinedumbbellbenchpress':                 'bench-press',
+  'dumbbellbenchpress':                        'bench-press',
+  'dumbbellbenchpresswithNeutralGrip':         'bench-press',
+  'hammergripinclinedbBenchpress':             'bench-press',
+  'machinebenchpress':                         'bench-press',
+  'smithmachinebenchpress':                    'bench-press',
+  'smithmachineclosegripbenchpress':           'bench-press',
+  'smithmachineinclibenchpress':               'bench-press',
+  'oneArmdumbbellbenchpress':                  'bench-press',
+  'reversegripincliedbBenchpress':             'bench-press',
+  'reversetricepsbenchpress':                  'bench-press',
+  'benchpress-withbands':                      'bench-press',
+  'closegripdumbbellpress':                    'bench-press',
+
+  // Squat variants → squat
+  'barbellsquat':                              'squat',
+  'barbellfullsquat':                          'squat',
+  'barbellsquattobench':                       'squat',
+  'barbellsidesplitsquat':                     'squat',
+  'bodyweigtSquat':                            'squat',
+  'bodywightsquat':                            'squat',
+  'chairsquat':                                'squat',
+  'dumbellsquat':                              'squat',
+  'dumbbellsquattobench':                      'squat',
+  'freejumpsquat':                             'squat',
+  'gobletsquat':                               'squat',
+  'hacksquat':                                 'squat',
+  'barbellhacksquat':                          'squat',
+  'narrowstancehacksquats':                    'squat',
+  'narrowstancesquats':                        'squat',
+  'smithmachinesquat':                         'squat',
+  'smithmachinepistolesquat':                  'squat',
+  'squatwithplatemovers':                      'squat',
+  'squats-withbands':                          'squat',
+  'widestancebarbellsquat':                    'squat',
+  'weightedjumpsquat':                         'squat',
+  'weightedsquatsissy':                        'squat',
+  'weightedsquat':                             'squat',
+  'singleleghighboxsquat':                     'squat',
+  'speedsquats':                               'squat',
+  'boxsquatwithchains':                        'squat',
+  'zerchersquats':                             'squat',
+  'jeffersonsquats':                           'squat',
+  'lyingmachinesquat':                         'squat',
+
+  // Deadlift variants → deadlift
+  'barbelldeadlift':                           'deadlift',
+  'stiffleggedbarbelldeadlift':                'deadlift',
+  'stiffleggeddumbbelldeadlift':               'deadlift',
+  'romaniandeadlift':                          'deadlift',
+  'leveragedeadlift':                          'deadlift',
+  'trapbardeadlift':                           'deadlift',
+  'smithmachinestiffleggeddeadlift':           'deadlift',
+  'cabledeadlifts':                            'deadlift',
+  'kettlebelloneleggeddeadlift':               'deadlift',
+  'onearmsidedeadlift':                        'deadlift',
+
+  // Shoulder press variants → shoulder-press
+  'barbellshoulderpress':                      'shoulder-press',
+  'dumbellshoulderpress':                      'shoulder-press',
+  'dumbellonarmshoulderpress':                 'shoulder-press',
+  'leverageshoulderpress':                     'shoulder-press',
+  'seatedcableshoulderpress':                  'shoulder-press',
+  'cableshoulderpress':                        'shoulder-press',
+  'smithmachineoverheadshoulderpress':         'shoulder-press',
+  'alternatingcableshoulderpress':             'shoulder-press',
+  'arnolddumbbellpress':                       'shoulder-press',
+
+  // Row variants → bent-over-row
+  'bentoverbarbelrow':                         'bent-over-row',
+  'bentovertwodumbbellrow':                    'bent-over-row',
+  'bentovertwodumbbellrowwithpalmsin':         'bent-over-row',
+  'dumbbellinlinerow':                         'bent-over-row',
+  'oneArmdumbbellrow':                         'bent-over-row',
+  'onearmkettlebellrow':                       'bent-over-row',
+  'twoarmkettlebellrow':                       'bent-over-row',
+  'smithmachinebentoverrow':                   'bent-over-row',
+  'reverseGripbentoverrows':                   'bent-over-row',
+
+  // Lunge variants → lunge
+  'barbelllunge':                              'lunge',
+  'barbellwalkinglunge':                       'lunge',
+  'dumbbelllunges':                            'lunge',
+  'dumbellrearlunge':                          'lunge',
+  'bodywightwalkinglunge':                     'lunge',
+  'elevatedbacklunge':                         'lunge',
+  'lungepassthrough':                          'lunge',
+  'lungsprint':                                'lunge',
+  'splitSquatwithDumbbells':                   'lunge',
+  'suspendedrowsplitsquat':                    'lunge',
+  'bulgariansplitsquat':                       'lunge',
+  'smithsinglelegsplitsquat':                  'lunge',
+
+  // Lat pulldown → lat-pulldown
+  'widegriplatpulldown':                       'lat-pulldown',
+  'closegripfrontlatpulldown':                 'lat-pulldown',
+  'fullrangeofmotionlatpulldown':              'lat-pulldown',
+  'onearmlatpulldown':                         'lat-pulldown',
+
+  // Leg curl → leg-curl
+  'seatedlegcurl':                             'leg-curl',
+  'lyinglegcurl':                              'leg-curl',
+
+  // Leg press → leg-press
+  'legpress':                                  'leg-press',
+  'narrowstancelegpress':                      'leg-press',
+  'smithmachinelegpress':                      'leg-press',
+  'calfpressonthelegpressmachine':             'leg-press',
+};
+
+/**
+ * Equipment prefix/suffix words stripped when deriving movementId.
+ */
+const STRIP_PREFIXES = [
+  'barbell', 'dumbbell', 'ez bar', 'ez-bar', 'ezbar',
+  'smith machine', 'smith-machine', 'cable', 'machine',
+  'kettlebell', 'resistance band', 'band', 'band assisted',
+  'leverage', 'weighted', 'bodyweight',
+  'seated', 'standing', 'lying', 'kneeling',
+  'incline', 'decline', 'flat', 'overhead',
+  'narrow stance', 'wide stance', 'wide grip', 'close grip',
+  'alternating', 'alternate', 'single leg', 'one arm', 'one-arm',
+  'two arm', 'two-arm',
+];
+
+const STRIP_SUFFIXES = [
+  'with bands', 'with chains', 'with handle', 'with straps', 'with plate movers',
+  'on bench', 'to a bench', 'to bench',
+  'narrow grip', 'wide grip', 'medium grip', 'close grip',
+  'behind the back', 'neutral grip', 'palms in',
+  'lunge style', 'squat style',
+  'clean grip',
+];
+
+/**
+ * Derive a stable movement slug from an exercise record.
+ * Used to group e.g. "Barbell Bench Press" and "Dumbbell Bench Press"
+ * under the same movementId "bench-press".
+ *
+ * The MOVEMENT_ID_OVERRIDES map handles edge-cases; this function
+ * handles the remaining ~70% automatically.
+ */
+export function deriveMovementId(exercise: Exercise): string {
+  // 1. Check manual override first (uses exercise.id for precision)
+  if (MOVEMENT_ID_OVERRIDES[exercise.id]) {
+    return MOVEMENT_ID_OVERRIDES[exercise.id];
+  }
+
+  let n = exercise.name.toLowerCase();
+
+  // 2. Strip trailing descriptors (after a dash)
+  n = n.replace(/\s*-\s*.+$/, '');
+
+  // 3. Strip suffix phrases
+  for (const suffix of STRIP_SUFFIXES) {
+    if (n.endsWith(suffix)) {
+      n = n.slice(0, n.length - suffix.length).trim();
+    }
+  }
+
+  // 4. Strip leading equipment prefixes (longest match first)
+  const sortedPrefixes = [...STRIP_PREFIXES].sort((a, b) => b.length - a.length);
+  for (const prefix of sortedPrefixes) {
+    if (n.startsWith(prefix + ' ') || n.startsWith(prefix + '-')) {
+      n = n.slice(prefix.length).trim().replace(/^[-\s]+/, '');
+      break; // only strip one prefix
+    }
+  }
+
+  // 5. Normalize to slug: trim, lowercase, replace non-alphanum with hyphens
+  return n.trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Returns the movementId for an exercise.
+ * Checks the optional stored movementId first, then derives it.
+ */
+export function getMovementId(exercise: Exercise): string {
+  return exercise.movementId ?? deriveMovementId(exercise);
 }
 
 export const exerciseDatabase: Exercise[] = [
@@ -759,7 +962,7 @@ export const exerciseDatabase: Exercise[] = [
     equipment: 'full_gym',
     equipmentType: 'machine',
     difficulty: 'beginner',
-    instructions: '1. Sit next to a low pulley sideways (with legs stretched in front of you or crossed) and grasp the single hand cable attachment with the arm nearest to the cable. Tip: If you can adjust the pulley\'s height, you can use a flat bench to sit on instead.\n2. Position the elbow against your side with the elbow bent at 90Ă‚Â° and the arm pointing towards the pulley. This will be your starting position.\n3. Pull the single hand cable attachment toward your body by internally rotating your shoulder until your forearm is across your abs. You will be creating an imaginary semi-circle. Tip: The forearm should be perpendicular to your torso at all times.\n4. Slowly go back to the initial position.\n5. Repeat for the recommended amount of repetitions and then repeat the movement with the next arm.'
+    instructions: '1. Sit next to a low pulley sideways (with legs stretched in front of you or crossed) and grasp the single hand cable attachment with the arm nearest to the cable. Tip: If you can adjust the pulley\'s height, you can use a flat bench to sit on instead.\n2. Position the elbow against your side with the elbow bent at 90° and the arm pointing towards the pulley. This will be your starting position.\n3. Pull the single hand cable attachment toward your body by internally rotating your shoulder until your forearm is across your abs. You will be creating an imaginary semi-circle. Tip: The forearm should be perpendicular to your torso at all times.\n4. Slowly go back to the initial position.\n5. Repeat for the recommended amount of repetitions and then repeat the movement with the next arm.'
   },
   {
     id: 'cableironcross',
@@ -2904,7 +3107,7 @@ export const exerciseDatabase: Exercise[] = [
     equipment: 'full_gym',
     equipmentType: 'dumbbell',
     difficulty: 'beginner',
-    instructions: '1. Connect a standard handle to a tower, andĂ˘â‚¬â€ťif possibleĂ˘â‚¬â€ťposition the cable to shoulder height. If not, a low pulley will suffice.\n2. With your side to the cable, grab the handle with both hands and step away from the tower. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable.\n3. With your feet positioned hip-width apart and knees slightly bent, hold the cable to the middle of your chest. This will be your starting position.\n4. Press the cable away from your chest, fully extending both arms. You core should be tight and engaged.\n5. Hold the repetition for several seconds before returning to the starting position.\n6. At the conclusion of the set, repeat facing the other direction.'
+    instructions: '1. Connect a standard handle to a tower, and, if possible, position the cable to shoulder height. If not, a low pulley will suffice.\n2. With your side to the cable, grab the handle with both hands and step away from the tower. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable.\n3. With your feet positioned hip-width apart and knees slightly bent, hold the cable to the middle of your chest. This will be your starting position.\n4. Press the cable away from your chest, fully extending both arms. You core should be tight and engaged.\n5. Hold the repetition for several seconds before returning to the starting position.\n6. At the conclusion of the set, repeat facing the other direction.'
   },
   {
     id: 'pallofpresswithrotation',
