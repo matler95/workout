@@ -118,8 +118,12 @@ export function Dashboard() {
   };
 
   const getWeeklyProgress = () => {
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const done = workoutHistory.filter(l => new Date(l.completedAt) >= weekStart).length;
+    // Phase 6: rolling 7-day window rather than a hard Monday reset — a
+    // calendar-week boundary let a Sunday-night session and a Monday-morning
+    // one each count toward a fresh week's target with no rest between them.
+    const windowStart = new Date(Date.now() - 6 * 86400000);
+    windowStart.setHours(0, 0, 0, 0);
+    const done = workoutHistory.filter(l => new Date(l.completedAt) >= windowStart).length;
     const planned = profile?.trainingDays || 3;
     return { completed: done, planned, pct: Math.min(100, Math.round((done / planned) * 100)) };
   };
@@ -194,7 +198,7 @@ export function Dashboard() {
   };
 
   const weekProg    = getWeeklyProgress();
-  const nextWorkout = getNextWorkout(workoutPlan, workoutHistory);
+  const nextWorkout = getNextWorkout(workoutPlan, workoutHistory, profile?.trainingDays);
   const cals        = getCalorieTarget();
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
   const streak      = getStreak();
@@ -278,6 +282,11 @@ export function Dashboard() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {nextWorkout ? `${nextWorkout.day} · ${(workoutPlan.workouts[nextWorkout.day] || []).length} exercises` : 'No workout scheduled'}
                 </p>
+                {nextWorkout?.availableOn && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Recommended rest day — next session opens up {format(parseISO(nextWorkout.availableOn), 'EEEE')}
+                  </p>
+                )}
               </div>
               <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center flex-shrink-0">
                 <Dumbbell className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />

@@ -18,18 +18,19 @@
 CREATE OR REPLACE VIEW best_sets_per_session
   WITH (security_invoker = true)           -- enforce RLS on underlying tables
 AS
-SELECT DISTINCT ON (session_id, exercise_id)
+SELECT DISTINCT ON (session_id, exercise_id, equipment_type)
   session_id,
   user_id,
   exercise_id,
   exercise_name,
+  equipment_type,
   completed_at,
   weight_kg,
   reps,
   e1rm_kg
 FROM workout_sets
 WHERE user_id = auth.uid()                 -- explicit predicate (defence-in-depth)
-ORDER BY session_id, exercise_id, e1rm_kg DESC;
+ORDER BY session_id, exercise_id, equipment_type, e1rm_kg DESC;
 
 -- ── 2. weekly_volume ──────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ SELECT
   user_id,
   exercise_id,
   exercise_name,
+  equipment_type,
   DATE_TRUNC('week', completed_at) AS week_start,
   COUNT(*) AS total_sets,
   SUM(reps) AS total_reps,
@@ -47,7 +49,7 @@ SELECT
   MAX(e1rm_kg) AS best_e1rm
 FROM workout_sets
 WHERE user_id = auth.uid()
-GROUP BY user_id, exercise_id, exercise_name, DATE_TRUNC('week', completed_at);
+GROUP BY user_id, exercise_id, exercise_name, equipment_type, DATE_TRUNC('week', completed_at);
 
 -- ── 3. workouts_per_week ─────────────────────────────────────────────────────
 

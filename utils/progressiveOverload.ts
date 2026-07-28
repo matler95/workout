@@ -632,9 +632,19 @@ export function computeAllSuggestions(
   for (const [key, { name, sessions, rpeCorrection }] of Object.entries(byKey)) {
     const suggestion = computeSuggestion(name, sessions);
 
+    // FIX #4 (June 2026 feedback pass): rpeCorrection was previously applied
+    // whenever it existed on ANY past session, with no bound on how many
+    // sessions had occurred since. Because rpeCorrections is only ever
+    // written on a first session, that one-time value stayed in byKey[key]
+    // forever and permanently overrode suggestedWeight — ignoring whatever
+    // the user actually logged in every session after that. Scoping this to
+    // sessions.length === 1 restores the original intent: adjust the
+    // estimated starting weight once, right before session #2, then let
+    // computeSuggestion's real weight-trend logic take over from there.
     if (
       rpeCorrection !== undefined &&
       rpeCorrection > 0 &&
+      sessions.length === 1 &&
       suggestion.action !== 'insufficient_data'
     ) {
       const tier = classifyExercise(name);
@@ -643,10 +653,8 @@ export function computeAllSuggestions(
           ...suggestion,
           action: rpeCorrection !== suggestion.currentWeight ? 'increase_weight' : 'maintain',
           suggestedWeight: rpeCorrection,
-          reasoning: sessions.length <= 1
-            ? `Starting weight adjusted to ${rpeCorrection} kg based on your effort rating from the first session.`
-            : `Weight adjusted to ${rpeCorrection} kg based on your RPE calibration.`,
-          confidence: sessions.length <= 1 ? 'medium' : suggestion.confidence,
+          reasoning: `Starting weight adjusted to ${rpeCorrection} kg based on your effort rating from the first session.`,
+          confidence: 'medium',
         };
         continue;
       }

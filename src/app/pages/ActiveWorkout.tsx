@@ -23,12 +23,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '../components/ui/dialog';
 import { profileApi, planApi, workoutApi } from '../../utils/api';
 import { toast } from 'sonner';
 import {
   Clock, Check, Trophy, X, TrendingUp, TrendingDown,
   HelpCircle, MoreVertical, ArrowDown, SkipForward, Minus, Plus,
   ChevronDown, ChevronUp, ArrowUp, ArrowUpDown, PlusCircle, Volume2, VolumeX,
+  Pencil,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -326,6 +330,10 @@ export function ActiveWorkout() {
   // Phase 5.4: set complete pulse animation
   const [showPulse, setShowPulse]             = useState(false);
 
+  // Phase 6: edit-logged-sets modal — feedback item #1
+  const [showEditSets, setShowEditSets]       = useState(false);
+  const [editDraft, setEditDraft]             = useState<SetLog[]>([]);
+
   // Phase 5.2: sound preference — read from localStorage, toggle in UI
   const [soundEnabled, setSoundEnabledState] = useState(() => getSoundEnabled());
   const toggleSound = () => {
@@ -380,6 +388,17 @@ export function ActiveWorkout() {
           } else {
             clearRestStart();
             setRestTimer(0);
+            // Phase 6: iOS PWA suspends AudioContext + JS timers while the
+            // screen is locked/backgrounded, so the in-tab beep in the main
+            // interval below never fires there. This visibilitychange
+            // handler already catches the "timer finished while away" case
+            // for the toast — extend it to also fire sound + vibration the
+            // instant the user looks back at the screen.
+            unlockAudio();
+            maybePlayTimerDone();
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              navigator.vibrate([200, 100, 200]);
+            }
             toast.success('Rest done — go!');
           }
         }
@@ -402,6 +421,9 @@ export function ActiveWorkout() {
           clearInterval(timerRef.current!);
           clearRestStart();
           maybePlayTimerDone();   // Phase 5.2
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);   // Phase 6: haptic fallback for iOS PWA
+          }
           toast.success('Rest done — go!');
           return 0;
         }
@@ -657,6 +679,61 @@ export function ActiveWorkout() {
       setCustomReps(String(lastSet.reps));
     }
     toast('Extra set added.', { icon: '➕' });
+  };
+
+  // ── Phase 6: Skip a single set (do fewer than planned) ────────────────────────
+
+  const handleSkipSet = () => {
+    if (!currentExercise) return;
+    const key            = exerciseHistoryKey(currentExercise);
+    const baseKeyForEx   = exerciseBaseKey(currentExercise);
+    const plan           = plans[key] ?? plans[baseKeyForEx];
+    const plannedSets    = plan?.sets ?? 3;
+    const loggedSoFar    = completedSets.filter(s => s.exerciseId === baseKeyForEx).length;
+
+    // Never drop below what's already logged for this exercise.
+    const newTotal = Math.max(loggedSoFar, plannedSets - 1);
+    setPlans(prev => ({ ...prev, [key]: { ...plan, sets: newTotal } }));
+    toast('Set skipped.', { icon: '⏭️' });
+
+    if (currentSet > newTotal) {
+      // That was the last remaining set for this exercise — move on.
+      advanceQueue(completedSets);
+    }
+    // Otherwise stay on currentSet, which now points at the next real set
+    // against the reduced total.
+  };
+
+  // ── Phase 6: Edit already-logged sets for the current exercise ────────────────
+
+  const openEditSets = () => {
+    if (!currentExercise) return;
+    const baseKeyForEx = exerciseBaseKey(currentExercise);
+    setEditDraft(completedSets.filter(s => s.exerciseId === baseKeyForEx).map(s => ({ ...s })));
+    setShowEditSets(true);
+  };
+
+  const updateEditDraft = (index: number, field: 'weight' | 'reps', value: string) => {
+    setEditDraft(prev => prev.map((s, i) => {
+      if (i !== index) return s;
+      const parsed = field === 'weight' ? parseFloat(value) : parseInt(value);
+      return { ...s, [field]: isNaN(parsed) ? 0 : parsed };
+    }));
+  };
+
+  const saveEditSets = () => {
+    if (!currentExercise) return;
+    const baseKeyForEx = exerciseBaseKey(currentExercise);
+    const editedById = new Map(editDraft.map(s => [s.set, s]));
+    const merged = completedSets.map(s => {
+      if (s.exerciseId !== baseKeyForEx) return s;
+      const edited = editedById.get(s.set);
+      return edited ? { ...s, weight: edited.weight, reps: edited.reps } : s;
+    });
+    setCompletedSets(merged);
+    queueUpdate(offlineSessionId.current, merged);
+    setShowEditSets(false);
+    toast.success('Sets updated');
   };
 
   // ── Set / exercise flow ──────────────────────────────────────────────────────
@@ -1124,6 +1201,46 @@ export function ActiveWorkout() {
         onReorder={handleReorder}
       />
 
+      {/* Phase 6: Edit logged sets — feedback item #1 */}
+      <Dialog open={showEditSets} onOpenChange={setShowEditSets}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit sets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {editDraft.map((s, i) => (
+              <div key={s.set} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-10 flex-shrink-0">Set {s.set}</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={s.weight === 0 ? '' : s.weight}
+                  onChange={e => updateEditDraft(i, 'weight', e.target.value)}
+                  className="w-20 text-center h-9 text-sm"
+                  placeholder="0"
+                />
+                <span className="text-xs text-muted-foreground flex-shrink-0">kg ×</span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={s.reps}
+                  onChange={e => updateEditDraft(i, 'reps', e.target.value)}
+                  className="w-16 text-center h-9 text-sm"
+                />
+                <span className="text-xs text-muted-foreground flex-shrink-0">reps</span>
+              </div>
+            ))}
+            {editDraft.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No sets logged yet.</p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowEditSets(false)}>Cancel</Button>
+            <Button onClick={saveEditSets} disabled={editDraft.length === 0}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Rest timer */}
       {restTimer > 0 && (
         <div className="sticky top-[57px] z-10 bg-blue-600 dark:bg-blue-700">
@@ -1361,10 +1478,27 @@ export function ActiveWorkout() {
               Complete Set {currentSet}
             </Button>
 
+            {/* Phase 6: Skip this set — do fewer than planned */}
+            <button
+              onClick={handleSkipSet}
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors py-1 flex items-center justify-center gap-1"
+            >
+              <SkipForward className="w-3.5 h-3.5" />
+              Skip this set
+            </button>
+
             {/* Phase 3: Completed sets log + Add extra set button */}
             {exerciseSets.length > 0 && (
               <div className="border-t pt-3">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">This exercise</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">This exercise</p>
+                  <button
+                    onClick={openEditSets}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                  >
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                </div>
                 <div className="space-y-1">
                   {exerciseSets.map((s, i) => {
                     const e1rm = s.weight > 0 ? Math.round(s.weight * (1 + s.reps / 30)) : null;
