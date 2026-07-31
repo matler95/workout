@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { formatDistanceToNow } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -32,7 +33,7 @@ import {
   Clock, Check, Trophy, X, TrendingUp, TrendingDown,
   HelpCircle, MoreVertical, ArrowDown, SkipForward, Minus, Plus,
   ChevronDown, ChevronUp, ArrowUp, ArrowUpDown, PlusCircle, Volume2, VolumeX,
-  Pencil,
+  Pencil, Trash2,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -57,7 +58,8 @@ import { getMovementId } from '../../data/exercises';
 import { getMovementDisplayName } from '../../utils/exerciseGrouping';
 import {
   generateSessionId, queueStart, queueUpdate,
-  queueMarkPending, queueClear,
+  queueMarkPending, queueClear, getInProgressWorkout,
+  type QueuedWorkout,
 } from '../../utils/offlineQueue';
 import Celebration from '../components/ui/celebration';
 import {
@@ -334,6 +336,9 @@ export function ActiveWorkout() {
   const [showEditSets, setShowEditSets]       = useState(false);
   const [editDraft, setEditDraft]             = useState<SetLog[]>([]);
 
+  // Phase 7: resumable in-progress session detected in localStorage — feedback item #3
+  const [resumableSession, setResumableSession] = useState<QueuedWorkout | null>(null);
+
   // Phase 5.2: sound preference — read from localStorage, toggle in UI
   const [soundEnabled, setSoundEnabledState] = useState(() => getSoundEnabled());
   const toggleSound = () => {
@@ -526,6 +531,19 @@ export function ActiveWorkout() {
 
       setPlans(builtPlans);
       if (exs.length > 0) applyPlanToInputs(exs[0], builtPlans);
+
+      // Phase 7 (feedback #3): the offline queue already persists every
+      // logged set to localStorage via queueUpdate as the workout happens —
+      // but nothing ever read it back on remount. If the app gets backgrounded
+      // and iOS kills/reloads the tab, this component remounts from scratch,
+      // currentPhase resets to the pre-workout screen, and tapping "Start
+      // Workout" again would call queueStart, which marks the old in-progress
+      // entry 'abandoned' and hands back a blank session — silently dropping
+      // everything already logged. Surface it instead so the user can choose.
+      const inProgress = getInProgressWorkout();
+      if (inProgress && inProgress.dayName === dayName && inProgress.sets.length > 0) {
+        setResumableSession(inProgress);
+      }
     } catch {
       toast.error('Failed to load workout');
       navigate('/plan');
@@ -560,11 +578,10 @@ export function ActiveWorkout() {
     setDeferredIds(prev => new Set([...prev, key]));
     const newQueue = [...rest, current];
     setExerciseQueue(newQueue);
-    setCurrentSet(1);
     setRestTimer(0);
     setShowExtraWeight(false);
     clearRestStart();
-    applyPlanToInputs(newQueue[0], plans);
+    resyncInputsForExercise(newQueue[0], plans, completedSets);
     toast('Moved to end — you\'ll come back to it.', { icon: '🔄' });
   };
 
@@ -575,11 +592,10 @@ export function ActiveWorkout() {
       return;
     }
     setExerciseQueue(newQueue);
-    setCurrentSet(1);
     setRestTimer(0);
     setShowExtraWeight(false);
     clearRestStart();
-    applyPlanToInputs(newQueue[0], plans);
+    resyncInputsForExercise(newQueue[0], plans, completedSets);
     toast('Exercise skipped for today.', { icon: '⏭' });
   };
 
@@ -625,11 +641,10 @@ export function ActiveWorkout() {
 
   const handleReorder = (newQueue: any[]) => {
     setExerciseQueue(newQueue);
-    setCurrentSet(1);
     setRestTimer(0);
     setShowExtraWeight(false);
     clearRestStart();
-    applyPlanToInputs(newQueue[0], plans);
+    resyncInputsForExercise(newQueue[0], plans, completedSets);
     toast('Exercise order updated.', { icon: '↕️' });
   };
 
@@ -704,12 +719,79 @@ export function ActiveWorkout() {
     // against the reduced total.
   };
 
-  // ── Phase 6: Edit already-logged sets for the current exercise ────────────────
+  // ── Phase 7: resync current-exercise inputs from actual logged history ────────
+  // Shared by reorder, "do later", queue-advance, and the edit-log modal so that
+  // returning to (or landing on) an exercise with sets already logged this
+  // session picks up where it actually left off — instead of resetting the set
+  // counter to 1 and the weight/reps back to the original suggestion.
+  const resyncInputsForExercise = (ex: any, allPlans: Record<string, ExercisePlan>, sets: SetLog[]) => {
+    const baseKeyForEx  = exerciseBaseKey(ex);
+    const loggedForEx   = sets.filter(s => s.exerciseId === baseKeyForEx);
+    setCurrentSet(loggedForEx.length + 1);
+
+    if (loggedForEx.length > 0) {
+      const last = loggedForEx[loggedForEx.length - 1];
+      setCustomWeight(String(last.weight));
+      setCustomReps(String(last.reps));
+      setShowExtraWeight(false);
+    } else {
+      applyPlanToInputs(ex, allPlans);
+    }
+  };
+
+  // ── Phase 7: Resume a recovered in-progress session ────────────────────────────
+
+  const handleResumeSession = () => {
+    if (!resumableSession) return;
+    const restoredSets = resumableSession.sets as SetLog[];
+
+    // Reuse the existing sessionId so we keep writing to the same localStorage
+    // entry rather than starting a fresh one (which would abandon this one).
+    offlineSessionId.current = resumableSession.sessionId;
+    setCompletedSets(restoredSets);
+
+    // Walk the day's planned exercises in order and find the first one that
+    // doesn't yet have its full target set count logged — that's the new
+    // queue head. Everything before it is done; everything from it onward
+    // is still pending, in original order.
+    let headIdx = exercises.length;
+    for (let i = 0; i < exercises.length; i++) {
+      const baseKeyForEx = exerciseBaseKey(exercises[i]);
+      const histKeyForEx = exerciseHistoryKey(exercises[i]);
+      const plan   = plans[histKeyForEx] ?? plans[baseKeyForEx];
+      const target = plan?.sets ?? 3;
+      const logged = restoredSets.filter(s => s.exerciseId === baseKeyForEx).length;
+      if (logged < target) { headIdx = i; break; }
+    }
+    const newQueue = exercises.slice(headIdx);
+    setExerciseQueue(newQueue);
+
+    const startMs = new Date(resumableSession.startedAt).getTime();
+    startTimeRef.current = startMs;
+    saveWorkoutStart(startMs);
+
+    if (newQueue.length === 0) {
+      setCurrentPhase('feedback');
+    } else {
+      resyncInputsForExercise(newQueue[0], plans, restoredSets);
+      setCurrentPhase('exercise');
+    }
+    setResumableSession(null);
+    toast.success('Workout resumed');
+  };
+
+  const handleDiscardResumableSession = () => {
+    if (resumableSession) queueClear(resumableSession.sessionId);
+    setResumableSession(null);
+  };
+
+
+  // Feedback round 2 (#2): previously scoped to only the current exercise, and
+  // offered no way to remove a mislogged set (edit weight/reps only). Now opens
+  // the full session log — every exercise, every set — with per-row delete.
 
   const openEditSets = () => {
-    if (!currentExercise) return;
-    const baseKeyForEx = exerciseBaseKey(currentExercise);
-    setEditDraft(completedSets.filter(s => s.exerciseId === baseKeyForEx).map(s => ({ ...s })));
+    setEditDraft(completedSets.map(s => ({ ...s })));
     setShowEditSets(true);
   };
 
@@ -721,20 +803,43 @@ export function ActiveWorkout() {
     }));
   };
 
-  const saveEditSets = () => {
-    if (!currentExercise) return;
-    const baseKeyForEx = exerciseBaseKey(currentExercise);
-    const editedById = new Map(editDraft.map(s => [s.set, s]));
-    const merged = completedSets.map(s => {
-      if (s.exerciseId !== baseKeyForEx) return s;
-      const edited = editedById.get(s.set);
-      return edited ? { ...s, weight: edited.weight, reps: edited.reps } : s;
-    });
-    setCompletedSets(merged);
-    queueUpdate(offlineSessionId.current, merged);
-    setShowEditSets(false);
-    toast.success('Sets updated');
+  const removeEditDraftRow = (index: number) => {
+    setEditDraft(prev => prev.filter((_, i) => i !== index));
   };
+
+  const saveEditSets = () => {
+    // Renumber each exercise's sets sequentially after any removals, so
+    // "Set 1, Set 3" (with 2 deleted) becomes "Set 1, Set 2" — keeps display
+    // and downstream set-count logic (currentSet, progression) consistent.
+    const counters: Record<string, number> = {};
+    const renumbered = editDraft.map(s => {
+      counters[s.exerciseId] = (counters[s.exerciseId] || 0) + 1;
+      return { ...s, set: counters[s.exerciseId] };
+    });
+
+    setCompletedSets(renumbered);
+    queueUpdate(offlineSessionId.current, renumbered);
+
+    // If any edits/removals touched the exercise currently in progress,
+    // realign the set counter and prefilled weight/reps to match.
+    if (currentExercise) {
+      resyncInputsForExercise(currentExercise, plans, renumbered);
+    }
+
+    setShowEditSets(false);
+    toast.success('Workout log updated');
+  };
+
+  const editGroups = useMemo(() => {
+    const map = new Map<string, { exerciseId: string; exerciseName: string; rows: { row: SetLog; index: number }[] }>();
+    editDraft.forEach((row, index) => {
+      if (!map.has(row.exerciseId)) {
+        map.set(row.exerciseId, { exerciseId: row.exerciseId, exerciseName: row.exerciseName, rows: [] });
+      }
+      map.get(row.exerciseId)!.rows.push({ row, index });
+    });
+    return Array.from(map.values());
+  }, [editDraft]);
 
   // ── Set / exercise flow ──────────────────────────────────────────────────────
 
@@ -804,11 +909,10 @@ export function ActiveWorkout() {
       setCurrentPhase('feedback');
     } else {
       setExerciseQueue(newQueue);
-      setCurrentSet(1);
       setRestTimer(0);
       setShowExtraWeight(false);
       clearRestStart();
-      applyPlanToInputs(newQueue[0], plans);
+      resyncInputsForExercise(newQueue[0], plans, current);
     }
   };
 
@@ -919,6 +1023,25 @@ export function ActiveWorkout() {
                 )}
               </p>
             </div>
+
+            {resumableSession && (
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-3 text-sm space-y-2">
+                <p className="font-medium text-amber-800 dark:text-amber-300">
+                  Unfinished workout found
+                </p>
+                <p className="text-amber-700 dark:text-amber-400 text-xs">
+                  {resumableSession.sets.length} set{resumableSession.sets.length === 1 ? '' : 's'} logged, started {formatDistanceToNow(new Date(resumableSession.startedAt), { addSuffix: true })}.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" className="flex-1 h-9" onClick={handleResumeSession}>
+                    Resume
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1 h-9" onClick={handleDiscardResumableSession}>
+                    Discard
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="bg-card rounded-xl p-3 text-sm space-y-1 border border-border/50">
               <p className="font-medium">Warm up first (5–10 min)</p>
@@ -1201,33 +1324,49 @@ export function ActiveWorkout() {
         onReorder={handleReorder}
       />
 
-      {/* Phase 6: Edit logged sets — feedback item #1 */}
+      {/* Phase 7: Edit workout log — feedback round 2, item #2 */}
       <Dialog open={showEditSets} onOpenChange={setShowEditSets}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Edit sets</DialogTitle>
+            <DialogTitle>Edit workout log</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-            {editDraft.map((s, i) => (
-              <div key={s.set} className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-10 flex-shrink-0">Set {s.set}</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={s.weight === 0 ? '' : s.weight}
-                  onChange={e => updateEditDraft(i, 'weight', e.target.value)}
-                  className="w-20 text-center h-9 text-sm"
-                  placeholder="0"
-                />
-                <span className="text-xs text-muted-foreground flex-shrink-0">kg ×</span>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  value={s.reps}
-                  onChange={e => updateEditDraft(i, 'reps', e.target.value)}
-                  className="w-16 text-center h-9 text-sm"
-                />
-                <span className="text-xs text-muted-foreground flex-shrink-0">reps</span>
+          <div className="space-y-4 max-h-[55vh] overflow-y-auto">
+            {editGroups.map(group => (
+              <div key={group.exerciseId}>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                  {group.exerciseName}
+                </p>
+                <div className="space-y-1.5">
+                  {group.rows.map(({ row, index }) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-10 flex-shrink-0">Set {row.set}</span>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={row.weight === 0 ? '' : row.weight}
+                        onChange={e => updateEditDraft(index, 'weight', e.target.value)}
+                        className="w-20 text-center h-9 text-sm"
+                        placeholder="0"
+                      />
+                      <span className="text-xs text-muted-foreground flex-shrink-0">kg ×</span>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={row.reps}
+                        onChange={e => updateEditDraft(index, 'reps', e.target.value)}
+                        className="w-16 text-center h-9 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground flex-shrink-0">reps</span>
+                      <button
+                        onClick={() => removeEditDraftRow(index)}
+                        className="ml-auto text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 p-1"
+                        aria-label={`Remove set ${row.set}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
             {editDraft.length === 0 && (
@@ -1335,6 +1474,16 @@ export function ActiveWorkout() {
                   >
                     <ArrowUpDown className="w-4 h-4" />
                     Reorder exercises
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {/* Phase 7: Edit any set logged this session — feedback round 2, item #2 */}
+                  <DropdownMenuItem
+                    onClick={openEditSets}
+                    disabled={completedSets.length === 0}
+                    className="gap-2"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Edit workout log
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
