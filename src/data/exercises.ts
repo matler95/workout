@@ -10,7 +10,11 @@
   primaryMuscles: string[];
   secondaryMuscles: string[];
   equipment: 'full_gym' | 'bodyweight';
-  equipmentType: 'barbell' | 'dumbbell' | 'smith' | 'machine' | 'kettlebell' | 'band' | 'bodyweight' | 'other';
+  // 'cable' added: exerciseWeightMode.ts (getWeightMode/formatEquipmentLabel) and
+  // exerciseGrouping.ts (EQUIPMENT_ORDER) already treat 'cable' as distinct from
+  // 'machine', but no exercise in this file ever used it — this type just never
+  // had it, so it silently fell through to 'dumbbell' on every cable/pulley entry.
+  equipmentType: 'barbell' | 'dumbbell' | 'smith' | 'machine' | 'cable' | 'kettlebell' | 'band' | 'bodyweight' | 'other';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   notes?: string;
   tempo?: string;
@@ -707,7 +711,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["lower back", "middle back", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Select a weight and hold the handle of the low pulley with your right hand.\n2. Bend at the waist until your torso is nearly parallel to the floor. Your legs should be slightly bent with your left hand placed on your lower left thigh. Your right arm should be hanging from your shoulder in front of you and with a slight bend at the elbow. This will be your starting position.\n3. Raise your right arm, elbow slightly bent, to the side until the arm is parallel to the floor and in line with your right ear. Breathe out as you perform this step.\n4. Slowly lower the weight back to the starting position as you breathe in.\n5. Repeat for the recommended amount of repetitions and repeat the movement with the other arm.'
   },
@@ -1818,7 +1822,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["middle back"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Facing a high pulley with a rope or dual handles attached, pull the weight directly towards your face, separating your hands as you do so. Keep your upper arms parallel to the ground.'
   },
@@ -2412,7 +2416,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["lats"],
     secondaryMuscles: ["biceps", "middle back"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Select the appropriate weight using a pulley that is above your head. Attach a rope to the cable and kneel a couple of feet away, holding the rope out in front of you with both arms extended. This will be your starting position.\n2. Initiate the movement by flexing the elbows and fully retracting your shoulders, pulling the rope toward your upper chest with your elbows out.\n3. After pausing briefly, slowly return to the starting position.'
   },
@@ -2423,7 +2427,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["lats"],
     secondaryMuscles: ["biceps", "middle back"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a single handle to a high pulley and make your weight selection.\n2. Kneel in front of the cable tower, taking the cable with one hand with your arm extended. This will be your starting position.\n3. Starting with your palm facing forward, pull the weight down to your torso by flexing the elbow and retract the shoulder blade. As you do so, rotate the wrist so that at the completion of the movement, your palm is now facing you.\n4. After a brief pause, return to the starting position.'
   },
@@ -2610,7 +2614,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["biceps", "middle back", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Sit on a low pulley row machine with a rope attachment.\n2. Grab the ends of the rope using a palms-down grip and sit with your back straight and your knees slightly bent. Tip: Keep your back almost completely vertical and your arms fully extended in front of you. This will be your starting position.\n3. While keeping your torso stationary, lift your elbows and start bending them as you pull the rope towards your neck while exhaling. Throughout the movement your upper arms should remain parallel to the floor. Tip: Continue this motion until your hands are almost next to your ears (the forearms will not be parallel to the floor at the end of the movement as they will be angled a bit upwards) and your elbows are out away from your sides.\n4. After holding for a second or so at the contracted position, come back slowly to the starting position as you inhale. Tip: Again, during no part of the movement should the torso move.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -2665,7 +2669,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Place a flat bench in front of a high pulley or lat pulldown machine.\n2. Hold the straight bar attachment using an underhand grip (palms up) that is about shoulder width.\n3. Lie on your back with your head over the end of the bench.\n4. Now extend your arms straight above your shoulders. Your torso and your arms should make a 90-degree angle and the elbows should be in. This will be your starting position.\n5. As you breathe out, curl the bar down in a semicircular motion until it touches your chin. Squeeze the biceps for a second at the top contracted position. Tip: As you execute this motion only the forearms should move. At no time should the upper arms be moving at all. They are to remain perpendicular throughout the movement.\n6. Return to starting position slowly.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -3105,7 +3109,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: ["chest", "shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a standard handle to a tower, and, if possible, position the cable to shoulder height. If not, a low pulley will suffice.\n2. With your side to the cable, grab the handle with both hands and step away from the tower. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable.\n3. With your feet positioned hip-width apart and knees slightly bent, hold the cable to the middle of your chest. This will be your starting position.\n4. Press the cable away from your chest, fully extending both arms. You core should be tight and engaged.\n5. Hold the repetition for several seconds before returning to the starting position.\n6. At the conclusion of the set, repeat facing the other direction.'
   },
@@ -3204,7 +3208,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["glutes"],
     secondaryMuscles: ["hamstrings", "lower back"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Begin standing a few feet in front of a low pulley with a rope or handle attached. Face away from the machine, straddling the cable, with your feet set wide apart.\n2. Begin the movement by reaching through your legs as far as possible, bending at the hips. Keep your knees slightly bent. Keeping your arms straight, extend through the hip to stand straight up. Avoid pulling upward through the shoulders; all of the motion should originate through the hips.'
   },
@@ -3358,7 +3362,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Start by setting a bar attachment (straight or e-z) on a high pulley machine.\n2. Facing the bar attachment, grab it with the palms facing up (supinated grip) at shoulder width. Lower the bar by using your lats until your arms are fully extended by your sides. Tip: Elbows should be in by your sides and your feet should be shoulder width apart from each other. This is the starting position.\n3. Slowly elevate the bar attachment up as you inhale so it is aligned with your chest. Only the forearms should move and the elbows/upper arms should be stationary by your side at all times.\n4. Then begin to lower the cable bar back down to the original staring position while exhaling and contracting the triceps hard.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -4271,7 +4275,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["forearms"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Start by standing to the right side of a low pulley row. Use your left hand to come across the body and grab a single handle attached to the low pulley with a pronated grip (palms facing down). Rest your arm in front of you. Your right hand should grab the machine for better support and balance.\n2. Make sure that your back is erect and your feet are shoulder width apart from each other. This is the starting position.\n3. Begin to use the left hand and come across your body out until it is elevated to shoulder height while exhaling.\n4. Feel the contraction at the top for a second and begin to slowly lower the handle back down to the original starting position while inhaling.\n5. Repeat for the recommended amount of repetitions.\n6. Switch arms and repeat the exercise.'
   },
@@ -4282,7 +4286,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: ["chest", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Grab a single handle with your left arm next to the low pulley machine. Turn away from the machine keeping the handle to the side of your body with your arm fully extended. Now use both hands to elevate the single handle directly above the head with the palm facing forward. Keep your upper arm completely vertical (perpendicular to the floor) and put your right hand on your left elbow to help keep it steady. This is the starting position.\n2. Keeping your upper arms close to your head (elbows in) and perpendicular to the floor, lower the resistance in a semicircular motion behind your head until your forearms touch your biceps. Tip: The upper arms should remain stationary and only the forearms should move. Breathe in as you perform this step.\n3. Go back to the starting position by using the triceps to raise the single handle. Breathe out as you perform this step.\n4. Repeat for the recommended amount of repetitions.\n5. Switch arms and repeat the exercise.'
   },
@@ -4546,7 +4550,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a rope to a low pulley. After selecting an appropriate weight, grasp the rope with both hands and face away from the cable.\n2. Position your hands behind your head with your elbows point straight up. Your elbows should start out flexed, and you can stagger your stance and lean gently away from the machine to create greater stability. This will be your starting position.\n3. To perform the movement, extend through the elbow while keeping the upper arm in position, raising your hands above your head.\n4. Squeeze your triceps at the top of the movement, and slowly lower the weight back to the start position.'
   },
@@ -4557,7 +4561,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a straight or angled bar to a high pulley and grab with an overhand grip (palms facing down) at shoulder width.\n2. Standing upright with the torso straight and a very small inclination forward, bring the upper arms close to your body and perpendicular to the floor. The forearms should be pointing up towards the pulley as they hold the bar. This is your starting position.\n3. Using the triceps, bring the bar down until it touches the front of your thighs and the arms are fully extended perpendicular to the floor. The upper arms should always remain stationary next to your torso and only the forearms should move. Exhale as you perform this movement.\n4. After a second hold at the contracted position, bring the bar slowly up to the starting point. Breathe in as you perform this step.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -4568,7 +4572,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a rope attachment to a high pulley and grab with a neutral grip (palms facing each other).\n2. Standing upright with the torso straight and a very small inclination forward, bring the upper arms close to your body and perpendicular to the floor. The forearms should be pointing up towards the pulley as they hold the rope with the palms facing each other. This is your starting position.\n3. Using the triceps, bring the rope down as you bring each side of the rope to the side of your thighs. At the end of the movement the arms are fully extended and perpendicular to the floor. The upper arms should always remain stationary next to your torso and only the forearms should move. Exhale as you perform this movement.\n4. After holding for a second, at the contracted position, bring the rope slowly up to the starting point. Breathe in as you perform this step.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -4579,7 +4583,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a V-Bar to a high pulley and grab with an overhand grip (palms facing down) at shoulder width.\n2. Standing upright with the torso straight and a very small inclination forward, bring the upper arms close to your body and perpendicular to the floor. The forearms should be pointing up towards the pulley as they hold the bar. The thumbs should be higher than the small finger. This is your starting position.\n3. Using the triceps, bring the bar down until it touches the front of your thighs and the arms are fully extended perpendicular to the floor. The upper arms should always remain stationary next to your torso and only the forearms should move. Exhale as you perform this movement.\n4. After a second hold at the contracted position, bring the V-Bar slowly up to the starting point. Breathe in as you perform this step.\n5. Repeat for the recommended amount of repetitions.'
   },

@@ -191,7 +191,15 @@ function ExitDialog({
   onChoice: (choice: ExitChoice) => void;
 }) {
   return (
-    <AlertDialog open={open}>
+    // FIX (feedback round 3, #4): this AlertDialog was controlled by `open`
+    // with no `onOpenChange`. Radix's Dialog primitive needs that callback
+    // to reconcile its *internal* open/closed state (and the body
+    // `pointer-events: none` + `aria-hidden` lock it applies while open)
+    // with the parent's state. Without it, an Escape-key close (or Radix's
+    // own dismiss handling) can desync the internal state from the `open`
+    // prop, leaving the body lock stuck — which makes every subsequent
+    // click on the page (including the kebab menu) silently swallowed.
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next) onChoice(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>End workout?</AlertDialogTitle>
@@ -253,7 +261,8 @@ function ReorderDialog({
   };
 
   return (
-    <AlertDialog open={open}>
+    // FIX (feedback round 3, #4): same missing onOpenChange as ExitDialog above.
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <AlertDialogContent className="max-w-sm">
         <AlertDialogHeader>
           <AlertDialogTitle>Reorder Exercises</AlertDialogTitle>
@@ -370,6 +379,19 @@ export function ActiveWorkout() {
     loadWorkout();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [dayName]);
+
+  // FIX (feedback round 3, #4) — safety net: Radix's Dialog/AlertDialog
+  // primitives lock `document.body` (pointer-events: none + aria-hidden)
+  // while any overlay is open, and release it on close. If a screen is
+  // ever left via something other than a normal close (e.g. a hard nav
+  // away while a dialog was open, an iOS PWA backgrounding mid-animation),
+  // that lock can survive the unmount and freeze every click on whatever
+  // page loads next — including this one's kebab menu. Clearing it on
+  // mount costs nothing if there was nothing stuck, and un-freezes the
+  // page if there was.
+  useEffect(() => {
+    document.body.style.pointerEvents = '';
+  }, []);
 
   // Phase 4: reset instructions collapsed state when exercise changes
   useEffect(() => {
@@ -907,12 +929,18 @@ export function ActiveWorkout() {
     const newQueue = exerciseQueue.slice(1);
     if (newQueue.length === 0) {
       setCurrentPhase('feedback');
+      setRestTimer(0);
+      clearRestStart();
     } else {
       setExerciseQueue(newQueue);
-      setRestTimer(0);
       setShowExtraWeight(false);
-      clearRestStart();
       resyncInputsForExercise(newQueue[0], plans, current);
+      // FIX (feedback round 3, #5): the last set of an exercise used to
+      // reset the rest timer to 0 with no countdown, so you'd land on the
+      // next exercise's first set with zero rest — same as if you'd just
+      // skipped straight into it. Start the normal rest window here too,
+      // same as between sets.
+      startRestTimer();
     }
   };
 

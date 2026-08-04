@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { profileApi, workoutApi, progressApi, planApi } from '../../utils/api';
 import { Calendar, TrendingUp, Target, Flame, Dumbbell, Plus, Play, AlertTriangle } from 'lucide-react';
-import { format, parseISO, startOfWeek, subDays } from 'date-fns';
+import { format, parseISO, startOfWeek, subDays, differenceInCalendarDays } from 'date-fns';
 import { toast } from 'sonner';
 import { SmartInsights } from '../components/SmartInsights';
 import { CrashRecoveryBanner, SyncedConfirmation } from '../components/CrashRecoveryBanner';
@@ -74,7 +74,14 @@ export function Dashboard() {
       if (prof && history.length >= 4 && vol.length > 0) {
         setDeloadSuggestion(suggestDeload(vol, history, prof));
         setRecoveryScore(calculateRecoveryScore(prof, history));
-        const nextDay = planResult?.workouts ? Object.keys(planResult.workouts)[0] : null;
+        // FIX (feedback round 3, #9): this used to grab Object.keys(workouts)[0]
+        // — literally "whichever day happens to be first in the plan object" —
+        // instead of the actual next day in rotation. If that happened to be
+        // the day you just finished, the fatigue check compared today's
+        // just-completed session against itself and warned "already trained
+        // today," which is trivially true and useless. Reuse the same
+        // rotation logic the dashboard already uses to show "Next workout."
+        const nextDay = getNextWorkout(planResult, history, prof?.trainingDays)?.day ?? null;
         if (nextDay && planResult?.workouts) {
           const exs = (planResult.workouts[nextDay] || []).map((ex: any) => ({
             id: ex.id, name: ex.name,
@@ -118,12 +125,15 @@ export function Dashboard() {
   };
 
   const getWeeklyProgress = () => {
-    // Phase 6: rolling 7-day window rather than a hard Monday reset — a
-    // calendar-week boundary let a Sunday-night session and a Monday-morning
-    // one each count toward a fresh week's target with no rest between them.
-    const windowStart = new Date(Date.now() - 6 * 86400000);
-    windowStart.setHours(0, 0, 0, 0);
-    const done = workoutHistory.filter(l => new Date(l.completedAt) >= windowStart).length;
+    // FIX (feedback round 3, #1): this used to be a rolling 7-day window,
+    // which let sessions from the *previous* calendar week still count
+    // toward "This week" — e.g. a Tuesday with zero sessions this week
+    // could still show 2/3 because of Thu/Fri/Sat sessions from last week.
+    // The card is explicitly labeled "This week" and the streak logic
+    // elsewhere already anchors to a Mon–Sun calendar week, so this now
+    // matches that: only sessions since this Monday count.
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const done = workoutHistory.filter(l => new Date(l.completedAt) >= weekStart).length;
     const planned = profile?.trainingDays || 3;
     return { completed: done, planned, pct: Math.min(100, Math.round((done / planned) * 100)) };
   };
@@ -137,12 +147,18 @@ export function Dashboard() {
   };
 
   const getTimeAgo = (isoDate: string) => {
-    const ms = Date.now() - new Date(isoDate).getTime();
+    const then = new Date(isoDate);
+    const ms = Date.now() - then.getTime();
     const mins = Math.floor(ms / 60000);
     const hours = Math.floor(ms / 3600000);
-    const days = Math.floor(ms / 86400000);
+    // FIX (feedback round 3, #2): raw hours/24 undercounts whenever "now"
+    // is earlier in the day than the logged timestamp — e.g. a Saturday
+    // evening session read on Tuesday morning was < 48h ago and rounded
+    // down to "Yesterday" even though it was 2 calendar days back.
+    // differenceInCalendarDays compares dates, not elapsed hours.
+    const days = differenceInCalendarDays(new Date(), then);
     if (mins < 60) return `${mins}m ago`;
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24 && days === 0) return `${hours}h ago`;
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days}d ago`;
     return `${Math.floor(days / 7)}w ago`;
