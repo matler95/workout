@@ -42,24 +42,36 @@ const buttonVariants = cva(
   },
 );
 
-function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean;
-  }) {
+// FIX (feedback round 4, #4 — confirmed root cause): Button was a plain
+// function component, not wrapped in React.forwardRef. Radix's `asChild`
+// pattern (used by the kebab menu's <DropdownMenuTrigger asChild><Button/>
+// </DropdownMenuTrigger>) clones its child and attaches a ref to it, which
+// Radix needs as the real DOM anchor for positioning the popup and for its
+// own open/dismiss/focus handling. A non-forwardRef function component
+// can't receive that ref — React silently drops it — so Radix never got a
+// valid anchor element for the dropdown, leaving an unpositioned,
+// non-dismissable menu layer mounted with nothing visibly happening and no
+// further clicks getting through. This is the ONLY place in the app that
+// composes this shared Button via a Radix asChild trigger, which is why
+// the freeze was isolated to this one menu. Wrapping in forwardRef fixes
+// the ref chain for this and any future asChild usage of Button.
+const Button = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentProps<"button"> &
+    VariantProps<typeof buttonVariants> & {
+      asChild?: boolean;
+    }
+>(({ className, variant, size, asChild = false, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
   return (
     <Comp
+      ref={ref}
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
   );
-}
+});
+Button.displayName = "Button";
 
 export { Button, buttonVariants };

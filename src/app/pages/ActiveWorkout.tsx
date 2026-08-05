@@ -1573,7 +1573,7 @@ export function ActiveWorkout() {
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuContent align="end" className="w-52" noExitAnimation>
                   {/* Phase 5: Reorder as first option — most useful mid-workout action */}
                   <DropdownMenuItem
                     onClick={() => setShowReorderDialog(true)}

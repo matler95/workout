@@ -34,15 +34,37 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   className,
   sideOffset = 4,
+  noExitAnimation = false,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  /**
+   * FIX (feedback round 4, #4 — second, confirmed-mechanism fix): Radix's
+   * Content uses `Presence` under the hood, which — when the element has a
+   * CSS exit animation (our `animate-out`/`fade-out-0`/`zoom-out-95`
+   * classes below) — waits for a real `animationend` DOM event before it
+   * actually unmounts and releases the focus-trap/scroll-lock it applies
+   * while open. If a parent re-render lands while that ~150ms exit
+   * animation is mid-flight, the animation can get interrupted and
+   * `animationend` never fires — Radix's Presence then waits forever,
+   * leaving the menu's lock stuck. ActiveWorkout re-renders its entire
+   * tree every second via the rest timer, so any menu left open there is
+   * exposed to this race on every close. Setting `noExitAnimation` drops
+   * the animate-out classes so `data-state=closed` triggers no CSS
+   * animation at all — Presence sees `animationName: 'none'` and unmounts
+   * synchronously, with nothing to interrupt and nothing to wait on.
+   */
+  noExitAnimation?: boolean;
+}) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",
+          "bg-popover text-popover-foreground z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",
+          noExitAnimation
+            ? "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
+            : "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           className,
         )}
         {...props}
