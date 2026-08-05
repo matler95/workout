@@ -271,7 +271,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Move the cables to the bottom of the tower and select an appropriate weight.\n2. Grasp the cables and hold them at shoulder height, palms facing forward. This will be your starting position.\n3. Keeping your head and chest up, extend through the elbow to press one side directly over head.\n4. After pausing at the top, return to the starting position and repeat on the opposite side.'
   },
@@ -304,7 +304,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["abdominals", "biceps", "chest", "lats", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'kettlebell',
     difficulty: 'advanced',
     instructions: '1. Place two kettlebells on the floor about shoulder width apart. Position yourself on your toes and your hands as though you were doing a pushup, with the body straight and extended. Use the handles of the kettlebells to support your upper body. You may need to position your feet wide for support.\n2. Push one kettlebell into the floor and row the other kettlebell, retracting the shoulder blade of the working side as you flex the elbow, pulling it to your side.\n3. Then lower the kettlebell to the floor and begin the kettlebell in the opposite hand. Repeat for several reps.'
   },
@@ -315,7 +315,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["middle back", "traps", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Place a bar on the ground behind the head of an incline bench.\n2. Lay on the bench face down. With a pronated grip, pick the barbell up from the floor. Flex the elbows, performing a reverse curl to bring the bar near your chest. This will be your starting position.\n3. To begin, press the barbell out in front of your head by extending your elbows. Keep your arms parallel to the ground throughout the movement.\n4. Return to the starting position and repeat to complete the set.'
   },
@@ -645,7 +645,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'band',
     difficulty: 'beginner',
     instructions: '1. Using a flat bench secure a band under the leg of the bench that is nearest to your head.\n2. Once the band is secure, grab it by both handles and lie down on the bench.\n3. Extend your arms so that you are holding the band handles in front of you at shoulder width.\n4. Once at shoulder width, rotate your wrists forward so that the palms of your hands are facing away from you. This will be your starting position.\n5. Bring down the handles slowly until your elbow forms a 90 degree angle. Keep full control at all times.\n6. As you breathe out, bring the handles up using your pectoral muscles. Lock your arms in the contracted position, squeeze your chest, hold for a second and then start coming down slowly. Tip: It should take at least twice as long to go down than to come up.\n7. Repeat the movement for the prescribed amount of repetitions of your training program.'
   },
@@ -722,7 +722,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats", "lower back", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Put weight on one of the ends of an Olympic barbell. Make sure that you either place the other end of the barbell in the corner of two walls; or put a heavy object on the ground so the barbell cannot slide backward.\n2. Bend forward until your torso is as close to parallel with the floor as you can and keep your knees slightly bent.\n3. Now grab the bar with one arm just behind the plates on the side where the weight was placed and put your other hand on your knee. This will be your starting position.\n4. Pull the bar straight up with your elbow in (to maximize back stimulation) until the plates touch your lower chest. Squeeze the back muscles as you lift the weight up and hold for a second at the top of the movement. Breathe out as you lift the weight. Tip: Do not allow for any swinging of the torso. Only the arm should move.\n5. Slowly lower the bar to the starting position getting a nice stretch on the lats. Tip: Do not let the plates touch the floor. To ensure the best range of motion, I recommend using small plates (25-lb ones) as opposed to larger plates (like 35-45lb ones).\n6. Repeat for the recommended amount of repetitions and switch arms.'
   },
@@ -733,7 +733,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'intermediate',
     instructions: '1. Put weight on one of the ends of an Olympic barbell. Make sure that you either place the other end of the barbell in the corner of two walls; or put a heavy object on the ground so the barbell cannot slide backward.\n2. Bend forward until your torso is as close to parallel with the floor as you can and keep your knees slightly bent.\n3. Now grab the bar with both arms just behind the plates on the side where the weight was placed and put your other hand on your knee. This will be your starting position.\n4. Pull the bar straight up with your elbows in (to maximize back stimulation) until the plates touch your lower chest. Squeeze the back muscles as you lift the weight up and hold for a second at the top of the movement. Breathe out as you lift the weight. Tip: Use a stirrup or double handle cable attachment by hooking it under the end of the bar.\n5. Slowly lower the bar to the starting position getting a nice stretch on the lats. Tip: Do not let the plates touch the floor. To ensure the best range of motion, I recommend using small plates (25-lb ones) as opposed to larger plates (like 35-45lb ones).\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -787,8 +787,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["chest"],
     secondaryMuscles: ["abdominals", "shoulders", "triceps"],
-    equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipment: 'bodyweight',
+    equipmentType: 'bodyweight',
     difficulty: 'intermediate',
     instructions: '1. Position two equally loaded EZ bars on the ground next to each other. Ensure they are able to roll.\n2. Assume a push-up position over the bars, supporting your weight on your toes and hands with your arms extended and body straight.\n3. Place your hands on the bars. This will be your starting position.\n4. Using a slow and controlled motion, move your hands away from the midline of your body, rolling the bars apart. Inhale during this portion of the motion.\n5. After moving the bars as far apart as you can, return to the starting position by pulling them back together. Exhale as you perform this movement.'
   },
@@ -798,8 +798,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats"],
-    equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipment: 'bodyweight',
+    equipmentType: 'bodyweight',
     difficulty: 'intermediate',
     instructions: '1. Begin by taking a medium to wide grip on a pull-up apparatus with your palms facing away from you. From a hanging position, tuck your knees to your chest, leaning back and getting your legs over your side of the pull-up apparatus. This will be your starting position.\n2. Beginning with your arms straight, flex the elbows and retract the shoulder blades to raise your body up until your legs contact the pull-up apparatus.\n3. After a brief pause, return to the starting position.'
   },
@@ -876,7 +876,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Sit on the machine with your back flat on the pad.\n2. Take hold of the handles. Tip: Your upper arms should be positioned parallel to the floor; adjust the machine accordingly. This will be your starting position.\n3. Push the handles together slowly as you squeeze your chest in the middle. Breathe out during this part of the motion and hold the contraction for a second.\n4. Return back to the starting position slowly as you inhale until your chest muscles are fully stretched.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -887,7 +887,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Adjust the weight to an appropriate amount and be seated, grasping the handles. Your upper arms should be about 45 degrees to the body, with your head and chest up. The elbows should be bent to about 90 degrees. This will be your starting position.\n2. Begin by extending through the elbow, pressing the handles together straight in front of you. Keep your shoulder blades retracted as you execute the movement.\n3. After pausing at full extension, return to th starting position, keeping tension on the cables.\n4. You can also execute this movement with your back off the pad, at an incline or decline, or alternate hands.'
   },
@@ -898,7 +898,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. To get yourself into the starting position, place the pulleys on a high position (above your head), select the resistance to be used and hold the pulleys in each hand.\n2. Step forward in front of an imaginary straight line between both pulleys while pulling your arms together in front of you. Your torso should have a small forward bend from the waist. This will be your starting position.\n3. With a slight bend on your elbows in order to prevent stress at the biceps tendon, extend your arms to the side (straight out at both sides) in a wide arc until you feel a stretch on your chest. Breathe in as you perform this portion of the movement. Tip: Keep in mind that throughout the movement, the arms and torso should remain stationary; the movement should only occur at the shoulder joint.\n4. Return your arms back to the starting position as you breathe out. Make sure to use the same arc of motion used to lower the weights.\n5. Hold for a second at the starting position and repeat the movement for the prescribed amount of repetitions.'
   },
@@ -909,7 +909,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["forearms", "glutes", "hamstrings", "lower back"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Move the cables to the bottom of the towers and select an appropriate weight. Stand directly in between the uprights.\n2. To begin, squat down be flexing your hips and knees until you can reach the handles.\n3. After grasping them, begin your ascent. Driving through your heels extend your hips and knees keeping your hands hanging at your side. Keep your head and chest up throughout the movement.\n4. After reaching a full standing position, Return to the starting position and repeat.'
   },
@@ -920,7 +920,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a rope attachment to a low pulley and stand facing the machine about 12 inches away from it.\n2. Grasp the rope with a neutral (palms-in) grip and stand straight up keeping the natural arch of the back and your torso stationary.\n3. Put your elbows in by your side and keep them there stationary during the entire movement. Tip: Only the forearms should move; not your upper arms. This will be your starting position.\n4. Using your biceps, pull your arms up as you exhale until your biceps touch your forearms. Tip: Remember to keep the elbows in and your upper arms stationary.\n5. After a 1 second contraction where you squeeze your biceps, slowly start to bring the weight back to the original position.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -931,7 +931,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Stand in front of a low pulley facing forward with one leg next to the pulley and the other one away.\n2. Attach the ankle cuff to the cable and also to the ankle of the leg that is next to the pulley.\n3. Now step out and away from the stack with a wide stance and grasp the bar of the pulley system.\n4. Stand on the foot that does not have the ankle cuff (the far foot) and allow the leg with the cuff to be pulled towards the low pulley. This will be your starting position.\n5. Now perform the movement by moving the leg with the ankle cuff in front of the far leg by using the inner thighs to abduct the hip. Breathe out during this portion of the movement.\n6. Slowly return to the starting position as you breathe in.\n7. Repeat for the recommended amount of repetitions and then repeat the same movement with the opposite leg.'
   },
@@ -942,7 +942,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["lats"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Lie on incline an bench facing away from a high pulley machine that has a straight bar attachment on it.\n2. Grasp the straight bar attachment overhead with a pronated (overhand; palms down) shoulder width grip and extend your arms in front of you. The bar should be around 2 inches away from your upper thighs. This will be your starting position.\n3. Keeping the upper arms stationary, lift your arms back in a semi circle until the bar is straight over your head. Breathe in during this portion of the movement.\n4. Slowly go back to the starting position using your lats and hold the contraction once you reach the starting position. Breathe out during the execution of this movement.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -953,7 +953,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Lie on incline an bench facing away from a high pulley machine that has a straight bar attachment on it.\n2. Grasp the straight bar attachment overhead with a pronated (overhand; palms down) narrow grip (less than shoulder width) and keep your elbows tucked in to your sides. Your upper arms should create around a 25 degree angle when measured from the floor.\n3. Keeping the upper arms stationary, extend the arms as you flex the triceps. Breathe out during this portion of the movement and hold the contraction for a second.\n4. Slowly go back to the starting position.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -964,7 +964,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Sit next to a low pulley sideways (with legs stretched in front of you or crossed) and grasp the single hand cable attachment with the arm nearest to the cable. Tip: If you can adjust the pulley\'s height, you can use a flat bench to sit on instead.\n2. Position the elbow against your side with the elbow bent at 90° and the arm pointing towards the pulley. This will be your starting position.\n3. Pull the single hand cable attachment toward your body by internally rotating your shoulder until your forearm is across your abs. You will be creating an imaginary semi-circle. Tip: The forearm should be perpendicular to your torso at all times.\n4. Slowly go back to the initial position.\n5. Repeat for the recommended amount of repetitions and then repeat the movement with the next arm.'
   },
@@ -975,7 +975,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Begin by moving the pulleys to the high position, select the resistance to be used, and take a handle in each hand.\n2. Stand directly between both pulleys with your arms extended out to your sides. Your head and chest should be up while your arms form a \"T\". This will be your starting position.\n3. Keeping the elbows extended, pull your arms straight to your sides.\n4. Return your arms back to the starting position after a pause at the peak contraction.\n5. Continue the movement for the prescribed number of repetitions.'
   },
@@ -986,7 +986,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a rope attachment to a tower, and move the cable to the lowest pulley position. Stand with your side to the cable with a wide stance, and grab the rope with both hands.\n2. Twist your body away from the pulley as you bring the rope over your shoulder like you\'re performing a judo flip.\n3. Shift your weight between your feet as you twist and crunch forward, pulling the cable downward.\n4. Return to the starting position and repeat until failure.\n5. Then, reposition and repeat the same series of movements on the opposite side.'
   },
@@ -997,7 +997,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Lie on a flat bench and grasp the straight bar attachment of a low pulley with a narrow overhand grip. Tip: The easiest way to do this is to have someone hand you the bar as you lay down.\n2. With your arms extended, position the bar over your torso. Your arms and your torso should create a 90-degree angle. This will be your starting position.\n3. Lower the bar by bending at the elbow while keeping the upper arms stationary and elbows in. Go down until the bar lightly touches your forehead. Breathe in as you perform this portion of the movement.\n4. Flex the triceps as you lift the bar back to its starting position. Exhale as you perform this portion of the movement.\n5. Hold for a second at the contracted position and repeat for the recommended amount of repetitions.'
   },
@@ -1008,7 +1008,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. With your right hand, grasp a single handle attached to the high-cable pulley using a supinated (underhand; palms facing up) grip. You should be standing directly in front of the weight stack.\n2. Now pull the handle down so that your upper arm and elbow are locked in to the side of your body. Your upper arm and forearm should form an acute angle (less than 90-degrees). You can keep the other arm by the waist and you can have one leg in front of you and the other one back for better balance. This will be your starting position.\n3. As you contract the triceps, move the single handle attachment down to your side until your arm is straight. Breathe out as you perform this movement. Tip: Only the forearms should move. Your upper arms should remain stationary at all times.\n4. Squeeze the triceps and hold for a second in this contracted position.\n5. Slowly return the handle to the starting position.\n6. Repeat for the recommended amount of repetitions and then perform the same movement with the other arm.'
   },
@@ -1019,7 +1019,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: ["forearms"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Place a preacher bench about 2 feet in front of a pulley machine.\n2. Attach a straight bar to the low pulley.\n3. Sit at the preacher bench with your elbow and upper arms firmly on top of the bench pad and have someone hand you the bar from the low pulley.\n4. Grab the bar and fully extend your arms on top of the preacher bench pad. This will be your starting position.\n5. Now start pilling the weight up towards your shoulders and squeeze the biceps hard at the top of the movement. Exhale as you perform this motion. Also, hold for a second at the top.\n6. Now slowly lower the weight to the starting position.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -1030,7 +1030,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Adjust the pulleys to the appropriate height and adjust the weight. The pulleys should be above your head.\n2. Grab the left pulley with your right hand and the right pulley with your left hand, crossing them in front of you. This will be your starting position.\n3. Initiate the movement by moving your arms back and outward, keeping your arms straight as you execute the movement.\n4. Pause at the end of the motion before returning the handles to the start position.'
   },
@@ -1041,7 +1041,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a rope to the bottom pulley of the pulley machine.\n2. Grasping the rope with both hands, extend your arms with your hands directly above your head using a neutral grip (palms facing each other). Your elbows should be in close to your head and the arms should be perpendicular to the floor with the knuckles aimed at the ceiling. This will be your starting position.\n3. Slowly lower the rope behind your head as you hold the upper arms stationary. Inhale as you perform this movement and pause when your triceps are fully stretched.\n4. Return to the starting position by flexing your triceps as you breathe out.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -1052,7 +1052,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["biceps", "middle back"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Sit in the same position on a low pulley row station as you would if you were doing seated cable rows for the back.\n2. Attach a rope to the pulley and grasp it with an overhand grip. Your arms should be extended and parallel to the floor with the elbows flared out.\n3. Keep your lower back upright and slide your hips back so that your knees are slightly bent. This will be your starting position.\n4. Pull the cable attachment towards your upper chest, just below the neck, as you keep your elbows up and out to the sides. Continue this motion as you exhale until the elbows travel slightly behind the back. Tip: Keep your upper arms horizontal, perpendicular to the torso and parallel to the floor throughout the motion.\n5. Go back to the initial position where the arms are extended and the shoulders are stretched forward. Inhale as you perform this portion of the movement.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -1063,7 +1063,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a standard handle attachment, and position the cable to a middle pulley position.\n2. Lie on a stability ball perpendicular to the cable and grab the handle with one hand. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable.\n3. Grab the handle with both hands and fully extend your arms above your chest. You hands should be directly in-line with the pulley. If not, adjust the pulley up or down until they are.\n4. Keep your hips elevated and abs engaged. Rotate your torso away from the pulley for a full-quarter rotation. Your body should be flat from head to knees.\n5. Pause for a moment and in a slow and controlled manner reset to the starting position. You should still have side tension on the cable in the resting position.\n6. Repeat the same movement to failure.\n7. Then, reposition and repeat the same series of movements on the opposite side.'
   },
@@ -1074,7 +1074,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["middle back", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Stand in the middle of two low pulleys that are opposite to each other and place a flat bench right behind you (in perpendicular fashion to you; the narrow edge of the bench should be the one behind you). Select the weight to be used on each pulley.\n2. Now sit at the edge of the flat bench behind you with your feet placed in front of your knees.\n3. Bend forward while keeping your back flat and rest your torso on the thighs.\n4. Have someone give you the single handles attached to the pulleys. Grasp the left pulley with the right hand and the right pulley with the left after you select your weight. The pulleys should run under your knees and your arms will be extended with palms facing each other and a slight bend at the elbows. This will be the starting position.\n5. While keeping the arms stationary, raise the upper arms to the sides until they are parallel to the floor and at shoulder height. Exhale during the execution of this movement and hold the contraction for a second.\n6. Slowly lower your arms to the starting position as you inhale.\n7. Repeat for the recommended amount of repetitions. Tip: Maintain upper arms perpendicular to torso and a fixed elbow position (10 degree to 30 degree angle) throughout exercise.'
   },
@@ -1085,7 +1085,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Move the cables to the bottom of the towers and select an appropriate weight.\n2. Stand directly in between the uprights. Grasp the cables and hold them at shoulder height, palms facing forward. This will be your starting position.\n3. Keeping your head and chest up, extend through the elbow to press the handles directly over head.\n4. After pausing at the top, return to the starting position and repeat.'
   },
@@ -1096,7 +1096,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["traps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Grasp a cable bar attachment that is attached to a low pulley with a shoulder width or slightly wider overhand (palms facing down) grip.\n2. Stand erect close to the pulley with your arms extended in front of you holding the bar. This will be your starting position.\n3. Lift the bar by elevating the shoulders as high as possible as you exhale. Hold the contraction at the top for a second. Tip: The arms should remain extended at all times. Refrain from using the biceps to help lift the bar. Only the shoulders should be moving up and down.\n4. Lower the bar back to the original position.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -1282,8 +1282,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["biceps"],
     secondaryMuscles: ["forearms"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Sit down on a flat bench with one dumbbell in front of you between your legs. Your legs should be spread with your knees bent and feet on the floor.\n2. Use your right arm to pick the dumbbell up. Place the back of your right upper arm on the top of your inner right thigh. Rotate the palm of your hand until it is facing forward away from your thigh. Tip: Your arm should be extended and the dumbbell should be above the floor. This will be your starting position.\n3. While holding the upper arm stationary, curl the weights forward while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the dumbbells are at shoulder level. Tip: At the top of the movement make sure that the little finger of your arm is higher than your thumb. This guarantees a good contraction. Hold the contracted position for a second as you squeeze the biceps.\n4. Slowly begin to bring the dumbbells back to starting position as your breathe in. Caution: Avoid swinging motions at any time.\n5. Repeat for the recommended amount of repetitions. Then repeat the movement with the left arm.'
   },
@@ -1327,7 +1327,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: ["chest", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'intermediate',
     instructions: '1. Secure your legs at the end of the decline bench and slowly lay down on the bench.\n2. Using a close grip (a grip that is slightly less than shoulder width), lift the bar from the rack and hold it straight over you with your arms locked and elbows in. The arms should be perpendicular to the floor. This will be your starting position. Tip: In order to protect your rotator cuff, it is best if you have a spotter help you lift the barbell off the rack.\n3. Now lower the bar down to your lower chest as you breathe in. Keep the elbows in as you perform this movement.\n4. Using the triceps to push the bar back up, press it back to the starting position as you exhale.\n5. As you breathe in and you keep the upper arms stationary, bring the bar down slowly by moving your forearms in a semicircular motion towards you until you feel the bar slightly touch your forehead. Breathe in as you perform this portion of the movement.\n6. Lift the bar back to the starting position by contracting the triceps and exhaling.\n7. Repeat steps 3-6 until the recommended amount of repetitions is performed.'
   },
@@ -1338,7 +1338,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Secure your legs at the end of the decline bench and lie down with a dumbbell on each hand on top of your thighs. The palms of your hand will be facing each other.\n2. Once you are laying down, move the dumbbells in front of you at shoulder width.\n3. Once at shoulder width, rotate your wrists forward so that the palms of your hands are facing away from you. This will be your starting position.\n4. Bring down the weights slowly to your side as you breathe out. Keep full control of the dumbbells at all times. Tip: Throughout the motion, the forearms should always be perpendicular to the floor.\n5. As you breathe out, push the dumbbells up using your pectoral muscles. Lock your arms in the contracted position, squeeze your chest, hold for a second and then start coming down slowly. Tip: It should take at least twice as long to go down than to come up..\n6. Repeat the movement for the prescribed amount of repetitions of your training program.'
   },
@@ -1403,8 +1403,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["triceps"],
     secondaryMuscles: ["chest", "shoulders"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Sit securely in a dip machine, select the weight and firmly grasp the handles.\n2. Now keep your elbows in at your sides in order to place emphasis on the triceps. The elbows should be bent at a 90 degree angle.\n3. As you contract the triceps, extend your arms downwards as you exhale. Tip: At the bottom of the movement, focus on keeping a little bend in your arms to keep tension on the triceps muscle.\n4. Now slowly let your arms come back up to the starting position as you inhale.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -1437,7 +1437,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["calves"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'intermediate',
     instructions: '1. For this exercise you will need access to a donkey calf raise machine. Start by positioning your lower back and hips under the padded lever provided. The tailbone area should be the one making contact with the pad.\n2. Place both of your arms on the side handles and place the balls of your feet on the calf block with the heels extending off. Align the toes forward, inward or outward, depending on the area you wish to target, and straighten the knees without locking them. This will be your starting position.\n3. Raise your heels as you breathe out by extending your ankles as high as possible and flexing your calf. Ensure that the knee is kept stationary at all times. There should be no bending at any time. Hold the contracted position by a second before you start to go back down.\n4. Go back slowly to the starting position as you breathe in by lowering your heels as you bend the ankles until calves are stretched.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -1448,7 +1448,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: ["forearms"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'intermediate',
     instructions: '1. Grab a barbell with a supinated grip (palms facing forward) and get your elbows close to your torso and back. This will be your starting position.\n2. As you exhale, curl the bar up while keeping the elbows to the back as you \"Drag\" the bar up by keeping it in contact with your torso. Tip: As you can see, you will not be keeping the elbows pinned to your sides, but instead you will be bringing them back. Also, do not lift your shoulders.\n3. Slowly go back to the starting position as you keep the bar in contact with the torso at all times.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -1470,7 +1470,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Lie down on a flat bench with a dumbbell in each hand resting on top of your thighs. The palms of your hands will be facing each other.\n2. Then, using your thighs to help raise the dumbbells up, lift the dumbbells one at a time so that you can hold them in front of you at shoulder width.\n3. Once at shoulder width, rotate your wrists forward so that the palms of your hands are facing away from you. The dumbbells should be just to the sides of your chest, with your upper arm and forearm creating a 90 degree angle. Be sure to maintain full control of the dumbbells at all times. This will be your starting position.\n4. Then, as you breathe out, use your chest to push the dumbbells up. Lock your arms at the top of the lift and squeeze your chest, hold for a second and then begin coming down slowly. Tip: Ideally, lowering the weight should take about twice as long as raising it.\n5. Repeat the movement for the prescribed amount of repetitions of your training program.'
   },
@@ -1481,7 +1481,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Take a dumbbell in each hand and lay back onto a flat bench. Your feet should be flat on the floor and your shoulder blades retracted.\n2. Maintaining a neutral grip, palms facing each other, begin with your arms extended directly above you, perpendicular to the floor. This will be your starting position.\n3. Begin the movement by flexing the elbow, lowering the upper arms to the side. Descend until the dumbbells are to your torso.\n4. Pause, then extend the elbow and return to the starting position.'
   },
@@ -1503,7 +1503,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["hamstrings"],
     secondaryMuscles: ["calves", "forearms", "glutes", "lower back", "quadriceps", "shoulders", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. Begin standing with a dumbbell in each hand with your feet shoulder width apart.\n2. Lower the weights to the floor by flexing at the hips and knees, pushing your hips back until the dumbbells reach the floor. This will be your starting position.\n3. To initiate the movement, violently jump upward by extending the hips, knees, and ankles to acclerate the weights upward. Maintaining a neutral grip on the dumbbells, keep the arms straight until full extension is reached.\n4. After full extension, rebend the hips and knees to receive the weight in a squat position. Allow the arms to bend, guiding the dumbbells to your shoulders.\n5. Upon receiving the weight in the squat position, extend the hips and knees to finish in a standing position with the weights on your shoulders.'
   },
@@ -1602,7 +1602,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. Grab a dumbbell and either sit on a military press bench or a utility bench that has a back support on it as you place the dumbbells upright on top of your thighs or stand up straight.\n2. Clean the dumbbell up to bring it to shoulder height. The other hand can be kept fully extended to the side, by the waist or grabbing a fixed surface.\n3. Rotate the wrist so that the palm of your hand is facing forward. This is your starting position.\n4. As you exhale, push the dumbbell up until your arm is fully extended.\n5. After a second pause, slowly come down back to the starting position as you inhale.\n6. Repeat for the recommended amount of repetitions and then switch arms.'
   },
@@ -1690,7 +1690,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. While holding a dumbbell in each hand, sit on a military press bench or utility bench that has back support. Place the dumbbells upright on top of your thighs.\n2. Now raise the dumbbells to shoulder height one at a time using your thighs to help propel them up into position.\n3. Make sure to rotate your wrists so that the palms of your hands are facing forward. This is your starting position.\n4. Now, exhale and push the dumbbells upward until they touch at the top.\n5. Then, after a brief pause at the top contracted position, slowly lower the weights back down to the starting position while inhaling.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -1789,7 +1789,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["lats"],
     secondaryMuscles: ["middle back", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Get a platform of some sort (it can be an aerobics or calf raise platform) that is around 4-6 inches in height.\n2. Place it on the seat of the cable row machine.\n3. Sit down on the machine and place your feet on the front platform or crossbar provided making sure that your knees are slightly bent and not locked.\n4. Lean over as you keep the natural alignment of your back and grab the V-bar handles.\n5. With your arms extended pull back until your torso is at a 90-degree angle from your legs. Your back should be slightly arched and your chest should be sticking out. You should be feeling a nice stretch on your lats as you hold the bar in front of you. This is the starting position of the exercise.\n6. Keeping the torso stationary, pull the handles back towards your torso while keeping the arms close to it until you touch the abdominals. Breathe out as you perform that movement. At that point you should be squeezing your back muscles hard. Hold that contraction for a second and slowly go back to the original position while breathing in.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -1799,8 +1799,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Lie sideways on a flat bench with one arm holding a dumbbell and the other hand on top of the bench folded so that you can rest your head on it.\n2. Bend the elbows of the arm holding the dumbbell so that it creates a 90-degree angle between the upper arm and the forearm. Tip: Keep the arm parallel to your torso.\n3. Now bend the elbow while keeping the upper arm stationary. In this manner, the forearm will be parallel to the floor and perpendicular to your torso (Tip: So the forearm will be directly in front of you). The upper arm will be stationary by your torso and should be parallel to the floor (aligned with your torso at all times). This will be your starting position.\n4. As you breathe out, externally rotate your forearm so that the dumbbell is lifted up in a semicircle motion as you maintain the 90 degree angle bend between the upper arms and the forearm. You will continue this external rotation until the forearm is perpendicular to the floor and the torso pointing towards the ceiling. At this point you will hold the contraction for a second.\n5. As you breathe in, slowly go back to the starting position.\n6. Repeat for the recommended amount of repetitions and then switch to the other arm.'
   },
@@ -1811,7 +1811,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Adjust the cable to the same height as your elbow. Stand with your left side to the band a couple of feet away.\n2. Grasp the handle with your right hand, and keep your elbow pressed firmly to your side. We recommend you hold a pad or foam roll in place with your elbow to keep it firmly in position.\n3. With your upper arm in position, your elbow should be flexed to 90 degrees with your hand reaching across the front of your torso. This will be your starting position.\n4. Execute the movement by rotating your arm in a backhand motion, keeping your elbow in place.'
   },
@@ -1833,7 +1833,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["forearms"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Hold a barbell with both hands and your palms facing up; hands spaced about shoulder width.\n2. Place your feet flat on the floor, at a distance that is slightly wider than shoulder width apart. This will be your starting position.\n3. Lower the bar as far as possible by extending the fingers. Allowing the bar to roll down the hands, catch the bar with the final joint in the fingers.\n4. Now curl bar up as high as possible by closing your hands while exhaling. Hold the contraction at the top.'
   },
@@ -1844,7 +1844,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Position a flat bench between two low pulleys so that when you are laying on it, your chest will be lined up with the cable pulleys.\n2. Lay flat on the bench and keep your feet on the ground.\n3. Have someone hand you the handles on each hand. You will grab each single handle attachment with a palms up grip.\n4. Extend your arms by your side with a slight bend on your elbows. Tip: You will keep this bend constant through the whole movement. Your arms should be parallel to the floor. This is your starting position.\n5. Now start lifting the arms in a semi-circle motion directly in front of you by pulling the cables together until both hands meet at the top of the movement. Squeeze your chest as you perform this motion and breathe out during this movement. Also, hold the contraction for a second at the top. Tip: When performed correctly, at the top position of this movement, your arms should be perpendicular to your torso and the floor touching above your chest.\n6. Slowly come back to the starting position.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -1932,7 +1932,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Select the weight on a low pulley machine and grasp the single hand cable attachment that is attached to the low pulley with your left hand.\n2. Face away from the pulley and put your arm straight down with the hand cable attachment in front of your thighs at arms\' length with the palms of the hand facing your thighs. This will be your starting position.\n3. While maintaining the torso stationary (no swinging), lift the left arm to the front with a slight bend on the elbow and the palms of the hand always faces down. Continue to go up until you arm is slightly above parallel to the floor. Exhale as you execute this portion of the movement and pause for a second at the top.\n4. Now as you inhale lower the arm back down slowly to the starting position.\n5. Once all of the recommended amount of repetitions have been performed for this arm, switch arms and perform the exercise with the right one.'
   },
@@ -1965,7 +1965,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["lats", "shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Lie on a flat bench while holding a barbell using a palms down grip that is about 15 inches apart.\n2. Place the bar on your upper thighs, extend your arms and lock them while keeping a slight bend on the elbows. This will be your starting position.\n3. Now raise the weight using a semicircular motion and keeping your arms straight as you inhale. Continue the same movement until the bar is on the other side above your head . (Tip: the bar will travel approximately 180-degrees). At this point your arms should be parallel to the floor with the palms of your hands facing the ceiling.\n4. Now return the barbell to the starting position by reversing the motion as you exhale.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -1987,7 +1987,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'kettlebell',
     difficulty: 'intermediate',
     instructions: '1. Clean two kettlebells to your shoulders. Clean the kettlebells to your shoulders by extending through the legs and hips as you pull the kettlebells towards your shoulders. Rotate your wrists as you do so.\n2. Looking straight ahead at all times, squat as low as you can and pause at the bottom. As you squat down, push your knees out. You should squat between your legs, keeping an upright torso, with your head and chest up.\n3. Rise back up by driving through your heels and repeat.'
   },
@@ -2031,7 +2031,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'kettlebell',
     difficulty: 'beginner',
     instructions: '1. Stand holding a light kettlebell by the horns close to your chest. This will be your starting position.\n2. Squat down between your legs until your hamstrings are on your calves. Keep your chest and head up and your back straight.\n3. At the bottom position, pause and use your elbows to push your knees out. Return to the starting position, and repeat for 10-20 repetitions.'
   },
@@ -2064,7 +2064,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Lie back on an incline bench with a dumbbell on each hand on top of your thighs. The palms of your hand will be facing each other.\n2. By using your thighs to help you get the dumbbells up, clean the dumbbells one arm at a time so that you can hold them at shoulder width.\n3. Once at shoulder width, keep the palms of your hands with a neutral grip (palms facing each other). Keep your elbows flared out with the upper arms in line with the shoulders (perpendicular to the torso) and the elbows bent creating a 90-degree angle between the upper arm and the forearm. This will be your starting position.\n4. Now bring down the weights slowly to your side as you breathe in. Keep full control of the dumbbells at all times.\n5. As you breathe out, push the dumbbells up using your pectoral muscles. Lock your arms in the contracted position, hold for a second and then start coming down slowly. Tip: It should take at least twice as long to go down than to come up.\n6. Repeat the movement for the prescribed amount of repetitions.\n7. When you are done, place the dumbbells back in your thighs and then on the floor. This is the safest manner to dispose of the dumbbells.'
   },
@@ -2108,7 +2108,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Stand between a couple of high pulleys and grab a handle in each arm. Position your upper arms in a way that they are parallel to the floor with the palms of your hands facing you. This will be your starting position.\n2. Curl the handles towards you until they are next to your ears. Make sure that as you do so you flex your biceps and exhale. The upper arms should remain stationary and only the forearms should move. Hold for a second in the contracted position as you squeeze the biceps.\n3. Slowly bring back the arms to the starting position.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -2152,7 +2152,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Adjust the weight to an appropriate amount and be seated, grasping the handles. Your upper arms should be about 45 degrees to the body, with your head and chest up. The elbows should be bent to about 90 degrees. This will be your starting position.\n2. Begin by extending through the elbow, pressing the handles together straight in front of you. Keep your shoulder blades retracted as you execute the movement.\n3. After pausing at full extension, return to the starting position, keeping tension on the cables.'
   },
@@ -2163,7 +2163,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. To get yourself into the starting position, set the pulleys at the floor level (lowest level possible on the machine that is below your torso).\n2. Place an incline bench (set at 45 degrees) in between the pulleys, select a weight on each one and grab a pulley on each hand.\n3. With a handle on each hand, lie on the incline bench and bring your hands together at arms length in front of your face. This will be your starting position.\n4. With a slight bend of your elbows (in order to prevent stress at the biceps tendon), lower your arms out at both sides in a wide arc until you feel a stretch on your chest. Breathe in as you perform this portion of the movement. Tip: Keep in mind that throughout the movement, the arms should remain stationary. The movement should only occur at the shoulder joint.\n5. Return your arms back to the starting position as you squeeze your chest muscles and exhale. Hold the contracted position for a second. Tip: Make sure to use the same arc of motion used to lower the weights.\n6. Repeat the movement for the prescribed amount of repetitions.'
   },
@@ -2239,8 +2239,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'full_body',
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Hold a dumbbell in each hand and lie back on an incline bench.\n2. The dumbbells should be at arm\'s length hanging at your sides and your palms should be facing out. This will be your starting position.\n3. Now as you exhale curl the weight outward and up while keeping your forearms in line with your side deltoids. Continue the curl until the dumbbells are at shoulder height and to the sides of your deltoids. Tip: The end of the movement should look similar to a double biceps pose.\n4. After a second contraction at the top of the movement, start to inhale and slowly lower the weights back to the starting position using the same path used to bring them up.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -2350,7 +2350,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings", "lower back", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'intermediate',
     instructions: '1. Place a barbell on the floor.\n2. Stand in the middle of the bar length wise.\n3. Bend down by bending at the knees and keeping your back straight and grasp the front of the bar with your right hand. Your palm should be in (neutral grip) facing the left side.\n4. Grasp the rear of the bar with your left hand. The palm of your hand should be in neutral grip alignment (palms facing the right side). Tip: Ensure that your grip is even on the bar. Your torso should be positioned right in the middle of the bar and the distance between your torso and your right hand (which should be at the front) should be the same as the distance between your torso and your left hand (which should be to your back).\n5. Now stand straight up with the weight. Tip: Your feet should be shoulder width apart and your toes slightly pointed out.\n6. Squat down by bending at the knees and keeping your back straight until your upper thighs are parallel with the floor. Tip: Keep your back as vertical as possible with the floor and your head up. Also remember to not let your knees go past your toes. Inhale during this portion of the movement.\n7. Now drive yourself back up to the starting position by pushing with the feet . Tip: Keep the bar hanging at arm\'s length and your elbows locked with a slight bend. The arms only serve as hooks. Avoid doing any lifting with them. Do the lifting with your thighs; not your arms.'
   },
@@ -2361,7 +2361,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["hamstrings"],
     secondaryMuscles: ["glutes", "lower back"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'kettlebell',
     difficulty: 'intermediate',
     instructions: '1. Hold a kettlebell by the handle in one hand. Stand on one leg, on the same side that you hold the kettlebell.\n2. Keeping that knee slightly bent, perform a stiff legged deadlift by bending at the hip, extending your free leg behind you for balance.\n3. Continue lowering the kettlebell until you are parallel to the ground, and then return to the upright position.'
   },
@@ -2405,7 +2405,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Place a bench sideways in front of a high pulley machine.\n2. Hold a straight bar attachment above your head with your hands about 6 inches apart with your palms facing down.\n3. Face away from the machine and kneel.\n4. Place your head and the back of your upper arms on the bench. Your elbows should be bent with the forearms pointing towards the high pulley. This will be your starting position.\n5. While keeping your upper arms close to your head at all times with the elbows in, press the bar out in a semicircular motion until the elbows are locked and your arms are parallel to the floor. Contract the triceps hard and keep this position for a second. Exhale as you perform this movement.\n6. Slowly return to the starting position as you breathe in.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -2592,7 +2592,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. To move into the starting position, place the pulleys at the low position, select the resistance to be used and grasp a handle in each hand.\n2. Step forward, gaining tension in the pulleys. Your palms should be facing forward, hands below the waist, and your arms straight. This will be your starting position.\n3. With a slight bend in your arms, draw your hands upward and toward the midline of your body. Your hands should come together in front of your chest, palms facing up.\n4. Return your arms back to the starting position after a brief pause.'
   },
@@ -2603,7 +2603,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Select the desired weight and lay down face up on the bench of a seated row machine that has a rope attached to it. Your head should be pointing towards the attachment.\n2. Grab the outside of the rope ends with your palms facing each other (neutral grip).\n3. Position your elbows so that they are bent at a 90 degree angle and your upper arms are perpendicular (90 degree angle) to your torso. Tip: Keep the elbows in and make sure that the upper arms point to the ceiling while your forearms point towards the pulley above your head. This will be your starting position.\n4. As you breathe out, extend your lower arms until they are straight and vertical. The upper arms and elbows remain stationary throughout the movement. Only the forearms should move. Contract the triceps hard for a second.\n5. As you breathe in slowly return to the starting position.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -2624,8 +2624,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'legs',
     primaryMuscles: ["hamstrings"],
     secondaryMuscles: ["calves", "glutes", "quadriceps"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'kettlebell',
     difficulty: 'intermediate',
     instructions: '1. Stand with your torso upright holding a kettlebell in your right hand. This will be your starting position.\n2. Step forward with your left foot and lower your upper body down by flexing the hip and the knee, keeping the torso upright. Lower your back knee until it nearly touches the ground.\n3. As you lunge, pass the kettlebell under your front leg to your opposite hand.\n4. Pressing through the heel of your foot, return to the starting position.\n5. Repeat the movement for the recommended amount of repetitions, alternating legs.'
   },
@@ -2636,7 +2636,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'smith',
     difficulty: 'intermediate',
     instructions: '1. Adjust a bar in a Smith machine to an appropriate height. Position yourself under the bar, racking it across the back of your shoulders. Unrack the bar, and then split your feet, moving one foot forward and one foot back. This will be your starting position.\n2. Lower your back knee nearly to the ground, flexing the knees and lowering your hips as you do so.\n3. At the bottom of the descent, immediately reverse direction. Explosively drive through the heel of your front foot with light pressure from your back foot. Jump up and reverse the position of your legs.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -2647,7 +2647,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Grab a straight bar or E-Z bar attachment that is attached to the low pulley with both hands, using an underhand (palms facing up) shoulder-width grip.\n2. Lie flat on your back on top of an exercise mat in front of the weight stack with your feet flat against the frame of the pulley machine and your legs straight.\n3. With your arms extended and your elbows close to your body slightly bend your arms. This will be your starting position.\n4. While keeping your upper arms stationary and the elbows close to your body, curl the bar up slowly toward your chest as you breathe out and you squeeze the biceps.\n5. After a second squeeze at the top of the movement, slowly return to the starting position.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -2734,8 +2734,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. While holding a dumbbell in one hand, lay with your chest down on a flat bench. The other hand can be used to hold to the leg of the bench for stability.\n2. Position the palm of the hand that is holding the dumbbell in a neutral manner (palms facing your torso) as you keep the arm extended with the elbow slightly bent. This will be your starting position.\n3. Now raise the arm with the dumbbell to the side until your elbow is at shoulder height and your arm is roughly parallel to the floor as you exhale. Tip: Maintain your arm perpendicular to the torso while keeping your arm extended throughout the movement. Also, keep the contraction at the top for a second.\n4. Slowly lower the dumbbell to the starting position as you inhale.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -2745,8 +2745,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. While holding a dumbbell in each hand, lay with your chest down on a flat bench.\n2. Position the palms of the hands in a neutral manner (palms facing your torso) as you keep the arms extended with the elbows slightly bent. This will be your starting position.\n3. Now raise the arms to the side until your elbows are at shoulder height and your arms are roughly parallel to the floor as you exhale. Tip: Maintain your arms perpendicular to the torso while keeping them extended throughout the movement. Also, keep the contraction at the top for a second.\n4. Slowly lower the dumbbells to the starting position as you inhale.\n5. Repeat for the recommended amount of repetitions and then switch to the other arm.'
   },
@@ -2768,7 +2768,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'intermediate',
     instructions: '1. Load up the T-bar Row Machine with the desired weight and adjust the leg height so that your upper chest is at the top of the pad. Tip: In some machines all you can do is stand on the appropriate step that allows you to be at a height that has the upper chest at the top of the pad.\n2. Lay face down on the pad and grab the handles. You can either use a palms down, palms up, or palms in position depending on what part of your back you want to emphasize.\n3. Lift the bar off the rack and extend your arms in front of you. This will be your starting position.\n4. As you exhale slowly pull the weight up and squeeze your back at the top of the movement. Tip: Keep the upper arms as close to the torso as possible throughout the movement in order to better engage the back muscles. Also, do not lift your body off of the pad at any time and refrain from using the biceps to lift the weight.\n5. After a second contraction at the top of the movement, as you inhale, slowly go back down to the starting position.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -2779,7 +2779,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Sit down on the Chest Press Machine and select the weight.\n2. Step on the lever provided by the machine since it will help you to bring the handles forward so that you can grab the handles and fully extend the arms.\n3. Grab the handles with a palms-down grip and lift your elbows so that your upper arms are parallel to the floor to the sides of your torso. Tip: Your forearms will be pointing forward since you are grabbing the handles. Once you bring the handles forward and extend the arms you will be at the starting position.\n4. Now bring the handles back towards you as you breathe in.\n5. Push the handles away from you as you flex your pecs and you breathe out. Hold the contraction for a second before going back to the starting position.\n6. Repeat for the recommended amount of reps.\n7. When finished step on the lever again and slowly get the handles back to their original place.'
   },
@@ -2833,8 +2833,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["middle back"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. Lie facedown on an incline bench while holding a dumbbell in each hand. Your arms should be fully extended hanging down and pointing towards the floor. The palms of your hands should be facing each other. This will be your starting position.\n2. As you exhale, squeeze your shoulder blades together and hold the contraction for a full second. Tip: This movement is just like the reverse action of a hug, or trying to perform rear laterals as if you had no arms.\n3. As you inhale go back to the starting position.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -2911,7 +2911,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a standard handle to a tower. Move cable to highest pulley position.\n2. Stand with side to cable. With one hand, reach up and grab handle with underhand grip.\n3. Pull down cable until elbow touches your side and the handle is by your shoulder.\n4. Position feet hip-width apart. Place free hand on hip to help gauge pivot point.\n5. Keep arm in static position. Contract oblique to bring the weight down in a side crunch.\n6. Once you reach maximum contraction, slowly release the weight to the starting position. The weight stack should never be unloaded in a resting position. The aim is constant tension during the set.\n7. Repeat to failure.\n8. Then, reposition and repeat the same series of movements on the opposite side.'
   },
@@ -2921,8 +2921,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Lie down sideways on an incline bench press with a dumbbell in the hand. Make sure the shoulder is pressing against the incline bench and the arm is lying across your body with the palm around your navel.\n2. Hold a dumbbell in your uppermost arm while keeping it extended in front of you parallel to the floor. This is your starting position.\n3. While keeping the dumbbell parallel to the floor at all times, perform a lateral raise. Your arm should travel straight up until it is pointing at the ceiling. Tip: Exhale as you perform this movement. Hold the dumbbell in the position and feel the contraction in the shoulders for a second.\n4. While inhaling lower the weight across your body back into the starting position.\n5. Repeat the movement for the prescribed amount of repetitions.\n6. Switch arms and repeat the movement.'
   },
@@ -2987,8 +2987,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Pick a dumbbell and place it in one of your hands. Your non lifting hand should be used to grab something steady such as an incline bench press. Lean towards your lifting arm and away from the hand that is gripping the incline bench as this will allow you to keep your balance.\n2. Stand with a straight torso and have the dumbbell by your side at arm\'s length with the palm of the hand facing you. This will be your starting position.\n3. While maintaining the torso stationary (no swinging), lift the dumbbell to your side with a slight bend on the elbow and your hand slightly tilted forward as if pouring water in a glass. Continue to go up until you arm is parallel to the floor. Exhale as you execute this movement and pause for a second at the top.\n4. Lower the dumbbell back down slowly to the starting position as you inhale.\n5. Repeat for the recommended amount of repetitions.\n6. Switch arms and repeat the exercise.'
   },
@@ -2999,7 +2999,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["glutes"],
     secondaryMuscles: ["hamstrings"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Hook a leather ankle cuff to a low cable pulley and then attach the cuff to your ankle.\n2. Face the weight stack from a distance of about two feet, grasping the steel frame for support.\n3. While keeping your knees and hips bent slightly and your abs tight, contract your glutes to slowly \"kick\" the working leg back in a semicircular arc as high as it will comfortably go as you breathe out. Tip: At full extension, squeeze your glutes for a second in order to achieve a peak contraction.\n4. Now slowly bring your working leg forward, resisting the pull of the cable until you reach the starting position.\n5. Repeat for the recommended amount of repetitions.\n6. Switch legs and repeat the movement for the other side.'
   },
@@ -3021,7 +3021,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Lie down on a flat bench with a dumbbell in one hand on top of your thigh.\n2. By using your thigh to help you get the dumbbell up, clean the dumbbell up so that you can hold it in front of you at shoulder width. Use the hand you are not lifting with to help position the dumbbell over you properly.\n3. Once at shoulder width, rotate your wrist forward so that the palm of your hand is facing away from you. This will be your starting position.\n4. Bring down the weights slowly to your side as you breathe in. Keep full control of the dumbbell at all times. Tip: Use the hand that you are not lifting with to help keep the dumbbell balance as you may struggle a bit at first. Only use your non-lifting hand if it is needed. Otherwise, keep it resting to the side.\n5. As you breathe out, push the dumbbells up using your pectoral muscles. Lock your arms in the contracted position, squeeze your chest, hold for a second and then start coming down slowly. Tip: It should take at least twice as long to go down than to come up.\n6. Repeat the movement for the prescribed amount of repetitions of your training program.\n7. Switch arms and repeat the movement.'
   },
@@ -3043,7 +3043,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["triceps"],
     secondaryMuscles: ["chest", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'intermediate',
     instructions: '1. Lie down on a flat surface with your back pressing against the floor or an exercise mat. Make sure your knees are bent.\n2. Have a partner hand you the bar on one hand. When starting, your arm should be just about fully extended, similar to the starting position of a barbell bench press. However, this time your grip will be neutral (palms facing your torso).\n3. Make sure the hand you are not using to lift the weight is placed by your side.\n4. Begin the exercise by lowering the barbell until your elbow touches the ground. Make sure to breathe in as this is the eccentric (lowering part of the exercise).\n5. Then start lifting the barbell back up to the original starting position. Remember to breathe out during the concentric (lifting part of the exercise).\n6. Repeat until you have performed your recommended repetitions.\n7. Switch arms and repeat the movement.'
   },
@@ -3098,7 +3098,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. To begin, set a weight that is comfortable on each side of the pulley machine. Note: Make sure that the amount of weight selected is the same on each side.\n2. Now adjust the height of the pulleys on each side and make sure that they are positioned at a height higher than that of your shoulders.\n3. Stand in the middle of both sides and use an underhand grip (palms facing towards the ceiling) to grab each handle. Your arms should be fully extended and parallel to the floor with your feet positioned shoulder width apart from each other. Your body should be evenly aligned the handles. This is the starting position.\n4. While exhaling, slowly squeeze the biceps on each side until your forearms and biceps touch.\n5. While inhaling, move your forearms back to the starting position. Note: Your entire body is stationary during this exercise except for the forearms.\n6. Repeat for the recommended amount of repetitions prescribed in your program.'
   },
@@ -3120,7 +3120,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: ["chest", "shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a standard handle to a tower, and position the cable to shoulder height.\n2. With your side to the cable, grab the handle with one hand and step away from the tower. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable. Align outstretched arm with cable.\n3. With your feet positioned hip-width apart, pull the cable into your chest and grab the handle with your other hand. Both hands should be on the handle at this time.\n4. Facing forward, press the cable away from your chest. You core should be tight and engaged.\n5. Keeping your hips straight, twist your torso away from the pulley until you get a full quarter rotation.\n6. Maintain your rigid stance and straight arms. Return to the neutral position in a slow and controlled manner. Your arms should be extended in front of you.\n7. With the side tension still engaging your core, bring your hands to your chest and immediately press outward to a fully extended position. This constitutes one rep.\n8. Repeat to failure.\n9. Then, reposition and repeat the same series of movements on the opposite side.'
   },
@@ -3174,8 +3174,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Stand up with your torso upright and a dumbbell on each hand being held at arms length. The elbows should be close to the torso.\n2. The palms of the hands should be facing your torso. Your feet should be about shoulder width apart. This will be your starting position.\n3. Keeping your arms straight and the torso stationary, lift the weights out to your sides until they are about shoulder level height while exhaling.\n4. Feel the contraction for a second and begin to lower the weights back down to the starting position while inhaling. Tip: Keep the palms facing down with the little finger slightly higher while lifting and lowering the weights as it will concentrate the stress on your shoulders mainly.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -3318,7 +3318,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: ["forearms"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Stand up with your torso upright while holding a bar attachment that is attached to a low pulley using a pronated (palms down) and shoulder width grip. Make sure also that you keep the elbows close to the torso. This will be your starting position.\n2. While holding the upper arms stationary, curl the weights while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the bar is at shoulder level. Hold the contracted position for a second as you squeeze the muscle.\n3. Slowly begin to bring the bar back to starting position as your breathe in.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -3328,8 +3328,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. To begin, lie down on an incline bench with the chest and stomach pressing against the incline. Have the dumbbells in each hand with the palms facing each other (neutral grip).\n2. Extend the arms in front of you so that they are perpendicular to the angle of the bench. The legs should be stationary while applying pressure with the ball of your toes. This is the starting position.\n3. Maintaining the slight bend of the elbows, move the weights out and away from each other (to the side) in an arc motion while exhaling. Tip: Try to squeeze your shoulder blades together to get the best results from this exercise.\n4. The arms should be elevated until they are parallel to the floor.\n5. Feel the contraction and slowly lower the weights back down to the starting position while inhaling.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -3339,8 +3339,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. To begin, lie down on an incline bench set at a 30-degree angle with the chest and stomach pressing against the incline.\n2. Have the dumbbells in each hand with the palms facing down to the floor. Your arms should be in front of you so that they are perpendicular to the angle of the bench. Tip: Your elbows should have a slight bend. The legs should be stationary while applying pressure with the ball of your toes (your heels should not be touching the floor). This is the starting position.\n3. Maintaining the slight bend of the elbows, move the weights out and away from each other in an arc motion while exhaling.\n4. As you lift the weight, your wrist should externally rotate by 90-degrees so that you go from a palms down (pronated) grip to a palms facing each other (neutral) grip. Tip: Try to squeeze your shoulder blades together to get the best results from this exercise.\n5. The arms should be elevated until they are level with the head.\n6. Feel the contraction and slowly lower the weights back down to the starting position while inhaling.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -3351,7 +3351,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'intermediate',
     instructions: '1. Stand erect while holding a barbell with a supinated grip (palms facing up).\n2. Bend your knees slightly and bring your torso forward, by bending at the waist, while keeping the back straight until it is almost parallel to the floor. Tip: Make sure that you keep the head up. The barbell should hang directly in front of you as your arms hang perpendicular to the floor and your torso. This is your starting position.\n3. While keeping the torso stationary, lift the barbell as you breathe out, keeping the elbows close to the body and not doing any force with the forearm other than holding the weights. On the top contracted position, squeeze the back muscles and hold for a second.\n4. Slowly lower the weight again to the starting position as you inhale.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -3373,7 +3373,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["hamstrings"],
     secondaryMuscles: ["calves", "glutes"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'intermediate',
     instructions: '1. Place your feet between the pads after loading an appropriate weight. Lay on the top pad, allowing your hips to hang off the back, while grasping the handles to hold your position.\n2. To begin the movement, flex the hips, pulling the legs forward.\n3. Reverse the motion by extending the hips, kicking the leg back. It is very important not to over-extend the hip on this movement, stopping short of your full range of motion.\n4. Return by again flexing the hip, pulling the carriage forward as far as you can.\n5. Repeat for the desired number of repetitions.'
   },
@@ -3515,8 +3515,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. Place a couple of dumbbells looking forward in front of a flat bench.\n2. Sit on the end of the bench with your legs together and the dumbbells behind your calves.\n3. Bend at the waist while keeping the back straight in order to pick up the dumbbells. The palms of your hands should be facing each other as you pick them. This will be your starting position.\n4. Keeping your torso forward and stationary, and the arms slightly bent at the elbows, lift the dumbbells straight to the side until both arms are parallel to the floor. Exhale as you lift the weights. (Note: avoid swinging the torso or bringing the arms back as opposed to the side.)\n5. After a one second contraction at the top, slowly lower the dumbbells back to the starting position.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -3538,7 +3538,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. For this exercise you will need access to a low pulley row machine with a V-bar. Note: The V-bar will enable you to have a neutral grip where the palms of your hands face each other. To get into the starting position, first sit down on the machine and place your feet on the front platform or crossbar provided making sure that your knees are slightly bent and not locked.\n2. Lean over as you keep the natural alignment of your back and grab the V-bar handles.\n3. With your arms extended pull back until your torso is at a 90-degree angle from your legs. Your back should be slightly arched and your chest should be sticking out. You should be feeling a nice stretch on your lats as you hold the bar in front of you. This is the starting position of the exercise.\n4. Keeping the torso stationary, pull the handles back towards your torso while keeping the arms close to it until you touch the abdominals. Breathe out as you perform that movement. At that point you should be squeezing your back muscles hard. Hold that contraction for a second and slowly go back to the original position while breathing in.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -3549,7 +3549,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["triceps"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Adjust the weight to an appropriate amount and be seated, grasping the handles. Your upper arms should be about 90 degrees to the body, with your head and chest up. The elbows should also be bent to about 90 degrees. This will be your starting position.\n2. Begin by extending through the elbow, pressing the handles together above your head.\n3. After pausing at the top, return the handles to the starting position. Ensure that you maintain tension on the cables.\n4. You can also execute this movement with your back off the pad and alternate hands.'
   },
@@ -3560,7 +3560,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["calves"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Sit on the machine and place your toes on the lower portion of the platform provided with the heels extending off. Choose the toe positioning of your choice (forward, in, or out) as per the beginning of this chapter.\n2. Place your lower thighs under the lever pad, which will need to be adjusted according to the height of your thighs. Now place your hands on top of the lever pad in order to prevent it from slipping forward.\n3. Lift the lever slightly by pushing your heels up and release the safety bar. This will be your starting position.\n4. Slowly lower your heels by bending at the ankles until the calves are fully stretched. Inhale as you perform this movement.\n5. Raise the heels by extending the ankles as high as possible as you contract the calves and breathe out. Hold the top contraction for a second.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -3648,7 +3648,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats", "traps"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. To get into the starting position, first sit down on the machine and place your feet on the front platform or crossbar provided making sure that your knees are slightly bent and not locked.\n2. Lean over as you keep the natural alignment of your back and grab the single handle attachment with your left arm using a palms-down grip.\n3. With your arm extended pull back until your torso is at a 90-degree angle from your legs. Your back should be slightly arched and your chest should be sticking out. You should be feeling a nice stretch on your lat as you hold the bar in front of you. The right arm can be kept by the waist. This is the starting position of the exercise.\n4. Keeping the torso stationary, pull the handles back towards your torso while keeping the arms close to it as you rotate the wrist, so that by the time your hand is by your abdominals it is in a neutral position (palms facing the torso). Breathe out as you perform that movement. At that point you should be squeezing your back muscles hard.\n5. Hold that contraction for a second and slowly go back to the original position while breathing in. Tip: Remember to rotate the wrist as you go back to the starting position so that the palms are facing down again.\n6. Repeat for the recommended amount of repetitions and then perform the same movement with the right hand.'
   },
@@ -3658,8 +3658,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Pick a couple of dumbbells and sit at the end of a flat bench with your feet firmly on the floor. Hold the dumbbells with your palms facing in and your arms straight down at your sides at arms\' length. This will be your starting position.\n2. While maintaining the torso stationary (no swinging), lift the dumbbells to your side with a slight bend on the elbow and the hands slightly tilted forward as if pouring water in a glass. Continue to go up until you arms are parallel to the floor. Exhale as you execute this movement and pause for a second at the top.\n3. Lower the dumbbells back down slowly to the starting position as you inhale.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -3669,8 +3669,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["triceps"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Sit down on a bench with back support and grasp a dumbbell with both hands and hold it overhead at arm\'s length. Tip: a better way is to have somebody hand it to you especially if it is very heavy. The resistance should be resting in the palms of your hands with your thumbs around it. The palm of the hand should be facing inward. This will be your starting position.\n2. Keeping your upper arms close to your head (elbows in) and perpendicular to the floor, lower the resistance in a semi-circular motion behind your head until your forearms touch your biceps. Tip: The upper arms should remain stationary and only the forearms should move. Breathe in as you perform this step.\n3. Go back to the starting position by using the triceps to raise the dumbbell. Breathe out as you perform this step.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -3680,8 +3680,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["abdominals", "triceps"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. Grab a dumbbell with each hand and stand up erect.\n2. Clean (lift) the dumbbells to the chest/shoulder level and then rotate your wrists so that your palms are facing towards you as if you were getting ready to perform an Arnold Press. This will be your starting position.\n3. Now start extending your left arm overhead as you rotate the wrist so that the palm of your hand faces forward as you go up. Your elbows should come out also as you lift the weight. Simultaneously, you will also be bending from your hip to your opposite side. Tip: If you perform the exercise correctly, is should look as if you are trying to reach for something overhead on the right hand side of your body, but with your left arm. Breathe out as you perform this movement.\n4. Once you reach the top position breathe in. Then, with the weight fully extended overhead and you bent over to your right hand side, begin the movement to the left side.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -3692,7 +3692,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["lats"],
     secondaryMuscles: ["biceps", "middle back"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Attach a single handle to a low cable.\n2. After selecting the correct weight, stand a couple feet back with a wide-split stance. Your arm should be extended and your shoulder forward. This will be your starting position.\n3. Perform the movement by retracting the shoulder and flexing the elbow. As you pull, supinate the wrist, turning the palm upward as you go.\n4. After a brief pause, return to the starting position.'
   },
@@ -3724,8 +3724,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Pick a couple of dumbbells and stand with a straight torso and the dumbbells by your side at arms length with the palms of the hand facing you. This will be your starting position.\n2. While maintaining the torso in a stationary position (no swinging), lift the dumbbells to your side with a slight bend on the elbow and the hands slightly tilted forward as if pouring water in a glass. Continue to go up until you arms are parallel to the floor. Exhale as you execute this movement and pause for a second at the top.\n3. Lower the dumbbells back down slowly to the starting position as you inhale.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -3735,8 +3735,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'push',
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["traps"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. In a standing position, hold a pair of dumbbells at your side. This will be your starting position.\n2. Keeping your elbows slightly bent, raise the weights directly in front of you to shoulder height, avoiding any swinging or cheating.\n3. At the top of the exercise move the weights out in front of you, keeping your arms extended.\n4. Lower the weights with a controlled motion.\n5. On the next repetition, raise the weights in front of you to shoulder height before moving the weights laterally to your sides.\n6. Lower the weights to the starting position.'
   },
@@ -3747,7 +3747,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Begin by moving the pulleys to the high position, select the resistance to be used, and take a handle in each hand.\n2. Step forward in front of both pulleys with your arms extended in front of you, bringing your hands together. Your head and chest should be up as you lean forward, while your feet should be staggered. This will be your starting position.\n3. Keeping your left arm in place, allow your right arm to extend out to the side, maintaining a slight bend at the elbow. The right arm should be perpendicular to the body at approximately shoulder level.\n4. Return your arm back to the starting position by pulling your hand back to the midline of the body.\n5. Hold for a second at the starting position and repeat the movement on the opposite side. Continue alternating back and forth for the prescribed number of repetitions.'
   },
@@ -3779,8 +3779,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'legs',
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["glutes", "hamstrings"],
-    equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipment: 'bodyweight',
+    equipmentType: 'bodyweight',
     difficulty: 'beginner',
     instructions: '1. Position a box in a rack. Secure a band or rope in place above the box.\n2. Standing in front of it, step onto the box to a full standing position, letting your other leg remain unsupported. Hold onto the band for balance\n3. . Continue stepping up and down on the same leg before switching to the opposite side.'
   },
@@ -3824,7 +3824,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Attach dual handles to a sled connected by a rope or chain. Load the sled to a light weight.\n2. Face the sled, backing up until there is some tension in the line. Take both handles at arms length at about waist level. Bend the knees slightly and keep your chest and head up. This will be your starting position.\n3. Without flexing the elbow, pull the handles upward and apart, performing a reverse fly with some external rotation. Your palms should be facing forward as you do this.\n4. Return to the starting position, taking a couple steps back to take the slack out of the line.'
   },
@@ -3835,7 +3835,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Attach dual handles to a sled connected by a rope or chain. Load the sled to an appropriate weight. Face the sled, backing up until there is some tension in the line.\n2. With a handle in each hand, bend the knees slightly, keep your head and chest up, and begin with your arms extended.\n3. To initiate the movement, flex the elbow as you retract your shoulder blades, pulling the sled towards you.\n4. Take a step or two back to get tension in the line and repeat.'
   },
@@ -3967,7 +3967,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'smith',
     difficulty: 'beginner',
     instructions: '1. To begin, place a flat bench 2-3 feet behind the smith machine. Then, set the bar on the height that best matches your height. Once the correct height is chosen and the bar is loaded, step under the bar and place the back of your shoulders (slightly below the neck) across it.\n2. Hold on to the bar using both arms at each side (palms facing forward), unlock it and lift it off the rack by first pushing with your legs and at the same time straightening your torso.\n3. Position your legs by placing one foot slightly forward under the bar and extending your other leg back and place the top of your foot on the bench. This will be your starting position\n4. Begin to slowly lower the bar by bending the knee as you maintain a straight posture with the head up. Continue down until the angle between the upper leg and the calf becomes slightly less than 90-degrees (which is the point in which the upper legs are below parallel to the floor). Inhale as you perform this portion of the movement. Tip: If you performed the exercise correctly, the front of the knee should make an imaginary straight line with the toes that is perpendicular to the front. If your knee is past that imaginary line (if it is past your toes) then you are placing undue stress on the knee and the exercise has been performed incorrectly.\n5. Begin to raise the bar as you exhale by pushing the floor with the heel of your foot mainly as you straighten your leg again and go back to the starting position.\n6. Repeat for the recommended amount of repetitions.\n7. Switch legs and repeat the movement.'
   },
@@ -3999,8 +3999,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'abs',
     primaryMuscles: ["abdominals"],
     secondaryMuscles: ["glutes", "shoulders"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Hold a dumbbell in each hand with a pronated grip. Your feet should be wide with your hips and knees extended. This will be your starting position.\n2. Begin the movement by pulling both of the dumbbells to one side next to your hip, rotating your torso.\n3. Keeping your arms straight and the dumbbells parallel to the ground, rotate your torso to swing the weights to your opposite side.\n4. Continue alternating, rotating from one side to the other until the set is complete.'
   },
@@ -4110,7 +4110,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Stand up with your torso upright while holding a cable curl bar that is attached to a low pulley. Grab the cable bar at shoulder width and keep the elbows close to the torso. The palm of your hands should be facing up (supinated grip). This will be your starting position.\n2. While holding the upper arms stationary, curl the weights while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the bar is at shoulder level. Hold the contracted position for a second as you squeeze the muscle.\n3. Slowly begin to bring the curl bar back to starting position as your breathe in.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -4121,7 +4121,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders", "triceps"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Position dual pulleys to chest height and select an appropriate weight. Stand a foot or two in front of the cables, holding one in each hand. You can stagger your stance for better stability.\n2. Position the upper arm at a 90 degree angle with the shoulder blades together. This will be your starting position.\n3. Keeping the rest of the body stationary, extend through the elbows to press the handles forward, drawing them together in front of you.\n4. Pause at the top of the motion, and return to the starting position.'
   },
@@ -4132,7 +4132,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: ["shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a standard handle on a tower, and move the cable to the lowest pulley position.\n2. With your side to the cable, grab the handle with one hand and step away from the tower. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable. Your outstretched arm should be aligned with the cable.\n3. With your feet positioned shoulder width apart, squat down and grab the handle with both hands. Your arms should still be fully extended.\n4. In one motion, pull the handle up and across your body until your arms are in a fully-extended position above your head.\n5. Keep your back straight and your arms close to your body as you pivot your back foot and straighten your legs to get a full range of motion.\n6. Retract your arms and then your body. Return to the neutral position in a slow and controlled manner.\n7. Repeat to failure.\n8. Then, reposition and repeat the same series of movements on the opposite side.'
   },
@@ -4143,7 +4143,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abdominals"],
     secondaryMuscles: ["shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Connect a standard handle to a tower, and move the cable to the highest pulley position.\n2. With your side to the cable, grab the handle with one hand and step away from the tower. You should be approximately arm\'s length away from the pulley, with the tension of the weight on the cable. Your outstretched arm should be aligned with the cable.\n3. With your feet positioned shoulder width apart, reach upward with your other hand and grab the handle with both hands. Your arms should still be fully extended.\n4. In one motion, pull the handle down and across your body to your front knee while rotating your torso.\n5. Keep your back and arms straight and core tight while you pivot your back foot and bend your knees to get a full range of motion.\n6. Maintain your stance and straight arms. Return to the neutral position in a slow and controlled manner.\n7. Repeat to failure.\n8. Then, reposition and repeat the same series of movements on the opposite side.'
   },
@@ -4154,7 +4154,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["calves"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. Adjust the padded lever of the calf raise machine to fit your height.\n2. Place your shoulders under the pads provided and position your toes facing forward (or using any of the two other positions described at the beginning of the chapter). The balls of your feet should be secured on top of the calf block with the heels extending off it. Push the lever up by extending your hips and knees until your torso is standing erect. The knees should be kept with a slight bend; never locked. Toes should be facing forward, outwards or inwards as described at the beginning of the chapter. This will be your starting position.\n3. Raise your heels as you breathe out by extending your ankles as high as possible and flexing your calf. Ensure that the knee is kept stationary at all times. There should be no bending at any time. Hold the contracted position by a second before you start to go back down.\n4. Go back slowly to the starting position as you breathe in by lowering your heels as you bend the ankles until calves are stretched.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -4164,8 +4164,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["biceps"],
     secondaryMuscles: ["forearms"],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Taking a dumbbell in your working hand, lean forward. Allow your working arm to hang perpendicular to the ground with the elbow pointing out. This will be your starting position.\n2. Flex the elbow to curl the weight, keeping the upper arm stationary. At the top of the repetition, flex the biceps and pause.\n3. Lower the dumbbell back to the starting position.\n4. Repeat the movement for the prescribed amount of repetitions.'
   },
@@ -4252,8 +4252,8 @@ export const exerciseDatabase: Exercise[] = [
     category: 'pull',
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
-    equipment: 'bodyweight',
-    equipmentType: 'bodyweight',
+    equipment: 'full_gym',
+    equipmentType: 'dumbbell',
     difficulty: 'intermediate',
     instructions: '1. Stand up with a dumbbell in each hand being held at arms length. The elbows should be close to the torso. Your legs should be at about shoulder\'s width apart from each other.\n2. Rotate the palms of the hands so that they are facing inward in a neutral position. This will be your starting position.\n3. While holding the upper arms stationary, curl the weights out while contracting the biceps as you breathe out. Your wrist should turn so that when the weights are fully elevated you have supinated grip (palms facing up).\n4. Only the forearms should move. Continue the movement until your biceps are fully contracted and the dumbbells are at shoulder level. Tip: Keep the forearms aligned with your outer deltoids.\n5. Hold the contracted position for a second as you squeeze the biceps.\n6. Slowly begin to bring the dumbbells back to the starting position as your breathe in. Remember to rotate the wrists as you lower the weight in order to switch back to a neutral grip.\n7. Repeat for the recommended amount of repetitions.'
   },
@@ -4297,7 +4297,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["triceps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Start by placing a barbell that is about chest high on a squat rack. Once you have selected the weights, grab the barbell using a pronated (palms facing forward) grip. Make sure to grip the bar wider than shoulder width apart from each other.\n2. Slightly bend the knees and place the barbell on your collar bone. Lift the barbell up keeping it lying on your chest. Take a step back and position your feet shoulder width apart from each other.\n3. Once you pick up the barbell with the correct grip length, lift the bar up over your head by locking your arms. Hold at about shoulder level and slightly in front of your head. This is your starting position.\n4. Lower the bar down to the collarbone slowly as you inhale.\n5. Lift the bar back up to the starting position as you exhale.\n6. Repeat for the recommended amount of repetitions.'
   },
@@ -4308,7 +4308,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["biceps"],
     secondaryMuscles: [],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Start out by grabbing single handle next to the low pulley machine. Make sure you are far enough from the machine so that your arm is supporting the weight.\n2. Make sure that your upper arm is stationary, perpendicular to the floor with elbows in and palms facing forward. Your non lifting arm should be grabbing your waist. This will allow you to keep your balance.\n3. Slowly begin to curl the single handle upwards while keeping the upper arm stationary until your forearm touches your bicep while exhaling. Tip: Only the forearm should move.\n4. Hold the contraction position as you squeeze the bicep and then lower the single handle back down to the starting position as you inhale.\n5. Repeat for the recommended amount of repetitions.\n6. Switch arms while performing this exercise.'
   },
@@ -4407,7 +4407,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["hamstrings"],
     secondaryMuscles: ["glutes", "lower back"],
     equipment: 'full_gym',
-    equipmentType: 'barbell',
+    equipmentType: 'dumbbell',
     difficulty: 'beginner',
     instructions: '1. Grasp a couple of dumbbells holding them by your side at arm\'s length.\n2. Stand with your torso straight and your legs spaced using a shoulder width or narrower stance. The knees should be slightly bent. This is your starting position.\n3. Keeping the knees stationary, lower the dumbbells to over the top of your feet by bending at the waist while keeping your back straight. Keep moving forward as if you were going to pick something from the floor until you feel a stretch on the hamstrings. Exhale as you perform this movement\n4. Start bringing your torso up straight again by extending your hips and waist until you are back at the starting position. Inhale as you perform this movement.\n5. Repeat for the recommended amount of repetitions.'
   },
@@ -4440,7 +4440,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["middle back"],
     secondaryMuscles: ["biceps", "lats"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Place a loaded barbell on the end of a bench. Standing on the bench behind the bar, take a medium, pronated grip. Stand with your hips back and chest up, maintaining a neutral spine. This will be your starting position.\n2. Row the bar to your torso by retracting the shoulder blades and flexing the elbows. Use a controlled movement with no jerking.\n3. After a brief pause, slowly return the bar to the starting position, ensuring to go all the way down.'
   },
@@ -4451,7 +4451,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["shoulders"],
     secondaryMuscles: ["traps"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'beginner',
     instructions: '1. Place a bar on the ground behind the head of an incline bench.\n2. Lay on the bench face down. With a pronated grip, pick the barbell up from the floor, keeping your arms straight. Allow the bar to hang straight down. This will be your starting position.\n3. To begin, raise the barbell out in front of your head while keeping your arms extended.\n4. Return to the starting position.'
   },
@@ -4506,7 +4506,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["abductors"],
     secondaryMuscles: ["glutes"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. To begin, sit down on the abductor machine and select a weight you are comfortable with. When your legs are positioned properly, grip the handles on each side. Your entire upper body (from the waist up) should be stationary. This is the starting position.\n2. Slowly press against the machine with your legs to move them away from each other while exhaling.\n3. Feel the contraction for a second and begin to move your legs back to the starting position while breathing in. Note: Remember to keep your upper body stationary to prevent any injuries from occurring.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -4517,7 +4517,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["adductors"],
     secondaryMuscles: ["glutes", "hamstrings"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'machine',
     difficulty: 'beginner',
     instructions: '1. To begin, sit down on the adductor machine and select a weight you are comfortable with. When your legs are positioned properly on the leg pads of the machine, grip the handles on each side. Your entire upper body (from the waist up) should be stationary. This is the starting position.\n2. Slowly press against the machine with your legs to move them towards each other while exhaling.\n3. Feel the contraction for a second and begin to move your legs back to the starting position while breathing in. Note: Remember to keep your upper body stationary and avoid fast jerking motions in order to prevent any injuries from occurring.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -4627,7 +4627,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["lats"],
     secondaryMuscles: ["biceps", "middle back", "shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'beginner',
     instructions: '1. Sit down on a pull-down machine with a wide bar attached to the top pulley. Adjust the knee pad of the machine to fit your height. These pads will prevent your body from being raised by the resistance attached to the bar.\n2. Grab the pull-down bar with the palms facing your torso (a supinated grip). Make sure that the hands are placed closer than the shoulder width.\n3. As you have both arms extended in front of you holding the bar at the chosen grip width, bring your torso back around 30 degrees or so while creating a curvature on your lower back and sticking your chest out. This is your starting position.\n4. As you breathe out, pull the bar down until it touches your upper chest by drawing the shoulders and the upper arms down and back. Tip: Concentrate on squeezing the back muscles once you reach the fully contracted position and keep the elbows close to your body. The upper torso should remain stationary as your bring the bar to you and only the arms should move. The forearms should do no other work other than hold the bar.\n5. After a second on the contracted position, while breathing in, slowly bring the bar back to the starting position when your arms are fully extended and the lats are fully stretched.\n6. Repeat this motion for the prescribed amount of repetitions.'
   },
@@ -4649,7 +4649,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["traps"],
     secondaryMuscles: ["shoulders"],
     equipment: 'full_gym',
-    equipmentType: 'machine',
+    equipmentType: 'cable',
     difficulty: 'intermediate',
     instructions: '1. Grasp a straight bar cable attachment that is attached to a low pulley with a pronated (palms facing your thighs) grip that is slightly less than shoulder width. The bar should be resting on top of your thighs. Your arms should be extended with a slight bend at the elbows and your back should be straight. This will be your starting position.\n2. Use your side shoulders to lift the cable bar as you exhale. The bar should be close to the body as you move it up. Continue to lift it until it nearly touches your chin. Tip: Your elbows should drive the motion. As you lift the bar, your elbows should always be higher than your forearms. Also, keep your torso stationary and pause for a second at the top of the movement.\n3. Lower the bar back down slowly to the starting position. Inhale as you perform this portion of the movement.\n4. Repeat for the recommended amount of repetitions.'
   },
@@ -4825,7 +4825,7 @@ export const exerciseDatabase: Exercise[] = [
     primaryMuscles: ["quadriceps"],
     secondaryMuscles: ["calves", "glutes", "hamstrings"],
     equipment: 'full_gym',
-    equipmentType: 'dumbbell',
+    equipmentType: 'barbell',
     difficulty: 'advanced',
     instructions: '1. This exercise is best performed inside a squat rack for safety purposes. To begin, first set the bar on a rack that best matches your height. The correct height should be anywhere above the waist but below the chest. Once the correct height is chosen and the bar is loaded, lock your hands together and place the bar on top of your arms in between the forearm and upper arm.\n2. Lift the bar up so that it is resting on top of your forearms. If you are holding the bar properly, it should look as if you have your arms crossed but with a bar running across them.\n3. Step away from the rack and position your legs using a shoulder width medium stance with the toes slightly pointed out. Keep your head up at all times as looking down will get you off balance and also maintain a straight back. This will be your starting position. (Note: For the purposes of this discussion we will use the medium stance described above which targets overall development; however you can choose any of the three stances discussed in the foot stances section).\n4. Begin to lower the bar by bending the knees as you maintain a straight posture with the head up. Continue down until the angle between the upper leg and the calves becomes slightly less than 90-degrees (which is the point in which the upper legs are below parallel to the floor). Inhale as you perform this portion of the movement. Tip: If you performed the exercise correctly, the front of the knees should make an imaginary straight line with the toes that is perpendicular to the front. If your knees are past that imaginary line (if they are past your toes) then you are placing undue stress on the knee and the exercise has been performed incorrectly.\n5. Begin to raise the bar as you exhale by pushing the floor with the ball of your foot mainly as you straighten the legs again and go back to the starting position.\n6. Repeat for the recommended amount of repetitions.'
   },
