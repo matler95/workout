@@ -13,6 +13,18 @@
 
 import { supabase } from './supabase-client';
 
+// Fix (feedback round 4, #1): `date.toISOString().split('T')[0]` converts to
+// UTC first. For a timezone ahead of UTC, local midnight Monday can land on
+// *Sunday* in UTC, shifting week-boundary queries back a day (and pulling
+// last week's Sunday session into "this week"). This formats the date's
+// already-correct local fields instead, with no UTC conversion.
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 export interface UserProfile {
@@ -63,6 +75,9 @@ export interface WorkoutSession {
   dayName: string;
   completedAt: string;
   duration?: number;
+  /** Feature (feedback round 4, #8): minutes spent warming up before the
+   *  logged working sets began, tracked separately from `duration`. */
+  warmupMinutes?: number;
   perceivedEffort?: number;
   feedback?: string;
   rpeCorrections?: Record<string, number>;
@@ -297,7 +312,7 @@ export const workoutApi = {
     const { data: sessions, error: sessionsError } = await supabase
       .from('workout_sessions')
       .select(`
-        id, day_name, completed_at, duration_minutes,
+        id, day_name, completed_at, duration_minutes, warmup_minutes,
         perceived_effort, feedback, rpe_corrections, muscle_volume
       `)
       .eq('user_id', userId)
@@ -328,6 +343,7 @@ export const workoutApi = {
       dayName:         row.day_name,
       completedAt:     row.completed_at,
       duration:        row.duration_minutes,
+      warmupMinutes:   row.warmup_minutes ?? undefined,
       perceivedEffort: row.perceived_effort,
       feedback:        row.feedback,
       rpeCorrections:  row.rpe_corrections,
@@ -366,6 +382,7 @@ export const workoutApi = {
     feedback?: string;
     rpeCorrections?: Record<string, number>;
     duration?: number;
+    warmupMinutes?: number;
     muscleVolume?: Record<string, MuscleVolumeEntry>;
   }): Promise<string> => {
     const userId = await getUserId();
@@ -377,6 +394,7 @@ export const workoutApi = {
         day_name:         session.dayName,
         completed_at:     session.completedAt,
         duration_minutes: session.duration || null,
+        warmup_minutes:   session.warmupMinutes ?? null,
         perceived_effort: session.perceivedEffort || null,
         feedback:         session.feedback || '',
         rpe_corrections:  session.rpeCorrections || {},
@@ -420,7 +438,7 @@ export const workoutApi = {
 
 export const progressApi = {
   getBodyweight: async (days = 90): Promise<BodyweightEntry[]> => {
-    const cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+    const cutoff = toLocalDateString(new Date(Date.now() - days * 86400000));
     const { data, error } = await supabase
       .from('bodyweight_log')
       .select('weight_kg, logged_at')
@@ -448,7 +466,7 @@ export const progressApi = {
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - daysToMonday);
     weekStart.setHours(0, 0, 0, 0);
-    const weekStartDate = weekStart.toISOString().split('T')[0];
+    const weekStartDate = toLocalDateString(weekStart);
 
     const { data, error } = await supabase
       .from('weekly_volume')

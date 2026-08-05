@@ -19,6 +19,8 @@ export interface QueuedWorkout {
   feedback?:        string;
   rpeCorrections?:  Record<string, number>;
   duration?:        number;
+  /** Feature (feedback round 4, #8) */
+  warmupMinutes?:   number;
   muscleVolume?:    Record<string, MuscleVolumeEntry>;
   status:           'in_progress' | 'abandoned' | 'pending_sync' | 'synced';
 }
@@ -145,6 +147,7 @@ export async function flushPendingWorkouts(): Promise<number> {
         feedback:        workout.feedback || '',
         rpeCorrections:  workout.rpeCorrections || {},
         duration:        workout.duration,
+        warmupMinutes:   workout.warmupMinutes,
         muscleVolume:    workout.muscleVolume,
       });
       queueClear(workout.sessionId);

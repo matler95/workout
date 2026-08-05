@@ -5,7 +5,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { TrendingUp, Activity, Calendar, Flame, Info, AlertTriangle, Pencil } from 'lucide-react';
+import { TrendingUp, Activity, Calendar, Flame, Info, AlertTriangle, Pencil, ChevronDown, Clock } from 'lucide-react';
 import { format, subDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router';
 import { profileApi, workoutApi, progressApi, type VolumeEntry } from '../../utils/api';
@@ -26,6 +26,9 @@ interface WorkoutLog {
   sets: SetLog[]; perceivedEffort?: number;
   rpeCorrections?: Record<string, number>;
   feedback?: string;
+  /** Feature (feedback round 4, #7/#8) */
+  duration?: number;
+  warmupMinutes?: number;
 }
 
 function toEngineHistory(logs: WorkoutLog[]): EngineWorkoutLog[] {
@@ -48,6 +51,7 @@ export function Progress() {
   const [profile, setProfile]               = useState<any>(null);
   const [loading, setLoading]               = useState(true);
   const [selectedExercise, setSelectedExercise] = useState('');
+  const [expandedDiaryId, setExpandedDiaryId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => { loadData(); }, []);
@@ -175,6 +179,33 @@ export function Progress() {
       target:   profile?.trainingDays || 3,
     }));
 
+  // Feature (feedback round 4, #7 phase 2): duration/volume trend for the
+  // Diary tab. Chronological (oldest→newest), last 20 sessions so the
+  // chart stays readable — the full history is still below it as a list.
+  const getDiaryTrendData = () =>
+    [...workoutHistory]
+      .reverse()
+      .slice(-20)
+      .map(log => ({
+        date:     format(parseISO(log.completedAt), 'MMM d'),
+        duration: typeof log.duration === 'number' ? log.duration : null,
+        volume:   Math.round((log.sets || []).reduce((s, x) => s + x.weight * x.reps, 0) / 1000 * 10) / 10,
+      }));
+
+  const getDiarySummary = () => {
+    const withDuration = workoutHistory.filter(l => typeof l.duration === 'number');
+    const avgDuration = withDuration.length > 0
+      ? Math.round(withDuration.reduce((s, l) => s + (l.duration || 0), 0) / withDuration.length)
+      : null;
+    const avgVolume = workoutHistory.length > 0
+      ? Math.round(
+          (workoutHistory.reduce((s, l) => s + (l.sets || []).reduce((ss, x) => ss + x.weight * x.reps, 0), 0)
+            / workoutHistory.length) / 1000 * 10
+        ) / 10
+      : 0;
+    return { totalSessions: workoutHistory.length, avgDuration, avgVolume };
+  };
+
   const weightChartData = bodyweightData.slice(-30).map(e => ({ date: format(parseISO(e.date), 'MMM d'), weight: e.weight }));
   const strengthMap     = getStrengthData();
 
@@ -187,6 +218,8 @@ export function Progress() {
   const streakInfo   = getStreakInfo();
   const heatmap      = getHeatmapData();
   const weeklyBars   = getWeeklyBarData();
+  const diaryTrend    = getDiaryTrendData();
+  const diarySummary  = getDiarySummary();
 
   const bmi = profile ? Math.round((profile.weight / Math.pow(profile.height / 100, 2)) * 10) / 10 : null;
   const estBodyFat = profile && bmi
@@ -217,11 +250,12 @@ export function Progress() {
         <h1 className="text-2xl font-bold tracking-tight pt-2">Progress</h1>
 
         <Tabs defaultValue="body" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="body">Body</TabsTrigger>
             <TabsTrigger value="strength">Strength</TabsTrigger>
             <TabsTrigger value="volume">Volume</TabsTrigger>
             <TabsTrigger value="streaks">Streaks</TabsTrigger>
+            <TabsTrigger value="diary">Diary</TabsTrigger>
           </TabsList>
 
           {/* ── Body ── */}
@@ -501,6 +535,150 @@ export function Progress() {
                 </ResponsiveContainer>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── Diary (feature: feedback round 4, #7) ── */}
+          <TabsContent value="diary" className="space-y-3">
+            {workoutHistory.length > 0 && (
+              <>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { value: diarySummary.totalSessions,                                    label: 'sessions logged' },
+                    { value: diarySummary.avgDuration != null ? `${diarySummary.avgDuration}m` : '—', label: 'avg duration' },
+                    { value: `${diarySummary.avgVolume}t`,                                  label: 'avg volume' },
+                  ].map(({ value, label }) => (
+                    <Card key={label}>
+                      <CardContent className="py-3">
+                        <div className="text-xl font-bold">{value}</div>
+                        <div className="text-xs text-muted-foreground">{label}</div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {diaryTrend.some(d => d.duration != null) && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" /> Duration Trend</CardTitle>
+                      <p className="text-xs text-muted-foreground">Last {diaryTrend.length} sessions, minutes</p>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <LineChart data={diaryTrend}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} interval="preserveStartEnd" />
+                          <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                          <Tooltip {...tooltipStyle} />
+                          <Line type="monotone" dataKey="duration" stroke="#6366F1" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4" /> Volume Trend</CardTitle>
+                    <p className="text-xs text-muted-foreground">Last {diaryTrend.length} sessions, tonnes lifted</p>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={diaryTrend}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                        <Tooltip {...tooltipStyle} />
+                        <Bar dataKey="volume" fill="#10B981" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {workoutHistory.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Complete a workout to start your diary.
+                </CardContent>
+              </Card>
+            ) : (
+              workoutHistory.map((log, i) => {
+                const rowKey = log.id ?? `${log.dayName}-${log.completedAt}-${i}`;
+                const isOpen = expandedDiaryId === rowKey;
+                const vol = (log.sets || []).reduce((s, x) => s + x.weight * x.reps, 0);
+
+                // Preserve first-appearance order of exercises within the session
+                const byExercise: { name: string; sets: SetLog[] }[] = [];
+                for (const s of log.sets || []) {
+                  let group = byExercise.find(g => g.name === s.exerciseName);
+                  if (!group) { group = { name: s.exerciseName, sets: [] }; byExercise.push(group); }
+                  group.sets.push(s);
+                }
+
+                return (
+                  <Card key={rowKey}>
+                    <button
+                      className="w-full text-left"
+                      onClick={() => setExpandedDiaryId(isOpen ? null : rowKey)}
+                    >
+                      <CardContent className="py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{log.dayName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(parseISO(log.completedAt), 'EEE, MMM d, yyyy')}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            {typeof log.duration === 'number' && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>
+                                  {log.duration}m
+                                  {log.warmupMinutes ? ` (+${log.warmupMinutes}m warmup)` : ''}
+                                </span>
+                              </div>
+                            )}
+                            <div className="text-right">
+                              <p className="text-sm font-medium">{(log.sets || []).length} sets</p>
+                              <p className="text-xs text-muted-foreground">{Math.round(vol / 1000 * 10) / 10}t vol</p>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </button>
+
+                    {isOpen && (
+                      <CardContent className="pt-0 pb-4 space-y-3 border-t">
+                        <div className="space-y-2 pt-3">
+                          {byExercise.map(g => (
+                            <div key={g.name} className="text-sm">
+                              <p className="font-medium mb-0.5">{g.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {g.sets.map(s => `${s.weight}×${s.reps}`).join('  ·  ')}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        {log.feedback && log.feedback.trim() && log.feedback !== '(partial workout)' && (
+                          <p className="text-xs text-muted-foreground italic">"{log.feedback}"</p>
+                        )}
+                        {log.id && (
+                          <button
+                            onClick={() => navigate(`/workout-edit/${log.id}`)}
+                            className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Edit this workout
+                          </button>
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
+                );
+              })
+            )}
           </TabsContent>
         </Tabs>
       </div>

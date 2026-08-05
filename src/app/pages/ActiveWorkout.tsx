@@ -98,6 +98,7 @@ interface ExercisePlan {
 
 const TIMER_START_KEY   = 'aw_rest_start';
 const WORKOUT_START_KEY = 'aw_workout_start';
+const WARMUP_START_KEY  = 'aw_warmup_start';
 
 function saveRestStart(ms: number) {
   try { sessionStorage.setItem(TIMER_START_KEY, String(ms)); } catch {}
@@ -113,6 +114,19 @@ function saveWorkoutStart(ms: number) {
 }
 function loadWorkoutStart(): number {
   try { const v = sessionStorage.getItem(WORKOUT_START_KEY); return v ? Number(v) : Date.now(); } catch { return Date.now(); }
+}
+
+// Feature (feedback round 4, #8): warm-up tracking. Persisted the same way
+// as the rest/workout timers above so it survives the app being backgrounded
+// or the tab being reloaded by iOS mid-warmup.
+function saveWarmupStart(ms: number) {
+  try { sessionStorage.setItem(WARMUP_START_KEY, String(ms)); } catch {}
+}
+function loadWarmupStart(): number | null {
+  try { const v = sessionStorage.getItem(WARMUP_START_KEY); return v ? Number(v) : null; } catch { return null; }
+}
+function clearWarmupStart() {
+  try { sessionStorage.removeItem(WARMUP_START_KEY); } catch {}
 }
 
 // ─── Phase 2: Stable exercise key helper ──────────────────────────────────────
@@ -363,6 +377,30 @@ export function ActiveWorkout() {
   const [showConfetti, setShowConfetti]   = useState(false);
   const [showExtraWeight, setShowExtraWeight] = useState(false);
   const [showRPEInfo, setShowRPEInfo]     = useState(false);
+
+  // Feature (feedback round 4, #8): warm-up tracking. warmupStartRef holds
+  // the timestamp warm-up began (persisted so it survives a reload);
+  // warmupElapsed just drives the live count-up display and is recomputed
+  // from warmupStartRef every second, so it's never the source of truth.
+  // warmupMinutesRef captures the final duration once "Start Workout" is
+  // tapped, for logging alongside the workout at completion.
+  const warmupStartRef   = useRef<number | null>(loadWarmupStart());
+  const warmupMinutesRef = useRef<number | undefined>(undefined);
+  const [warmupElapsed, setWarmupElapsed] = useState(0);
+  useEffect(() => {
+    if (warmupStartRef.current == null) return;
+    const tick = () => setWarmupElapsed(Math.floor((Date.now() - (warmupStartRef.current as number)) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [warmupStartRef.current]);
+
+  const startWarmup = () => {
+    const ms = Date.now();
+    warmupStartRef.current = ms;
+    saveWarmupStart(ms);
+    setWarmupElapsed(0);
+  };
   // Phase 4: collapsible instructions — collapsed by default
   const [showInstructions, setShowInstructions] = useState(false);
 
@@ -392,6 +430,21 @@ export function ActiveWorkout() {
   useEffect(() => {
     document.body.style.pointerEvents = '';
   }, []);
+
+  // FIX (feedback round 4, #4) — the mount-time reset above only covers a
+  // lock left over from a *previous* page. This screen itself opens several
+  // Radix Dialog/AlertDialog overlays mid-session (exit confirm, reorder,
+  // edit workout log) that each apply the same body pointer-events lock
+  // while open. If one of those closes in an unusual way (e.g. the app is
+  // backgrounded/resumed by iOS mid-close-animation — common in this PWA),
+  // the lock can survive and freeze every subsequent tap, including the
+  // kebab (⋮) menu, for the rest of the session. Re-clear it any time we
+  // know none of this screen's own overlays should be open.
+  useEffect(() => {
+    if (!showExitDialog && !showReorderDialog && !showEditSets && !showAddExercise) {
+      document.body.style.pointerEvents = '';
+    }
+  }, [showExitDialog, showReorderDialog, showEditSets, showAddExercise]);
 
   // Phase 4: reset instructions collapsed state when exercise changes
   useEffect(() => {
@@ -686,6 +739,7 @@ export function ActiveWorkout() {
           perceivedEffort,
           rpeCorrections: {},
           duration:       Math.round((Date.now() - startTimeRef.current) / 60000),
+          warmupMinutes:  warmupMinutesRef.current,
         });
         queueClear(offlineSessionId.current);
         toast.success('Partial workout saved');
@@ -968,16 +1022,19 @@ export function ActiveWorkout() {
         dayName: dayName!, completedAt: now,
         sets: completedSets, feedback, perceivedEffort,
         rpeCorrections, duration, muscleVolume,
+        warmupMinutes: warmupMinutesRef.current,
       });
 
       await workoutApi.log({
         dayName: dayName!, completedAt: now,
         sets: completedSets, feedback, perceivedEffort,
         rpeCorrections, duration, muscleVolume,
+        warmupMinutes: warmupMinutesRef.current,
       });
 
       queueClear(offlineSessionId.current);
       clearRestStart();
+      clearWarmupStart();
       try { sessionStorage.removeItem(WORKOUT_START_KEY); } catch {}
 
       toast.success('Workout saved! 💪');
@@ -1071,10 +1128,28 @@ export function ActiveWorkout() {
               </div>
             )}
 
-            <div className="bg-card rounded-xl p-3 text-sm space-y-1 border border-border/50">
+            <div className="bg-card rounded-xl p-3 text-sm space-y-2 border border-border/50">
               <p className="font-medium">Warm up first (5–10 min)</p>
               <p className="text-muted-foreground">• Light cardio + dynamic stretches</p>
               <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
+              {warmupStartRef.current == null ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-1"
+                  onClick={startWarmup}
+                >
+                  <Clock className="w-3.5 h-3.5 mr-1.5" />
+                  Start Warm-up
+                </Button>
+              ) : (
+                <div className="flex items-center justify-between mt-1 bg-muted/60 rounded-lg px-3 py-2">
+                  <span className="text-xs text-muted-foreground">Warming up</span>
+                  <span className="font-mono text-sm font-medium tabular-nums">
+                    {String(Math.floor(warmupElapsed / 60)).padStart(2, '0')}:{String(warmupElapsed % 60).padStart(2, '0')}
+                  </span>
+                </div>
+              )}
             </div>
 
             {(() => {
@@ -1144,6 +1219,10 @@ export function ActiveWorkout() {
               size="lg"
               onClick={() => {
                 const startMs = Date.now();
+                if (warmupStartRef.current != null) {
+                  warmupMinutesRef.current = Math.round((startMs - warmupStartRef.current) / 60000);
+                  clearWarmupStart();
+                }
                 startTimeRef.current = startMs;
                 saveWorkoutStart(startMs);
                 queueStart(offlineSessionId.current, dayName!);
@@ -1190,7 +1269,7 @@ export function ActiveWorkout() {
               {[
                 { value: completedSets.length,                                          label: 'sets' },
                 { value: new Set(completedSets.map(s => s.exerciseId)).size,           label: 'exercises' },
-                { value: `${durationMin}m`,                                             label: 'duration' },
+                { value: `${durationMin}m`,                                             label: warmupMinutesRef.current ? `duration (+${warmupMinutesRef.current}m warmup)` : 'duration' },
               ].map(({ value, label }) => (
                 <div key={label} className="bg-green-50 dark:bg-green-950/30 rounded-lg py-3">
                   <div className="text-xl font-bold text-green-700 dark:text-green-300">{value}</div>
