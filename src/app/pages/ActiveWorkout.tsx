@@ -28,6 +28,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import { profileApi, planApi, workoutApi } from '../../utils/api';
+import { readRememberedActiveWorkoutDay } from '../../utils/activeWorkoutNav';
 import { toast } from 'sonner';
 import {
   Clock, Check, Trophy, X, TrendingUp, TrendingDown,
@@ -134,14 +135,27 @@ function clearWarmupStart() {
 /**
  * Builds the history key for an exercise plan entry.
  * Uses composite key when equipmentType is known.
+ *
+ * FIX (bug report round 5, #2): must prefer selectedEquipmentType, exactly
+ * like the equipType computed at plan-build time (below) and the
+ * equipmentType actually written onto each logged set. Previously this
+ * function used only ex.equipmentType (the exercise's DB default), while the
+ * saved log used ex.selectedEquipmentType ?? ex.equipmentType. For any
+ * exercise added via the equipment-variant picker with a non-default
+ * equipment choice, that mismatch meant the second-ever session for that
+ * exercise built a different composite key than the one its history was
+ * filed under — the lookup missed and silently fell back to the estimated
+ * default weight instead of the user's actual progression.
  */
 function exerciseHistoryKey(ex: {
   id?: string;
   name: string;
   equipmentType?: string;
+  selectedEquipmentType?: string;
 }): string {
   const baseId = (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
-  return buildHistoryKey(baseId, ex.name, ex.equipmentType);
+  const equip  = ex.selectedEquipmentType ?? ex.equipmentType;
+  return buildHistoryKey(baseId, ex.name, equip);
 }
 
 /** Plain base ID (no equipment suffix) — used for plan lookup */
@@ -331,7 +345,10 @@ const REST_DURATION = 120;
 export function ActiveWorkout() {
   const location = useLocation();
   const navigate  = useNavigate();
-  const dayName   = location.state?.dayName as string | undefined;
+  // FIX (bug report round 5, #1): fall back to the sessionStorage value set
+  // by goToActiveWorkout() when router state didn't survive (tab reload).
+  const dayName   = (location.state?.dayName as string | undefined)
+    ?? readRememberedActiveWorkoutDay();
 
   const [exercises, setExercises]         = useState<any[]>([]);
   const [exerciseQueue, setExerciseQueue] = useState<any[]>([]);
@@ -350,6 +367,11 @@ export function ActiveWorkout() {
   const [customWeight, setCustomWeight]   = useState('');
   const [customReps, setCustomReps]       = useState('');
   const [loading, setLoading]             = useState(true);
+  // FIX (bug report round 5, #1): loadWorkout used to redirect straight back
+  // to /plan on ANY error (network hiccup, transient Supabase error, etc.)
+  // with only a toast that could easily be missed. That's indistinguishable
+  // from "the button doesn't work." Surface it instead, with a retry.
+  const [loadError, setLoadError]         = useState(false);
   const [showExitDialog, setShowExitDialog]     = useState(false);
   const [showReorderDialog, setShowReorderDialog] = useState(false);
   // Phase 5.4: set complete pulse animation
@@ -521,6 +543,7 @@ export function ActiveWorkout() {
   // ── Load workout ─────────────────────────────────────────────────────────────
 
   const loadWorkout = async () => {
+    setLoadError(false);
     try {
       const [planResult, history, profile] = await Promise.all([
         planApi.get(),
@@ -621,7 +644,7 @@ export function ActiveWorkout() {
       }
     } catch {
       toast.error('Failed to load workout');
-      navigate('/plan');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -1059,6 +1082,24 @@ export function ActiveWorkout() {
           <div className="animate-spin rounded-full h-12 w-12 border-2 border-muted border-t-primary mx-auto" />
           <p className="mt-3 text-sm text-muted-foreground animate-pulse">Loading workout...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center border-0 shadow-lg">
+          <CardContent className="pt-8 pb-8">
+            <p className="text-muted-foreground mb-4">
+              Couldn't load {dayName}. Check your connection and try again.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <Button onClick={loadWorkout}>Retry</Button>
+              <Button variant="outline" onClick={() => navigate('/plan')}>Back to Plan</Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

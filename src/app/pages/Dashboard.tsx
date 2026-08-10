@@ -15,6 +15,7 @@ import { SmartInsights } from '../components/SmartInsights';
 import { CrashRecoveryBanner, SyncedConfirmation } from '../components/CrashRecoveryBanner';
 import { suggestDeload, calculateRecoveryScore, checkFatigueWarnings } from '../../utils/smartAlgorithms';
 import { getRecentVolume } from '../../utils/apiAdditions';
+import { goToActiveWorkout } from '../../utils/activeWorkoutNav';
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -311,7 +312,7 @@ export function Dashboard() {
             {nextWorkout && (
               <div className="mt-4">
                 <Button size="lg" className="w-full rounded-2xl"
-                  onClick={() => navigate('/active-workout', { state: { dayName: nextWorkout.day } })}>
+                  onClick={() => goToActiveWorkout(navigate, nextWorkout.day)}>
                   Start workout <Play className="w-4 h-4 ml-2" />
                 </Button>
               </div>

@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
 import { profileApi, planApi } from '../../utils/api';
 import { Dumbbell, Clock, Edit, BedDouble } from 'lucide-react';
+import { goToActiveWorkout } from '../../utils/activeWorkoutNav';
 
 export function Plan() {
   const [profile, setProfile]         = useState<any>(null);
@@ -13,6 +14,7 @@ export function Plan() {
   const [loading, setLoading]         = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const startWorkout = (dayName: string) => goToActiveWorkout(navigate, dayName);
 
   // FIX #11: Same race condition as Dashboard — location.key change and
   // visibilitychange both fire on return from ActiveWorkout, causing two
@@ -163,7 +165,7 @@ export function Plan() {
                       </div>
                     </div>
                     <div className="hidden sm:block">
-                      <Button onClick={() => navigate('/active-workout', { state: { dayName } })}
+                      <Button onClick={() => startWorkout(dayName)}
                         size="lg" className="rounded-2xl bg-emerald-500 text-white hover:bg-emerald-600">
                         Start
                       </Button>
@@ -187,7 +189,7 @@ export function Plan() {
                       );
                     })}
                     <div className="block sm:hidden mt-3">
-                      <Button onClick={() => navigate('/active-workout', { state: { dayName } })}
+                      <Button onClick={() => startWorkout(dayName)}
                         size="lg" className="w-full rounded-2xl bg-emerald-500 text-white hover:bg-emerald-600">
                         Start
                       </Button>
