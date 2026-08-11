@@ -14,7 +14,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { exerciseDatabase, type Exercise } from '../../data/exercises';
 import {
   getMovementId,
-  deriveMovementId,
 } from '../../data/exercises';
 import {
   getMovementDisplayName,

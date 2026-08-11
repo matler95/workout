@@ -1,11 +1,12 @@
 ﻿export interface Exercise {
   id: string;
   name: string;
-  /** Groups exercise variants that are the same movement with different equipment.
-   *  e.g. "Barbell Bench Press" and "Dumbbell Bench Press" both get movementId "bench-press".
-   *  Computed at runtime via deriveMovementId() — not stored in each record to avoid
-   *  manual maintenance of 400+ entries. Read via getMovementId(exercise). */
-  movementId?: string;
+  /** Groups exercise variants that are the same movement with different equipment
+   *  (e.g. "Barbell Bench Press" and "Dumbbell Bench Press" both use "bench-press").
+   *  Set explicitly on every record below — no runtime derivation. If you add a
+   *  new exercise, pick an existing movementId if it's a variant of something
+   *  already here, or a new short slug if it's genuinely new. */
+  movementId: string;
   category: 'push' | 'pull' | 'legs' | 'abs' | 'full_body';
   primaryMuscles: string[];
   secondaryMuscles: string[];
@@ -21,205 +22,23 @@
   instructions: string;
 }
 
-// ─── Movement ID derivation ────────────────────────────────────────────────────
+// ─── Movement ID ────────────────────────────────────────────────────────────
+// movementId is authoritative data on each exercise record (see the interface
+// above) — this used to be derived at runtime via a string-heuristic plus a
+// hand-maintained override table. That table drifted out of sync with the
+// actual exercise ids over time (45 of 99 entries were already stale/dead
+// when this was replaced), silently breaking equipment-variant grouping with
+// no warning. Simplified to a plain field lookup on 2026-08-11.
 
-/**
- * Manual overrides for exercises where automated derivation produces wrong grouping.
- * Key: exercise.id — Value: desired movementId slug
- */
-const MOVEMENT_ID_OVERRIDES: Record<string, string> = {
-  // Bench press variants → bench-press
-  'barbellbenchpress-mediumgrip':              'bench-press',
-  'barbellguillotinebenchpress':               'bench-press',
-  'barbellinclinebenchpress-mediumgrip':        'bench-press',
-  'close-gripbarbellbenchpress':                'bench-press',
-  'wide-gripbarbellbenchpress':                 'bench-press',
-  'wide-gripdeclinebarbellbenchpress':          'bench-press',
-  'declinebarbellbenchpress':                  'bench-press',
-  'declinedumbbellbenchpress':                 'bench-press',
-  'dumbbellbenchpress':                        'bench-press',
-  'dumbbellbenchpresswithneutralgrip':         'bench-press',
-  'hammergripinclinedbbenchpress':             'bench-press',
-  'machinebenchpress':                         'bench-press',
-  'smithmachinebenchpress':                    'bench-press',
-  'smithmachineclose-gripbenchpress':           'bench-press',
-  'smithmachineinclinebenchpress':              'bench-press',
-  'onearmdumbbellbenchpress':                  'bench-press',
-  'reversetricepsbenchpress':                  'bench-press',
-  'benchpress-withbands':                      'bench-press',
-  'close-gripdumbbellpress':                    'bench-press',
-
-  // Squat variants → squat
-  'barbellsquat':                              'squat',
-  'barbellfullsquat':                          'squat',
-  'barbellsquattoabench':                      'squat',
-  'barbellsidesplitsquat':                     'squat',
-  'bodyweightsquat':                           'squat',
-  'chairsquat':                                'squat',
-  'dumbbellsquat':                             'squat',
-  'dumbbellsquattoabench':                     'squat',
-  'freehandjumpsquat':                         'squat',
-  'gobletsquat':                               'squat',
-  'hacksquat':                                 'squat',
-  'barbellhacksquat':                          'squat',
-  'narrowstancehacksquats':                    'squat',
-  'narrowstancesquats':                        'squat',
-  'smithmachinesquat':                         'squat',
-  'smithmachinepistolsquat':                   'squat',
-  'squatwithplatemovers':                      'squat',
-  'squats-withbands':                          'squat',
-  'widestancebarbellsquat':                    'squat',
-  'weightedjumpsquat':                         'squat',
-  'weightedsissysquat':                        'squat',
-  'weightedsquat':                             'squat',
-  'single-leghighboxsquat':                     'squat',
-  'speedsquats':                               'squat',
-  'boxsquatwithchains':                        'squat',
-  'zerchersquats':                             'squat',
-  'jeffersonsquats':                           'squat',
-  'lyingmachinesquat':                         'squat',
-
-  // Deadlift variants → deadlift
-  'barbelldeadlift':                           'deadlift',
-  'stiff-leggedbarbelldeadlift':                'deadlift',
-  'stiff-leggeddumbbelldeadlift':               'deadlift',
-  'romaniandeadlift':                          'deadlift',
-  'leveragedeadlift':                          'deadlift',
-  'trapbardeadlift':                           'deadlift',
-  'smithmachinestiff-leggeddeadlift':           'deadlift',
-  'cabledeadlifts':                            'deadlift',
-  'kettlebellone-leggeddeadlift':               'deadlift',
-  'one-armsidedeadlift':                        'deadlift',
-
-  // Shoulder press variants → shoulder-press
-  'barbellshoulderpress':                      'shoulder-press',
-  'dumbbellshoulderpress':                      'shoulder-press',
-  'dumbbellone-armshoulderpress':              'shoulder-press',
-  'leverageshoulderpress':                     'shoulder-press',
-  'seatedcableshoulderpress':                  'shoulder-press',
-  'cableshoulderpress':                        'shoulder-press',
-  'smithmachineoverheadshoulderpress':         'shoulder-press',
-  'alternatingcableshoulderpress':             'shoulder-press',
-  'arnolddumbbellpress':                       'shoulder-press',
-
-  // Row variants → bent-over-row
-  'bentoverbarbellrow':                        'bent-over-row',
-  'bentovertwo-dumbbellrow':                    'bent-over-row',
-  'bentovertwo-dumbbellrowwithpalmsin':         'bent-over-row',
-  'dumbbellinclinerow':                        'bent-over-row',
-  'one-armdumbbellrow':                        'bent-over-row',
-  'one-armkettlebellrow':                      'bent-over-row',
-  'two-armkettlebellrow':                      'bent-over-row',
-  'smithmachinebentoverrow':                   'bent-over-row',
-  'reversegripbent-overrows':                  'bent-over-row',
-
-  // Lunge variants → lunge
-  'barbelllunge':                              'lunge',
-  'barbellwalkinglunge':                       'lunge',
-  'dumbbelllunges':                            'lunge',
-  'dumbbellrearlunge':                          'lunge',
-  'bodyweightwalkinglunge':                    'lunge',
-  'elevatedbacklunge':                         'lunge',
-  'lungepassthrough':                          'lunge',
-  'lungesprint':                                'lunge',
-  'splitsquatwithdumbbells':                   'lunge',
-  'suspendedsplitsquat':                       'lunge',
-  'bulgariansplitsquat':                       'lunge',
-  'smithsingle-legsplitsquat':                  'lunge',
-
-  // Lat pulldown → lat-pulldown
-  'wide-griplatpulldown':                       'lat-pulldown',
-  'close-gripfrontlatpulldown':                 'lat-pulldown',
-  'fullrange-of-motionlatpulldown':              'lat-pulldown',
-  'onearmlatpulldown':                         'lat-pulldown',
-
-  // Leg curl → leg-curl
-  'seatedlegcurl':                             'leg-curl',
-  'lyinglegcurls':                             'leg-curl',
-
-  // Leg press → leg-press
-  'legpress':                                  'leg-press',
-  'narrowstancelegpress':                      'leg-press',
-  'smithmachinelegpress':                      'leg-press',
-  'calfpressonthelegpressmachine':             'leg-press',
-};
-
-/**
- * Equipment prefix/suffix words stripped when deriving movementId.
- */
-const STRIP_PREFIXES = [
-  'barbell', 'dumbbell', 'ez bar', 'ez-bar', 'ezbar',
-  'smith machine', 'smith-machine', 'cable', 'machine',
-  'kettlebell', 'resistance band', 'band', 'band assisted',
-  'leverage', 'weighted', 'bodyweight',
-  'seated', 'standing', 'lying', 'kneeling',
-  'incline', 'decline', 'flat', 'overhead',
-  'narrow stance', 'wide stance', 'wide grip', 'close grip',
-  'alternating', 'alternate', 'single leg', 'one arm', 'one-arm',
-  'two arm', 'two-arm',
-];
-
-const STRIP_SUFFIXES = [
-  'with bands', 'with chains', 'with handle', 'with straps', 'with plate movers',
-  'on bench', 'to a bench', 'to bench',
-  'narrow grip', 'wide grip', 'medium grip', 'close grip',
-  'behind the back', 'neutral grip', 'palms in',
-  'lunge style', 'squat style',
-  'clean grip',
-];
-
-/**
- * Derive a stable movement slug from an exercise record.
- * Used to group e.g. "Barbell Bench Press" and "Dumbbell Bench Press"
- * under the same movementId "bench-press".
- *
- * The MOVEMENT_ID_OVERRIDES map handles edge-cases; this function
- * handles the remaining ~70% automatically.
- */
-export function deriveMovementId(exercise: Exercise): string {
-  // 1. Check manual override first (uses exercise.id for precision)
-  if (MOVEMENT_ID_OVERRIDES[exercise.id]) {
-    return MOVEMENT_ID_OVERRIDES[exercise.id];
-  }
-
-  let n = exercise.name.toLowerCase();
-
-  // 2. Strip trailing descriptors (after a dash)
-  n = n.replace(/\s*-\s*.+$/, '');
-
-  // 3. Strip suffix phrases
-  for (const suffix of STRIP_SUFFIXES) {
-    if (n.endsWith(suffix)) {
-      n = n.slice(0, n.length - suffix.length).trim();
-    }
-  }
-
-  // 4. Strip leading equipment prefixes (longest match first)
-  const sortedPrefixes = [...STRIP_PREFIXES].sort((a, b) => b.length - a.length);
-  for (const prefix of sortedPrefixes) {
-    if (n.startsWith(prefix + ' ') || n.startsWith(prefix + '-')) {
-      n = n.slice(prefix.length).trim().replace(/^[-\s]+/, '');
-      break; // only strip one prefix
-    }
-  }
-
-  // 5. Normalize to slug: trim, lowercase, replace non-alphanum with hyphens
-  return n.trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-/**
- * Returns the movementId for an exercise.
- * Checks the optional stored movementId first, then derives it.
- */
 export function getMovementId(exercise: Exercise): string {
-  return exercise.movementId ?? deriveMovementId(exercise);
+  return exercise.movementId;
 }
 
 export const exerciseDatabase: Exercise[] = [
   {
     id: 'airbike',
+
+    movementId: 'air-bike',
     name: 'Air Bike',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -231,6 +50,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternatehammercurl',
+
+    movementId: 'hammer-curl',
     name: 'Alternate Hammer Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -242,6 +63,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternateheeltouchers',
+
+    movementId: 'heel-touchers',
     name: 'Alternate Heel Touchers',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -253,6 +76,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternateinclinedumbbellcurl',
+
+    movementId: 'incline-dumbbell-curl',
     name: 'Alternate Incline Dumbbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -264,6 +89,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternatingcableshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Alternating Cable Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -275,6 +102,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternatingdeltoidraise',
+
+    movementId: 'deltoid-raise',
     name: 'Alternating Deltoid Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -286,6 +115,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternatingkettlebellrow',
+
+    movementId: 'kettlebell-row',
     name: 'Alternating Kettlebell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -297,6 +128,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'alternatingrenegaderow',
+
+    movementId: 'renegade-row',
     name: 'Alternating Renegade Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -308,6 +141,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'anti-gravitypress',
+
+    movementId: 'anti',
     name: 'Anti-Gravity Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -319,6 +154,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'arnolddumbbellpress',
+
+    movementId: 'shoulder-press',
     name: 'Arnold Dumbbell Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -330,6 +167,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'aroundtheworlds',
+
+    movementId: 'around-the-worlds',
     name: 'Around The Worlds',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -341,6 +180,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'balllegcurl',
+
+    movementId: 'ball-leg-curl',
     name: 'Ball Leg Curl',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -352,6 +193,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bandassistedpull-up',
+
+    movementId: 'pull',
     name: 'Band Assisted Pull-Up',
     category: 'full_body',
     primaryMuscles: ["lats"],
@@ -363,6 +206,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellabrollout',
+
+    movementId: 'ab-rollout',
     name: 'Barbell Ab Rollout',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -374,6 +219,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellabrollout-onknees',
+
+    movementId: 'ab-rollout',
     name: 'Barbell Ab Rollout - On Knees',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -385,6 +232,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellbenchpress-mediumgrip',
+
+    movementId: 'bench-press',
     name: 'Barbell Bench Press - Medium Grip',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -396,6 +245,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellcurl',
+
+    movementId: 'curl',
     name: 'Barbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -407,6 +258,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellcurlslyingagainstanincline',
+
+    movementId: 'curls-lying-against-an-incline',
     name: 'Barbell Curls Lying Against An Incline',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -418,6 +271,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbelldeadlift',
+
+    movementId: 'deadlift',
     name: 'Barbell Deadlift',
     category: 'pull',
     primaryMuscles: ["lower back"],
@@ -429,6 +284,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellfullsquat',
+
+    movementId: 'squat',
     name: 'Barbell Full Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -440,6 +297,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellguillotinebenchpress',
+
+    movementId: 'bench-press',
     name: 'Barbell Guillotine Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -451,6 +310,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellhacksquat',
+
+    movementId: 'squat',
     name: 'Barbell Hack Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -462,6 +323,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellinclinebenchpress-mediumgrip',
+
+    movementId: 'incline-bench-press',
     name: 'Barbell Incline Bench Press - Medium Grip',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -473,6 +336,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellinclineshoulderraise',
+
+    movementId: 'incline-shoulder-raise',
     name: 'Barbell Incline Shoulder Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -484,6 +349,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbelllunge',
+
+    movementId: 'lunge',
     name: 'Barbell Lunge',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -495,6 +362,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellreardeltrow',
+
+    movementId: 'rear-delt-row',
     name: 'Barbell Rear Delt Row',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -506,6 +375,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellrolloutfrombench',
+
+    movementId: 'rollout-from-bench',
     name: 'Barbell Rollout from Bench',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -517,6 +388,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellseatedcalfraise',
+
+    movementId: 'seated-calf-raise',
     name: 'Barbell Seated Calf Raise',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -528,6 +401,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Barbell Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -539,6 +414,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellshrug',
+
+    movementId: 'shrug',
     name: 'Barbell Shrug',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -550,6 +427,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellshrugbehindtheback',
+
+    movementId: 'shrug',
     name: 'Barbell Shrug Behind The Back',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -561,6 +440,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellsidebend',
+
+    movementId: 'side-bend',
     name: 'Barbell Side Bend',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -572,6 +453,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellsidesplitsquat',
+
+    movementId: 'squat',
     name: 'Barbell Side Split Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -583,6 +466,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellsquat',
+
+    movementId: 'squat',
     name: 'Barbell Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -594,6 +479,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellsquattoabench',
+
+    movementId: 'squat',
     name: 'Barbell Squat To A Bench',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -605,6 +492,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellstepups',
+
+    movementId: 'step-ups',
     name: 'Barbell Step Ups',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -616,6 +505,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'barbellwalkinglunge',
+
+    movementId: 'lunge',
     name: 'Barbell Walking Lunge',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -627,6 +518,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'benchdips',
+
+    movementId: 'bench-dips',
     name: 'Bench Dips',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -638,6 +531,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'benchpress-withbands',
+
+    movementId: 'bench-press',
     name: 'Bench Press - With Bands',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -649,6 +544,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bent-armbarbellpullover',
+
+    movementId: 'bent',
     name: 'Bent-Arm Barbell Pullover',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -660,6 +557,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bent-armdumbbellpullover',
+
+    movementId: 'bent',
     name: 'Bent-Arm Dumbbell Pullover',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -671,6 +570,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bent-kneehipraise',
+
+    movementId: 'bent',
     name: 'Bent-Knee Hip Raise',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -682,6 +583,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentoverbarbellrow',
+
+    movementId: 'bent-over-barbell-row',
     name: 'Bent Over Barbell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -693,6 +596,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentoverdumbbellreardeltraisewithheadonbench',
+
+    movementId: 'bent-over-dumbbell-rear-delt-raise-with-head',
     name: 'Bent Over Dumbbell Rear Delt Raise With Head On Bench',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -704,6 +609,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentoverlow-pulleysidelateral',
+
+    movementId: 'bent-over-low',
     name: 'Bent Over Low-Pulley Side Lateral',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -715,6 +622,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentoverone-armlongbarrow',
+
+    movementId: 'bent-over-one',
     name: 'Bent Over One-Arm Long Bar Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -726,6 +635,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentovertwo-armlongbarrow',
+
+    movementId: 'bent-over-two',
     name: 'Bent Over Two-Arm Long Bar Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -737,6 +648,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentovertwo-dumbbellrow',
+
+    movementId: 'bent-over-row',
     name: 'Bent Over Two-Dumbbell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -748,6 +661,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bentovertwo-dumbbellrowwithpalmsin',
+
+    movementId: 'bent-over-row',
     name: 'Bent Over Two-Dumbbell Row With Palms In',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -759,6 +674,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'body-up',
+
+    movementId: 'body',
     name: 'Body-Up',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -770,6 +687,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bodytriceppress',
+
+    movementId: 'body-tricep-press',
     name: 'Body Tricep Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -781,6 +700,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bodyweightflyes',
+
+    movementId: 'flyes',
     name: 'Bodyweight Flyes',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -792,6 +713,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bodyweightmidrow',
+
+    movementId: 'mid-row',
     name: 'Bodyweight Mid Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -803,6 +726,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bodyweightsquat',
+
+    movementId: 'squat',
     name: 'Bodyweight Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -814,6 +739,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bodyweightwalkinglunge',
+
+    movementId: 'walking-lunge',
     name: 'Bodyweight Walking Lunge',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -825,6 +752,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'bottomsup',
+
+    movementId: 'bottoms-up',
     name: 'Bottoms Up',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -836,6 +765,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'boxsquatwithchains',
+
+    movementId: 'squat',
     name: 'Box Squat with Chains',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -847,6 +778,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'butt-ups',
+
+    movementId: 'butt',
     name: 'Butt-Ups',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -858,6 +791,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'buttliftbridge',
+
+    movementId: 'butt-lift-bridge',
     name: 'Butt Lift (Bridge)',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -869,6 +804,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'butterfly',
+
+    movementId: 'butterfly',
     name: 'Butterfly',
     category: 'pull',
     primaryMuscles: ["chest"],
@@ -880,6 +817,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablechestpress',
+
+    movementId: 'chest-press',
     name: 'Cable Chest Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -891,6 +830,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablecrossover',
+
+    movementId: 'crossover',
     name: 'Cable Crossover',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -902,6 +843,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cabledeadlifts',
+
+    movementId: 'deadlift',
     name: 'Cable Deadlifts',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -913,6 +856,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablehammercurls-ropeattachment',
+
+    movementId: 'hammer-curls',
     name: 'Cable Hammer Curls - Rope Attachment',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -924,6 +869,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablehipadduction',
+
+    movementId: 'hip-adduction',
     name: 'Cable Hip Adduction',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -935,6 +882,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableinclinepushdown',
+
+    movementId: 'incline-pushdown',
     name: 'Cable Incline Pushdown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -946,6 +895,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableinclinetricepsextension',
+
+    movementId: 'incline-triceps-extension',
     name: 'Cable Incline Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -957,6 +908,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableinternalrotation',
+
+    movementId: 'internal-rotation',
     name: 'Cable Internal Rotation',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -968,6 +921,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableironcross',
+
+    movementId: 'iron-cross',
     name: 'Cable Iron Cross',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -979,6 +934,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablejudoflip',
+
+    movementId: 'judo-flip',
     name: 'Cable Judo Flip',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -990,6 +947,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablelyingtricepsextension',
+
+    movementId: 'lying-triceps-extension',
     name: 'Cable Lying Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1001,6 +960,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableonearmtricepextension',
+
+    movementId: 'one-arm-tricep-extension',
     name: 'Cable One Arm Tricep Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1012,6 +973,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablepreachercurl',
+
+    movementId: 'preacher-curl',
     name: 'Cable Preacher Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1023,6 +986,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablereardeltfly',
+
+    movementId: 'rear-delt-fly',
     name: 'Cable Rear Delt Fly',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1034,6 +999,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableropeoverheadtricepsextension',
+
+    movementId: 'rope-overhead-triceps-extension',
     name: 'Cable Rope Overhead Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1045,6 +1012,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableroperear-deltrows',
+
+    movementId: 'rope-rear',
     name: 'Cable Rope Rear-Delt Rows',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1056,6 +1025,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cablerussiantwists',
+
+    movementId: 'russian-twists',
     name: 'Cable Russian Twists',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1067,6 +1038,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableseatedlateralraise',
+
+    movementId: 'seated-lateral-raise',
     name: 'Cable Seated Lateral Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1078,6 +1051,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Cable Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1089,6 +1064,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cableshrugs',
+
+    movementId: 'shrugs',
     name: 'Cable Shrugs',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -1100,6 +1077,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'calf-machineshouldershrug',
+
+    movementId: 'calf',
     name: 'Calf-Machine Shoulder Shrug',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -1111,6 +1090,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'calfpress',
+
+    movementId: 'calf-press',
     name: 'Calf Press',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -1122,6 +1103,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'calfpressonthelegpressmachine',
+
+    movementId: 'leg-press',
     name: 'Calf Press On The Leg Press Machine',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -1133,6 +1116,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'calfraiseonadumbbell',
+
+    movementId: 'calf-raise-on-a-dumbbell',
     name: 'Calf Raise On A Dumbbell',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -1144,6 +1129,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cardrivers',
+
+    movementId: 'car-drivers',
     name: 'Car Drivers',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1155,6 +1142,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'chairsquat',
+
+    movementId: 'squat',
     name: 'Chair Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1166,6 +1155,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'chin-up',
+
+    movementId: 'chin',
     name: 'Chin-Up',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -1177,6 +1168,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cleanandpress',
+
+    movementId: 'clean-and-press',
     name: 'Clean and Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1188,6 +1181,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'clockpush-up',
+
+    movementId: 'clock-push',
     name: 'Clock Push-Up',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1199,6 +1194,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'close-gripbarbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'Close-Grip Barbell Bench Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1210,6 +1207,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'close-gripdumbbellpress',
+
+    movementId: 'bench-press',
     name: 'Close-Grip Dumbbell Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1221,6 +1220,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'close-gripezbarcurl',
+
+    movementId: 'close',
     name: 'Close-Grip EZ Bar Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1232,6 +1233,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'close-gripfrontlatpulldown',
+
+    movementId: 'lat-pulldown',
     name: 'Close-Grip Front Lat Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -1243,6 +1246,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'close-grippush-upoffofadumbbell',
+
+    movementId: 'close',
     name: 'Close-Grip Push-Up off of a Dumbbell',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1254,6 +1259,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'close-gripstandingbarbellcurl',
+
+    movementId: 'close',
     name: 'Close-Grip Standing Barbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1265,6 +1272,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'cocoons',
+
+    movementId: 'cocoons',
     name: 'Cocoons',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1276,6 +1285,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'concentrationcurls',
+
+    movementId: 'concentration-curls',
     name: 'Concentration Curls',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1287,6 +1298,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'crossbodyhammercurl',
+
+    movementId: 'cross-body-hammer-curl',
     name: 'Cross Body Hammer Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1298,6 +1311,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'deadbug',
+
+    movementId: 'dead-bug',
     name: 'Dead Bug',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1309,6 +1324,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declinebarbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'Decline Barbell Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1320,6 +1337,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declineclose-gripbenchtoskullcrusher',
+
+    movementId: 'close',
     name: 'Decline Close-Grip Bench To Skull Crusher',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1331,6 +1350,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declinedumbbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'Decline Dumbbell Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1342,6 +1363,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declinedumbbellflyes',
+
+    movementId: 'dumbbell-flyes',
     name: 'Decline Dumbbell Flyes',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1353,6 +1376,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declinedumbbelltricepsextension',
+
+    movementId: 'dumbbell-triceps-extension',
     name: 'Decline Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1364,6 +1389,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declineezbartricepsextension',
+
+    movementId: 'ez-bar-triceps-extension',
     name: 'Decline EZ Bar Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1375,6 +1402,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declinepush-up',
+
+    movementId: 'push',
     name: 'Decline Push-Up',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1386,6 +1415,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'declinesmithpress',
+
+    movementId: 'smith-press',
     name: 'Decline Smith Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1397,6 +1428,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dipmachine',
+
+    movementId: 'dip-machine',
     name: 'Dip Machine',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1408,6 +1441,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dips-chestversion',
+
+    movementId: 'dips',
     name: 'Dips - Chest Version',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1419,6 +1454,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dips-tricepsversion',
+
+    movementId: 'dips',
     name: 'Dips - Triceps Version',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1430,6 +1467,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'donkeycalfraises',
+
+    movementId: 'donkey-calf-raises',
     name: 'Donkey Calf Raises',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -1441,6 +1480,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dragcurl',
+
+    movementId: 'drag-curl',
     name: 'Drag Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1452,6 +1493,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellalternatebicepcurl',
+
+    movementId: 'alternate-bicep-curl',
     name: 'Dumbbell Alternate Bicep Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1463,6 +1506,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'Dumbbell Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1474,6 +1519,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellbenchpresswithneutralgrip',
+
+    movementId: 'bench-press',
     name: 'Dumbbell Bench Press with Neutral Grip',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1485,6 +1532,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellbicepcurl',
+
+    movementId: 'bicep-curl',
     name: 'Dumbbell Bicep Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1496,6 +1545,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellclean',
+
+    movementId: 'clean',
     name: 'Dumbbell Clean',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -1507,6 +1558,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellflyes',
+
+    movementId: 'flyes',
     name: 'Dumbbell Flyes',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1518,6 +1571,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellinclinerow',
+
+    movementId: 'incline-row',
     name: 'Dumbbell Incline Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -1529,6 +1584,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellinclineshoulderraise',
+
+    movementId: 'incline-shoulder-raise',
     name: 'Dumbbell Incline Shoulder Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1540,6 +1597,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbelllunges',
+
+    movementId: 'lunge',
     name: 'Dumbbell Lunges',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1551,6 +1610,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbelllyingone-armrearlateralraise',
+
+    movementId: 'lying-one',
     name: 'Dumbbell Lying One-Arm Rear Lateral Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1562,6 +1623,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbelllyingpronation',
+
+    movementId: 'lying-pronation',
     name: 'Dumbbell Lying Pronation',
     category: 'pull',
     primaryMuscles: ["forearms"],
@@ -1573,6 +1636,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbelllyingrearlateralraise',
+
+    movementId: 'lying-rear-lateral-raise',
     name: 'Dumbbell Lying Rear Lateral Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1584,6 +1649,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbelllyingsupination',
+
+    movementId: 'lying-supination',
     name: 'Dumbbell Lying Supination',
     category: 'pull',
     primaryMuscles: ["forearms"],
@@ -1595,6 +1662,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellone-armshoulderpress',
+
+    movementId: 'one',
     name: 'Dumbbell One-Arm Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1606,6 +1675,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellone-armtricepsextension',
+
+    movementId: 'one',
     name: 'Dumbbell One-Arm Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1617,6 +1688,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellone-armuprightrow',
+
+    movementId: 'one',
     name: 'Dumbbell One-Arm Upright Row',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1628,6 +1701,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellproneinclinecurl',
+
+    movementId: 'prone-incline-curl',
     name: 'Dumbbell Prone Incline Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1639,6 +1714,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellraise',
+
+    movementId: 'raise',
     name: 'Dumbbell Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1650,6 +1727,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellrearlunge',
+
+    movementId: 'rear-lunge',
     name: 'Dumbbell Rear Lunge',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1661,6 +1740,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellscaption',
+
+    movementId: 'scaption',
     name: 'Dumbbell Scaption',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1672,6 +1753,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellseatedone-legcalfraise',
+
+    movementId: 'seated-one',
     name: 'Dumbbell Seated One-Leg Calf Raise',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -1683,6 +1766,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Dumbbell Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1694,6 +1779,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellshrug',
+
+    movementId: 'shrug',
     name: 'Dumbbell Shrug',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -1705,6 +1792,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellsidebend',
+
+    movementId: 'side-bend',
     name: 'Dumbbell Side Bend',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1716,6 +1805,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellsquat',
+
+    movementId: 'squat',
     name: 'Dumbbell Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1727,6 +1818,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellsquattoabench',
+
+    movementId: 'squat',
     name: 'Dumbbell Squat To A Bench',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1738,6 +1831,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbellstepups',
+
+    movementId: 'step-ups',
     name: 'Dumbbell Step Ups',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1749,6 +1844,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'dumbbelltricepextension-pronatedgrip',
+
+    movementId: 'tricep-extension',
     name: 'Dumbbell Tricep Extension -Pronated Grip',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -1760,6 +1857,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'elbowtoknee',
+
+    movementId: 'elbow-to-knee',
     name: 'Elbow to Knee',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1771,6 +1870,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'elevatedbacklunge',
+
+    movementId: 'lunge',
     name: 'Elevated Back Lunge',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1782,6 +1883,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'elevatedcablerows',
+
+    movementId: 'elevated-cable-rows',
     name: 'Elevated Cable Rows',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -1793,6 +1896,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'externalrotation',
+
+    movementId: 'external-rotation',
     name: 'External Rotation',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1804,6 +1909,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'externalrotationwithcable',
+
+    movementId: 'external-rotation-with-cable',
     name: 'External Rotation with Cable',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1815,6 +1922,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'facepull',
+
+    movementId: 'face-pull',
     name: 'Face Pull',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -1826,6 +1935,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'fingercurls',
+
+    movementId: 'finger-curls',
     name: 'Finger Curls',
     category: 'pull',
     primaryMuscles: ["forearms"],
@@ -1837,6 +1948,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'flatbenchcableflyes',
+
+    movementId: 'bench-cable-flyes',
     name: 'Flat Bench Cable Flyes',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -1848,6 +1961,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'flatbenchlegpull-in',
+
+    movementId: 'bench-leg-pull',
     name: 'Flat Bench Leg Pull-In',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1859,6 +1974,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'flatbenchlyinglegraise',
+
+    movementId: 'bench-lying-leg-raise',
     name: 'Flat Bench Lying Leg Raise',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -1870,6 +1987,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'flexorinclinedumbbellcurls',
+
+    movementId: 'flexor-incline-dumbbell-curls',
     name: 'Flexor Incline Dumbbell Curls',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -1881,6 +2000,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'flutterkicks',
+
+    movementId: 'flutter-kicks',
     name: 'Flutter Kicks',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -1892,6 +2013,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'freehandjumpsquat',
+
+    movementId: 'freehand-jump-squat',
     name: 'Freehand Jump Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1903,6 +2026,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontbarbellsquat',
+
+    movementId: 'front-barbell-squat',
     name: 'Front Barbell Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1914,6 +2039,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontbarbellsquattoabench',
+
+    movementId: 'front-barbell-squat',
     name: 'Front Barbell Squat To A Bench',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1925,6 +2052,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontcableraise',
+
+    movementId: 'front-cable-raise',
     name: 'Front Cable Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1936,6 +2065,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontdumbbellraise',
+
+    movementId: 'front-dumbbell-raise',
     name: 'Front Dumbbell Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1947,6 +2078,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontinclinedumbbellraise',
+
+    movementId: 'front-incline-dumbbell-raise',
     name: 'Front Incline Dumbbell Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -1958,6 +2091,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontraiseandpullover',
+
+    movementId: 'front-raise-and-pullover',
     name: 'Front Raise And Pullover',
     category: 'pull',
     primaryMuscles: ["chest"],
@@ -1969,6 +2104,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontsquatcleangrip',
+
+    movementId: 'front-squat-clean-grip',
     name: 'Front Squat (Clean Grip)',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1980,6 +2117,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'frontsquatswithtwokettlebells',
+
+    movementId: 'front-squats-with-two-kettlebells',
     name: 'Front Squats With Two Kettlebells',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -1991,6 +2130,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'fronttwo-dumbbellraise',
+
+    movementId: 'front-two',
     name: 'Front Two-Dumbbell Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2002,6 +2143,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'fullrange-of-motionlatpulldown',
+
+    movementId: 'lat-pulldown',
     name: 'Full Range-Of-Motion Lat Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -2013,6 +2156,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'glutekickback',
+
+    movementId: 'glute-kickback',
     name: 'Glute Kickback',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -2024,6 +2169,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'gobletsquat',
+
+    movementId: 'squat',
     name: 'Goblet Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2035,6 +2182,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'hacksquat',
+
+    movementId: 'squat',
     name: 'Hack Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2046,6 +2195,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'hammercurls',
+
+    movementId: 'hammer-curls',
     name: 'Hammer Curls',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2057,6 +2208,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'hammergripinclinedbbenchpress',
+
+    movementId: 'bench-press',
     name: 'Hammer Grip Incline DB Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2068,6 +2221,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'handstandpush-ups',
+
+    movementId: 'handstand-push',
     name: 'Handstand Push-Ups',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2079,6 +2234,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'hanginglegraise',
+
+    movementId: 'hanging-leg-raise',
     name: 'Hanging Leg Raise',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -2090,6 +2247,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'hangingpike',
+
+    movementId: 'hanging-pike',
     name: 'Hanging Pike',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -2101,6 +2260,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'highcablecurls',
+
+    movementId: 'high-cable-curls',
     name: 'High Cable Curls',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2112,6 +2273,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'hyperextensionswithnohyperextensionbench',
+
+    movementId: 'hyperextensions-with-no-hyperextensi',
     name: 'Hyperextensions With No Hyperextension Bench',
     category: 'pull',
     primaryMuscles: ["lower back"],
@@ -2123,6 +2286,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinebarbelltricepsextension',
+
+    movementId: 'barbell-triceps-extension',
     name: 'Incline Barbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2134,6 +2299,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinebenchpull',
+
+    movementId: 'bench-pull',
     name: 'Incline Bench Pull',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2145,6 +2312,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinecablechestpress',
+
+    movementId: 'cable-chest-press',
     name: 'Incline Cable Chest Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2156,6 +2325,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinecableflye',
+
+    movementId: 'cable-flye',
     name: 'Incline Cable Flye',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2167,6 +2338,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinedumbbellbenchwithpalmsfacingin',
+
+    movementId: 'dumbbell-bench-with-palms-facing-in',
     name: 'Incline Dumbbell Bench With Palms Facing In',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2178,6 +2351,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinedumbbellcurl',
+
+    movementId: 'dumbbell-curl',
     name: 'Incline Dumbbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2189,6 +2364,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinedumbbellflyes',
+
+    movementId: 'dumbbell-flyes',
     name: 'Incline Dumbbell Flyes',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2200,6 +2377,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinedumbbellflyes-withatwist',
+
+    movementId: 'dumbbell-flyes',
     name: 'Incline Dumbbell Flyes - With A Twist',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2211,6 +2390,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinedumbbellpress',
+
+    movementId: 'dumbbell-press',
     name: 'Incline Dumbbell Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2222,6 +2403,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinehammercurls',
+
+    movementId: 'hammer-curls',
     name: 'Incline Hammer Curls',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2233,6 +2416,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclineinnerbicepscurl',
+
+    movementId: 'inner-biceps-curl',
     name: 'Incline Inner Biceps Curl',
     category: 'full_body',
     primaryMuscles: ["biceps"],
@@ -2244,6 +2429,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinepush-up',
+
+    movementId: 'push',
     name: 'Incline Push-Up',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2255,6 +2442,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinepush-upclose-grip',
+
+    movementId: 'push',
     name: 'Incline Push-Up Close-Grip',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2266,6 +2455,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinepush-upmedium',
+
+    movementId: 'push',
     name: 'Incline Push-Up Medium',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2277,6 +2468,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinepush-upreversegrip',
+
+    movementId: 'push',
     name: 'Incline Push-Up Reverse Grip',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2288,6 +2481,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'inclinepush-upwide',
+
+    movementId: 'push',
     name: 'Incline Push-Up Wide',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2299,6 +2494,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'invertedrow',
+
+    movementId: 'inverted-row',
     name: 'Inverted Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2310,6 +2507,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'invertedrowwithstraps',
+
+    movementId: 'inverted-row',
     name: 'Inverted Row with Straps',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2321,6 +2520,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'ironcross',
+
+    movementId: 'iron-cross',
     name: 'Iron Cross',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2332,6 +2533,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'isometricwipers',
+
+    movementId: 'isometric-wipers',
     name: 'Isometric Wipers',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2343,6 +2546,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'jeffersonsquats',
+
+    movementId: 'squat',
     name: 'Jefferson Squats',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2354,6 +2559,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kettlebellone-leggeddeadlift',
+
+    movementId: 'deadlift',
     name: 'Kettlebell One-Legged Deadlift',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -2365,6 +2572,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kettlebellpistolsquat',
+
+    movementId: 'pistol-squat',
     name: 'Kettlebell Pistol Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2376,6 +2585,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kettlebellturkishget-uplungestyle',
+
+    movementId: 'turkish-get',
     name: 'Kettlebell Turkish Get-Up (Lunge style)',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2387,6 +2598,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kettlebellturkishget-upsquatstyle',
+
+    movementId: 'turkish-get',
     name: 'Kettlebell Turkish Get-Up (Squat style)',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2398,6 +2611,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kneelingcabletricepsextension',
+
+    movementId: 'cable-triceps-extension',
     name: 'Kneeling Cable Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2409,6 +2624,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kneelinghighpulleyrow',
+
+    movementId: 'high-pulley-row',
     name: 'Kneeling High Pulley Row',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -2420,6 +2637,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'kneelingsingle-armhighpulleyrow',
+
+    movementId: 'single',
     name: 'Kneeling Single-Arm High Pulley Row',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -2431,6 +2650,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'landmine180s',
+
+    movementId: 'landmine-180-s',
     name: 'Landmine 180\'s',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -2442,6 +2663,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'landminelinearjammer',
+
+    movementId: 'landmine-linear-jammer',
     name: 'Landmine Linear Jammer',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2453,6 +2676,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'legextensions',
+
+    movementId: 'leg-extensions',
     name: 'Leg Extensions',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2464,6 +2689,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leglift',
+
+    movementId: 'leg-lift',
     name: 'Leg Lift',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -2475,6 +2702,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'legpress',
+
+    movementId: 'leg-press',
     name: 'Leg Press',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2486,6 +2715,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'legpull-in',
+
+    movementId: 'leg-pull',
     name: 'Leg Pull-In',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -2497,6 +2728,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leveragechestpress',
+
+    movementId: 'chest-press',
     name: 'Leverage Chest Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2508,6 +2741,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leveragedeadlift',
+
+    movementId: 'deadlift',
     name: 'Leverage Deadlift',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2519,6 +2754,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leveragedeclinechestpress',
+
+    movementId: 'decline-chest-press',
     name: 'Leverage Decline Chest Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2530,6 +2767,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leveragehighrow',
+
+    movementId: 'high-row',
     name: 'Leverage High Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2541,6 +2780,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leverageinclinechestpress',
+
+    movementId: 'incline-chest-press',
     name: 'Leverage Incline Chest Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2552,6 +2793,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leverageisorow',
+
+    movementId: 'iso-row',
     name: 'Leverage Iso Row',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -2563,6 +2806,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leverageshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Leverage Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2574,6 +2819,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'leverageshrug',
+
+    movementId: 'shrug',
     name: 'Leverage Shrug',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -2585,6 +2832,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lowcablecrossover',
+
+    movementId: 'low-cable-crossover',
     name: 'Low Cable Crossover',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2596,6 +2845,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lowcabletricepsextension',
+
+    movementId: 'low-cable-triceps-extension',
     name: 'Low Cable Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2607,6 +2858,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lowpulleyrowtoneck',
+
+    movementId: 'low-pulley-row-to-neck',
     name: 'Low Pulley Row To Neck',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -2618,6 +2871,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lungepassthrough',
+
+    movementId: 'lunge',
     name: 'Lunge Pass Through',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -2629,6 +2884,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lungesprint',
+
+    movementId: 'lunge-sprint',
     name: 'Lunge Sprint',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2640,6 +2897,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingcablecurl',
+
+    movementId: 'cable-curl',
     name: 'Lying Cable Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2651,6 +2910,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingcamberedbarbellrow',
+
+    movementId: 'cambered-barbell-row',
     name: 'Lying Cambered Barbell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2662,6 +2923,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingclose-gripbarcurlonhighpulley',
+
+    movementId: 'close',
     name: 'Lying Close-Grip Bar Curl On High Pulley',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2673,6 +2936,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingclose-gripbarbelltricepsextensionbehindthehead',
+
+    movementId: 'close',
     name: 'Lying Close-Grip Barbell Triceps Extension Behind The Head',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2684,6 +2949,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingdumbbelltricepextension',
+
+    movementId: 'dumbbell-tricep-extension',
     name: 'Lying Dumbbell Tricep Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2695,6 +2962,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyinghighbenchbarbellcurl',
+
+    movementId: 'high-bench-barbell-curl',
     name: 'Lying High Bench Barbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2706,6 +2975,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyinglegcurls',
+
+    movementId: 'leg-curls',
     name: 'Lying Leg Curls',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -2717,6 +2988,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingmachinesquat',
+
+    movementId: 'squat',
     name: 'Lying Machine Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2728,6 +3001,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingone-armlateralraise',
+
+    movementId: 'one',
     name: 'Lying One-Arm Lateral Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -2739,6 +3014,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingreardeltraise',
+
+    movementId: 'rear-delt-raise',
     name: 'Lying Rear Delt Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -2750,6 +3027,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingsupinedumbbellcurl',
+
+    movementId: 'supine-dumbbell-curl',
     name: 'Lying Supine Dumbbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2761,6 +3040,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'lyingt-barrow',
+
+    movementId: 't',
     name: 'Lying T-Bar Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2772,6 +3053,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'machinebenchpress',
+
+    movementId: 'bench-press',
     name: 'Machine Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2783,6 +3066,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'machinebicepcurl',
+
+    movementId: 'bicep-curl',
     name: 'Machine Bicep Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2794,6 +3079,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'machinepreachercurls',
+
+    movementId: 'preacher-curls',
     name: 'Machine Preacher Curls',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -2805,6 +3092,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'machineshouldermilitarypress',
+
+    movementId: 'shoulder-military-press',
     name: 'Machine Shoulder (Military) Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2816,6 +3105,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'machinetricepsextension',
+
+    movementId: 'triceps-extension',
     name: 'Machine Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -2827,6 +3118,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'middlebackshrug',
+
+    movementId: 'middle-back-shrug',
     name: 'Middle Back Shrug',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2838,6 +3131,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'narrowstancehacksquats',
+
+    movementId: 'squat',
     name: 'Narrow Stance Hack Squats',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2849,6 +3144,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'narrowstancelegpress',
+
+    movementId: 'leg-press',
     name: 'Narrow Stance Leg Press',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2860,6 +3157,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'narrowstancesquats',
+
+    movementId: 'squat',
     name: 'Narrow Stance Squats',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2871,6 +3170,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'naturalglutehamraise',
+
+    movementId: 'natural-glute-ham-raise',
     name: 'Natural Glute Ham Raise',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -2882,6 +3183,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armdumbbellrow',
+
+    movementId: 'bent-over-row',
     name: 'One-Arm Dumbbell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2893,6 +3196,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armflatbenchdumbbellflye',
+
+    movementId: 'one',
     name: 'One-Arm Flat Bench Dumbbell Flye',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -2904,6 +3209,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armhigh-pulleycablesidebends',
+
+    movementId: 'one',
     name: 'One-Arm High-Pulley Cable Side Bends',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -2915,6 +3222,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-arminclinelateralraise',
+
+    movementId: 'one',
     name: 'One-Arm Incline Lateral Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2926,6 +3235,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armkettlebellmilitarypresstotheside',
+
+    movementId: 'one',
     name: 'One-Arm Kettlebell Military Press To The Side',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2937,6 +3248,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armkettlebellrow',
+
+    movementId: 'bent-over-row',
     name: 'One-Arm Kettlebell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2948,6 +3261,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armlongbarrow',
+
+    movementId: 'one',
     name: 'One-Arm Long Bar Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -2959,6 +3274,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armoverheadkettlebellsquats',
+
+    movementId: 'one',
     name: 'One-Arm Overhead Kettlebell Squats',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2970,6 +3287,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armsidedeadlift',
+
+    movementId: 'deadlift',
     name: 'One-Arm Side Deadlift',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -2981,6 +3300,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-armsidelaterals',
+
+    movementId: 'one',
     name: 'One-Arm Side Laterals',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -2992,6 +3313,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'one-leggedcablekickback',
+
+    movementId: 'one',
     name: 'One-Legged Cable Kickback',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -3003,6 +3326,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmchin-up',
+
+    movementId: 'chin',
     name: 'One Arm Chin-Up',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -3014,6 +3339,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmdumbbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'One Arm Dumbbell Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3025,6 +3352,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmdumbbellpreachercurl',
+
+    movementId: 'dumbbell-preacher-curl',
     name: 'One Arm Dumbbell Preacher Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3036,6 +3365,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmfloorpress',
+
+    movementId: 'floor-press',
     name: 'One Arm Floor Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3047,6 +3378,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmlatpulldown',
+
+    movementId: 'lat-pulldown',
     name: 'One Arm Lat Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -3058,6 +3391,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmpronateddumbbelltricepsextension',
+
+    movementId: 'pronated-dumbbell-triceps-extension',
     name: 'One Arm Pronated Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3069,6 +3404,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onearmsupinateddumbbelltricepsextension',
+
+    movementId: 'supinated-dumbbell-triceps-extension',
     name: 'One Arm Supinated Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3080,6 +3417,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'onelegbarbellsquat',
+
+    movementId: 'one-leg-barbell-squat',
     name: 'One Leg Barbell Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3091,6 +3430,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'overheadcablecurl',
+
+    movementId: 'cable-curl',
     name: 'Overhead Cable Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3102,6 +3443,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pallofpress',
+
+    movementId: 'pallof-press',
     name: 'Pallof Press',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3113,6 +3456,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pallofpresswithrotation',
+
+    movementId: 'pallof-press-with-rotation',
     name: 'Pallof Press With Rotation',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3124,6 +3469,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'parallelbardip',
+
+    movementId: 'parallel-bar-dip',
     name: 'Parallel Bar Dip',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3135,6 +3482,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'plank',
+
+    movementId: 'plank',
     name: 'Plank',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3146,6 +3495,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pliedumbbellsquat',
+
+    movementId: 'plie-dumbbell-squat',
     name: 'Plie Dumbbell Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3157,6 +3508,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'powerclean',
+
+    movementId: 'power-clean',
     name: 'Power Clean',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3168,6 +3521,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'powerpartials',
+
+    movementId: 'power-partials',
     name: 'Power Partials',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3179,6 +3534,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'preachercurl',
+
+    movementId: 'preacher-curl',
     name: 'Preacher Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3190,6 +3547,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'preacherhammerdumbbellcurl',
+
+    movementId: 'preacher-hammer-dumbbell-curl',
     name: 'Preacher Hammer Dumbbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3201,6 +3560,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pullthrough',
+
+    movementId: 'pull-through',
     name: 'Pull Through',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -3212,6 +3573,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pullups',
+
+    movementId: 'pullups',
     name: 'Pullups',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -3223,6 +3586,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'push-upwide',
+
+    movementId: 'push',
     name: 'Push-Up Wide',
     category: 'full_body',
     primaryMuscles: ["chest"],
@@ -3234,6 +3599,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'push-ups-closetricepsposition',
+
+    movementId: 'push',
     name: 'Push-Ups - Close Triceps Position',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3245,6 +3612,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'push-upswithfeetelevated',
+
+    movementId: 'push',
     name: 'Push-Ups With Feet Elevated',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3256,6 +3625,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'push-upswithfeetonanexerciseball',
+
+    movementId: 'push',
     name: 'Push-Ups With Feet On An Exercise Ball',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3267,6 +3638,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pushuptosideplank',
+
+    movementId: 'push-up-to-side-plank',
     name: 'Push Up to Side Plank',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3278,6 +3651,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pushups',
+
+    movementId: 'pushups',
     name: 'Pushups',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3289,6 +3664,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'pushupscloseandwidehandpositions',
+
+    movementId: 'pushups-close-and-wide-hand-positions',
     name: 'Pushups (Close and Wide Hand Positions)',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3300,6 +3677,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversebarbellcurl',
+
+    movementId: 'reverse-barbell-curl',
     name: 'Reverse Barbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3311,6 +3690,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversecablecurl',
+
+    movementId: 'reverse-cable-curl',
     name: 'Reverse Cable Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3322,6 +3703,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reverseflyes',
+
+    movementId: 'reverse-flyes',
     name: 'Reverse Flyes',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -3333,6 +3716,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reverseflyeswithexternalrotation',
+
+    movementId: 'reverse-flyes-with-external-rotation',
     name: 'Reverse Flyes With External Rotation',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -3344,6 +3729,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversegripbent-overrows',
+
+    movementId: 'bent-over-row',
     name: 'Reverse Grip Bent-Over Rows',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -3355,6 +3742,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversegriptricepspushdown',
+
+    movementId: 'reverse-grip-triceps-pushdown',
     name: 'Reverse Grip Triceps Pushdown',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3366,6 +3755,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversehyperextension',
+
+    movementId: 'reverse-hyperextension',
     name: 'Reverse Hyperextension',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3377,6 +3768,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversemachineflyes',
+
+    movementId: 'reverse-machine-flyes',
     name: 'Reverse Machine Flyes',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -3388,6 +3781,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'reversetricepsbenchpress',
+
+    movementId: 'bench-press',
     name: 'Reverse Triceps Bench Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3399,6 +3794,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'ringdips',
+
+    movementId: 'ring-dips',
     name: 'Ring Dips',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3410,6 +3807,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'rockingstandingcalfraise',
+
+    movementId: 'rocking-standing-calf-raise',
     name: 'Rocking Standing Calf Raise',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -3421,6 +3820,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'rockypull-upspulldowns',
+
+    movementId: 'rocky-pull',
     name: 'Rocky Pull-Ups/Pulldowns',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -3432,6 +3833,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'romaniandeadlift',
+
+    movementId: 'deadlift',
     name: 'Romanian Deadlift',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3443,6 +3846,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'ropestraight-armpulldown',
+
+    movementId: 'rope-straight',
     name: 'Rope Straight-Arm Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -3454,6 +3859,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'russiantwist',
+
+    movementId: 'russian-twist',
     name: 'Russian Twist',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3465,6 +3872,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'scapularpull-up',
+
+    movementId: 'scapular-pull',
     name: 'Scapular Pull-Up',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -3476,6 +3885,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedbarbellmilitarypress',
+
+    movementId: 'barbell-military-press',
     name: 'Seated Barbell Military Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3487,6 +3898,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedbarbelltwist',
+
+    movementId: 'barbell-twist',
     name: 'Seated Barbell Twist',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3498,6 +3911,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedbent-overone-armdumbbelltricepsextension',
+
+    movementId: 'bent',
     name: 'Seated Bent-Over One-Arm Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3509,6 +3924,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedbent-overreardeltraise',
+
+    movementId: 'bent',
     name: 'Seated Bent-Over Rear Delt Raise',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -3520,6 +3937,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedbent-overtwo-armdumbbelltricepsextension',
+
+    movementId: 'bent',
     name: 'Seated Bent-Over Two-Arm Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3531,6 +3950,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedcablerows',
+
+    movementId: 'cable-rows',
     name: 'Seated Cable Rows',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -3542,6 +3963,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedcableshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Seated Cable Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3553,6 +3976,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedcalfraise',
+
+    movementId: 'calf-raise',
     name: 'Seated Calf Raise',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -3564,6 +3989,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedclose-gripconcentrationbarbellcurl',
+
+    movementId: 'close',
     name: 'Seated Close-Grip Concentration Barbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3575,6 +4002,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seateddumbbellcurl',
+
+    movementId: 'dumbbell-curl',
     name: 'Seated Dumbbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3586,6 +4015,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seateddumbbellinnerbicepscurl',
+
+    movementId: 'dumbbell-inner-biceps-curl',
     name: 'Seated Dumbbell Inner Biceps Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -3597,6 +4028,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seateddumbbellpress',
+
+    movementId: 'dumbbell-press',
     name: 'Seated Dumbbell Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3608,6 +4041,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedflatbenchlegpull-in',
+
+    movementId: 'flat-bench-leg-pull',
     name: 'Seated Flat Bench Leg Pull-In',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3619,6 +4054,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedlegcurl',
+
+    movementId: 'leg-curl',
     name: 'Seated Leg Curl',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3630,6 +4067,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedlegtucks',
+
+    movementId: 'leg-tucks',
     name: 'Seated Leg Tucks',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3641,6 +4080,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedone-armcablepulleyrows',
+
+    movementId: 'one',
     name: 'Seated One-arm Cable Pulley Rows',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -3652,6 +4093,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedsidelateralraise',
+
+    movementId: 'side-lateral-raise',
     name: 'Seated Side Lateral Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3663,6 +4106,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'seatedtricepspress',
+
+    movementId: 'triceps-press',
     name: 'Seated Triceps Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3674,6 +4119,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'see-sawpressalternatingsidepress',
+
+    movementId: 'see',
     name: 'See-Saw Press (Alternating Side Press)',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3685,6 +4132,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'shotgunrow',
+
+    movementId: 'shotgun-row',
     name: 'Shotgun Row',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -3696,6 +4145,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'sidebridge',
+
+    movementId: 'side-bridge',
     name: 'Side Bridge',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3707,6 +4158,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'sidejackknife',
+
+    movementId: 'side-jackknife',
     name: 'Side Jackknife',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -3718,6 +4171,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'sidelateralraise',
+
+    movementId: 'side-lateral-raise',
     name: 'Side Lateral Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3729,6 +4184,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'sidelateralstofrontraise',
+
+    movementId: 'side-laterals-to-front-raise',
     name: 'Side Laterals to Front Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3740,6 +4197,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'single-armcablecrossover',
+
+    movementId: 'single',
     name: 'Single-Arm Cable Crossover',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3751,6 +4210,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'single-armlinearjammer',
+
+    movementId: 'single',
     name: 'Single-Arm Linear Jammer',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3762,6 +4223,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'single-armpush-up',
+
+    movementId: 'single',
     name: 'Single-Arm Push-Up',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3773,6 +4236,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'single-leghighboxsquat',
+
+    movementId: 'squat',
     name: 'Single-Leg High Box Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3784,6 +4249,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'single-leglegextension',
+
+    movementId: 'single',
     name: 'Single-Leg Leg Extension',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3795,6 +4262,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'singledumbbellraise',
+
+    movementId: 'single-dumbbell-raise',
     name: 'Single Dumbbell Raise',
     category: 'full_body',
     primaryMuscles: ["shoulders"],
@@ -3806,6 +4275,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'singlelegglutebridge',
+
+    movementId: 'glute-bridge',
     name: 'Single Leg Glute Bridge',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -3817,6 +4288,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'sledreverseflye',
+
+    movementId: 'sled-reverse-flye',
     name: 'Sled Reverse Flye',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -3828,6 +4301,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'sledrow',
+
+    movementId: 'sled-row',
     name: 'Sled Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -3839,6 +4314,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinebenchpress',
+
+    movementId: 'bench-press',
     name: 'Smith Machine Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3850,6 +4327,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinebentoverrow',
+
+    movementId: 'bent-over-row',
     name: 'Smith Machine Bent Over Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -3861,6 +4340,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachineclose-gripbenchpress',
+
+    movementId: 'bench-press',
     name: 'Smith Machine Close-Grip Bench Press',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -3872,6 +4353,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinedeclinepress',
+
+    movementId: 'decline-press',
     name: 'Smith Machine Decline Press',
     category: 'full_body',
     primaryMuscles: ["chest"],
@@ -3883,6 +4366,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinehangpowerclean',
+
+    movementId: 'hang-power-clean',
     name: 'Smith Machine Hang Power Clean',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3894,6 +4379,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachineinclinebenchpress',
+
+    movementId: 'incline-bench-press',
     name: 'Smith Machine Incline Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -3905,6 +4392,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinelegpress',
+
+    movementId: 'leg-press',
     name: 'Smith Machine Leg Press',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3916,6 +4405,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachineoverheadshoulderpress',
+
+    movementId: 'shoulder-press',
     name: 'Smith Machine Overhead Shoulder Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -3927,6 +4418,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinepistolsquat',
+
+    movementId: 'pistol-squat',
     name: 'Smith Machine Pistol Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3938,6 +4431,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinesquat',
+
+    movementId: 'squat',
     name: 'Smith Machine Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3949,6 +4444,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithmachinestiff-leggeddeadlift',
+
+    movementId: 'deadlift',
     name: 'Smith Machine Stiff-Legged Deadlift',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3960,6 +4457,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'smithsingle-legsplitsquat',
+
+    movementId: 'lunge',
     name: 'Smith Single-Leg Split Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3971,6 +4470,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'snatchpull',
+
+    movementId: 'snatch-pull',
     name: 'Snatch Pull',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -3982,6 +4483,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'speedsquats',
+
+    movementId: 'squat',
     name: 'Speed Squats',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -3993,6 +4496,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'spellcaster',
+
+    movementId: 'spell-caster',
     name: 'Spell Caster',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -4004,6 +4509,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'spidercrawl',
+
+    movementId: 'spider-crawl',
     name: 'Spider Crawl',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -4015,6 +4522,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'splitsquatwithdumbbells',
+
+    movementId: 'lunge',
     name: 'Split Squat with Dumbbells',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4026,6 +4535,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'squatjerk',
+
+    movementId: 'squat-jerk',
     name: 'Squat Jerk',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4037,6 +4548,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'squatwithplatemovers',
+
+    movementId: 'squat',
     name: 'Squat with Plate Movers',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4048,6 +4561,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'squats-withbands',
+
+    movementId: 'squat',
     name: 'Squats - With Bands',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4059,6 +4574,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingalternatingdumbbellpress',
+
+    movementId: 'alternating-dumbbell-press',
     name: 'Standing Alternating Dumbbell Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4070,6 +4587,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingbarbellcalfraise',
+
+    movementId: 'barbell-calf-raise',
     name: 'Standing Barbell Calf Raise',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -4081,6 +4600,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingbent-overone-armdumbbelltricepsextension',
+
+    movementId: 'bent',
     name: 'Standing Bent-Over One-Arm Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4092,6 +4613,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingbent-overtwo-armdumbbelltricepsextension',
+
+    movementId: 'bent',
     name: 'Standing Bent-Over Two-Arm Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4103,6 +4626,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingbicepscablecurl',
+
+    movementId: 'biceps-cable-curl',
     name: 'Standing Biceps Cable Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4114,6 +4639,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingcablechestpress',
+
+    movementId: 'cable-chest-press',
     name: 'Standing Cable Chest Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -4125,6 +4652,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingcablelift',
+
+    movementId: 'cable-lift',
     name: 'Standing Cable Lift',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -4136,6 +4665,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingcablewoodchop',
+
+    movementId: 'cable-wood-chop',
     name: 'Standing Cable Wood Chop',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -4147,6 +4678,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingcalfraises',
+
+    movementId: 'calf-raises',
     name: 'Standing Calf Raises',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -4158,6 +4691,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingconcentrationcurl',
+
+    movementId: 'concentration-curl',
     name: 'Standing Concentration Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4169,6 +4704,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingdumbbellcalfraise',
+
+    movementId: 'dumbbell-calf-raise',
     name: 'Standing Dumbbell Calf Raise',
     category: 'legs',
     primaryMuscles: ["calves"],
@@ -4180,6 +4717,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingdumbbellpress',
+
+    movementId: 'dumbbell-press',
     name: 'Standing Dumbbell Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4191,6 +4730,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingdumbbellreversecurl',
+
+    movementId: 'dumbbell-reverse-curl',
     name: 'Standing Dumbbell Reverse Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4202,6 +4743,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingdumbbellstraight-armfrontdeltraiseabovehead',
+
+    movementId: 'dumbbell-straight',
     name: 'Standing Dumbbell Straight-Arm Front Delt Raise Above Head',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4213,6 +4756,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingdumbbelltricepsextension',
+
+    movementId: 'dumbbell-triceps-extension',
     name: 'Standing Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4224,6 +4769,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingdumbbelluprightrow',
+
+    movementId: 'dumbbell-upright-row',
     name: 'Standing Dumbbell Upright Row',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -4235,6 +4782,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingfrontbarbellraiseoverhead',
+
+    movementId: 'front-barbell-raise-over-head',
     name: 'Standing Front Barbell Raise Over Head',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4246,6 +4795,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standinginner-bicepscurl',
+
+    movementId: 'inner',
     name: 'Standing Inner-Biceps Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4257,6 +4808,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standinglegcurl',
+
+    movementId: 'leg-curl',
     name: 'Standing Leg Curl',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -4268,6 +4821,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standinglow-pulleydeltoidraise',
+
+    movementId: 'low',
     name: 'Standing Low-Pulley Deltoid Raise',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4279,6 +4834,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standinglow-pulleyone-armtricepsextension',
+
+    movementId: 'low',
     name: 'Standing Low-Pulley One-Arm Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4290,6 +4847,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingmilitarypress',
+
+    movementId: 'military-press',
     name: 'Standing Military Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4301,6 +4860,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingone-armcablecurl',
+
+    movementId: 'one',
     name: 'Standing One-Arm Cable Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4312,6 +4873,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingone-armdumbbellcurloverinclinebench',
+
+    movementId: 'one',
     name: 'Standing One-Arm Dumbbell Curl Over Incline Bench',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4323,6 +4886,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingone-armdumbbelltricepsextension',
+
+    movementId: 'one',
     name: 'Standing One-Arm Dumbbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4334,6 +4899,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingoverheadbarbelltricepsextension',
+
+    movementId: 'overhead-barbell-triceps-extension',
     name: 'Standing Overhead Barbell Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4345,6 +4912,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingpalm-inone-armdumbbellpress',
+
+    movementId: 'palm',
     name: 'Standing Palm-In One-Arm Dumbbell Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4356,6 +4925,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingpalms-indumbbellpress',
+
+    movementId: 'palms',
     name: 'Standing Palms-In Dumbbell Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4367,6 +4938,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'standingtoweltricepsextension',
+
+    movementId: 'towel-triceps-extension',
     name: 'Standing Towel Triceps Extension',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4378,6 +4951,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'step-upwithkneeraise',
+
+    movementId: 'step',
     name: 'Step-up with Knee Raise',
     category: 'legs',
     primaryMuscles: ["glutes"],
@@ -4389,6 +4964,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'stiff-leggedbarbelldeadlift',
+
+    movementId: 'deadlift',
     name: 'Stiff-Legged Barbell Deadlift',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -4400,6 +4977,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'stiff-leggeddumbbelldeadlift',
+
+    movementId: 'deadlift',
     name: 'Stiff-Legged Dumbbell Deadlift',
     category: 'legs',
     primaryMuscles: ["hamstrings"],
@@ -4411,6 +4990,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'straight-armdumbbellpullover',
+
+    movementId: 'straight',
     name: 'Straight-Arm Dumbbell Pullover',
     category: 'pull',
     primaryMuscles: ["chest"],
@@ -4422,6 +5003,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'straight-armpulldown',
+
+    movementId: 'straight',
     name: 'Straight-Arm Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -4433,6 +5016,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'straightbarbenchmidrows',
+
+    movementId: 'straight-bar-bench-mid-rows',
     name: 'Straight Bar Bench Mid Rows',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -4444,6 +5029,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'straightraisesoninclinebench',
+
+    movementId: 'straight-raises-on-incline-bench',
     name: 'Straight Raises on Incline Bench',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4455,6 +5042,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'suspendedpush-up',
+
+    movementId: 'suspended-push',
     name: 'Suspended Push-Up',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -4466,6 +5055,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'suspendedrow',
+
+    movementId: 'suspended-row',
     name: 'Suspended Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -4477,6 +5068,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'suspendedsplitsquat',
+
+    movementId: 'suspended-split-squat',
     name: 'Suspended Split Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4488,6 +5081,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 't-barrowwithhandle',
+
+    movementId: 't',
     name: 'T-Bar Row with Handle',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -4499,6 +5094,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'thighabductor',
+
+    movementId: 'thigh-abductor',
     name: 'Thigh Abductor',
     category: 'legs',
     primaryMuscles: ["abductors"],
@@ -4510,6 +5107,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'thighadductor',
+
+    movementId: 'thigh-adductor',
     name: 'Thigh Adductor',
     category: 'legs',
     primaryMuscles: ["adductors"],
@@ -4521,6 +5120,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'trapbardeadlift',
+
+    movementId: 'deadlift',
     name: 'Trap Bar Deadlift',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4532,6 +5133,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'tricepdumbbellkickback',
+
+    movementId: 'tricep-dumbbell-kickback',
     name: 'Tricep Dumbbell Kickback',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4543,6 +5146,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'tricepsoverheadextensionwithrope',
+
+    movementId: 'triceps-overhead-extension-with-rope',
     name: 'Triceps Overhead Extension with Rope',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4554,6 +5159,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'tricepspushdown',
+
+    movementId: 'triceps-pushdown',
     name: 'Triceps Pushdown',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4565,6 +5172,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'tricepspushdown-ropeattachment',
+
+    movementId: 'triceps-pushdown',
     name: 'Triceps Pushdown - Rope Attachment',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4576,6 +5185,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'tricepspushdown-v-barattachment',
+
+    movementId: 'triceps-pushdown',
     name: 'Triceps Pushdown - V-Bar Attachment',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4587,6 +5198,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'two-armdumbbellpreachercurl',
+
+    movementId: 'two',
     name: 'Two-Arm Dumbbell Preacher Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4598,6 +5211,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'two-armkettlebellmilitarypress',
+
+    movementId: 'two',
     name: 'Two-Arm Kettlebell Military Press',
     category: 'push',
     primaryMuscles: ["shoulders"],
@@ -4609,6 +5224,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'two-armkettlebellrow',
+
+    movementId: 'bent-over-row',
     name: 'Two-Arm Kettlebell Row',
     category: 'pull',
     primaryMuscles: ["middle back"],
@@ -4620,6 +5237,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'underhandcablepulldowns',
+
+    movementId: 'underhand-cable-pulldowns',
     name: 'Underhand Cable Pulldowns',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -4631,6 +5250,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'uprightbarbellrow',
+
+    movementId: 'upright-barbell-row',
     name: 'Upright Barbell Row',
     category: 'pull',
     primaryMuscles: ["shoulders"],
@@ -4642,6 +5263,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'uprightcablerow',
+
+    movementId: 'upright-cable-row',
     name: 'Upright Cable Row',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -4653,6 +5276,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'uprightrow-withbands',
+
+    movementId: 'upright-row',
     name: 'Upright Row - With Bands',
     category: 'pull',
     primaryMuscles: ["traps"],
@@ -4664,6 +5289,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'v-barpulldown',
+
+    movementId: 'v',
     name: 'V-Bar Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -4675,6 +5302,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'v-barpullup',
+
+    movementId: 'v',
     name: 'V-Bar Pullup',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -4686,6 +5315,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'weightedbenchdip',
+
+    movementId: 'bench-dip',
     name: 'Weighted Bench Dip',
     category: 'push',
     primaryMuscles: ["triceps"],
@@ -4697,6 +5328,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'weightedjumpsquat',
+
+    movementId: 'squat',
     name: 'Weighted Jump Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4708,6 +5341,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'weightedsissysquat',
+
+    movementId: 'sissy-squat',
     name: 'Weighted Sissy Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4719,6 +5354,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'weightedsquat',
+
+    movementId: 'squat',
     name: 'Weighted Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4730,6 +5367,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'wide-gripbarbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'Wide-Grip Barbell Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -4741,6 +5380,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'wide-gripdeclinebarbellbenchpress',
+
+    movementId: 'bench-press',
     name: 'Wide-Grip Decline Barbell Bench Press',
     category: 'push',
     primaryMuscles: ["chest"],
@@ -4752,6 +5393,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'wide-gripdeclinebarbellpullover',
+
+    movementId: 'wide',
     name: 'Wide-Grip Decline Barbell Pullover',
     category: 'pull',
     primaryMuscles: ["chest"],
@@ -4763,6 +5406,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'wide-griplatpulldown',
+
+    movementId: 'lat-pulldown',
     name: 'Wide-Grip Lat Pulldown',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -4774,6 +5419,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'wide-griprearpull-up',
+
+    movementId: 'wide',
     name: 'Wide-Grip Rear Pull-Up',
     category: 'pull',
     primaryMuscles: ["lats"],
@@ -4785,6 +5432,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'wide-gripstandingbarbellcurl',
+
+    movementId: 'wide',
     name: 'Wide-Grip Standing Barbell Curl',
     category: 'pull',
     primaryMuscles: ["biceps"],
@@ -4796,6 +5445,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'widestancebarbellsquat',
+
+    movementId: 'squat',
     name: 'Wide Stance Barbell Squat',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4807,6 +5458,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'windsprints',
+
+    movementId: 'wind-sprints',
     name: 'Wind Sprints',
     category: 'abs',
     primaryMuscles: ["abdominals"],
@@ -4818,6 +5471,8 @@ export const exerciseDatabase: Exercise[] = [
   },
   {
     id: 'zerchersquats',
+
+    movementId: 'squat',
     name: 'Zercher Squats',
     category: 'legs',
     primaryMuscles: ["quadriceps"],
@@ -4829,6 +5484,8 @@ export const exerciseDatabase: Exercise[] = [
   },
 {
   id: 'spidercurls',
+
+  movementId: 'spider-curls',
   name: 'Spider Curls',
   category: 'pull',
   primaryMuscles: ['biceps'],
@@ -4840,6 +5497,8 @@ export const exerciseDatabase: Exercise[] = [
   },
 {
   id: 'hipthrust',
+
+  movementId: 'hip-thrust',
   name: 'Hip Thrust',
   category: 'legs',
   primaryMuscles: ['glutes'],
@@ -4851,6 +5510,8 @@ export const exerciseDatabase: Exercise[] = [
 },
 {
   id: 'bulgariansplitsquat',
+
+  movementId: 'lunge',
   name: 'Bulgarian Split Squat',
   category: 'legs',
   primaryMuscles: ['quadriceps', 'glutes'],

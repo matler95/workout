@@ -5,8 +5,9 @@
  * AddExerciseDrawer can show "Bench Press" once and let the user pick
  * equipment type, rather than showing four separate entries.
  *
- * All grouping is computed at runtime from exerciseDatabase using
- * deriveMovementId() — no manual per-exercise edits needed.
+ * All grouping is computed at runtime from exerciseDatabase using each
+ * exercise's explicit movementId field — no runtime derivation, no override
+ * table to keep in sync.
  */
 
 import { exerciseDatabase, getMovementId, type Exercise } from '../data/exercises';
