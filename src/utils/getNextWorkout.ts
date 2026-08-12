@@ -78,39 +78,58 @@ export function getNextWorkout(
     return { day: trainingDays[0], isToday: true };
   }
 
-  const dayIndexByName = new Map<string, number>(
-    trainingDays.map((name, idx) => [name, idx])
-  );
+  const trainingDaySet = new Set(trainingDays);
 
   // Most recent session overall (regardless of which day it matched) governs
-  // rest-gap spacing — the rotation lookup below only decides *which* day
-  // comes next once the gap has cleared.
+  // rest-gap spacing — unaffected by the rotation fix below.
   const mostRecent = workoutHistory[0];
   const minRestDays = minRestDaysFor(weeklyTargetDays);
   const daysSinceMostRecent = mostRecent ? calendarDaysSince(mostRecent.completedAt) : Infinity;
   const restGapPending = daysSinceMostRecent < minRestDays;
 
-  // Walk history newest-first to find the last completed training day
+  // Walk history newest-first and collect which training days have been
+  // completed *since the current rotation cycle started* — stop as soon as
+  // we see a day repeat (that marks the start of the previous cycle) or
+  // once every training day has been checked off (this cycle just
+  // completed).
+  //
+  // This replaces the old "(lastDoneDayIndex + 1) % trainingDays.length"
+  // approach, which assumed sessions always happen in plan order. If a
+  // user trains out of order (plan is Push/Pull/Legs, they do Pull when
+  // Push was suggested), the old logic advanced one slot past Pull and
+  // suggested Legs next — permanently skipping Push for that cycle. This
+  // version always suggests the earliest day (in plan order) not yet done
+  // in the current cycle, so nothing gets silently skipped.
+  const completedThisCycle = new Set<string>();
+  let referenceSession: WorkoutHistoryEntry | undefined;
   for (const session of workoutHistory) {
-    const idx = dayIndexByName.get(session.dayName);
-    if (idx !== undefined) {
-      const nextIdx = (idx + 1) % trainingDays.length;
-
-      if (restGapPending) {
-        const availableOn = new Date(
-          startOfDay(new Date(mostRecent.completedAt)).getTime() + minRestDays * 86400000
-        ).toISOString();
-        return { day: trainingDays[nextIdx], isToday: false, availableOn };
-      }
-
-      // FIX #5: isToday is true only when the last session was NOT today —
-      // meaning the user hasn't trained yet today and should do the next day.
-      // If the last session was today, they already trained, so isToday=false.
-      const lastSessionWasToday = isToday(session.completedAt);
-      return { day: trainingDays[nextIdx], isToday: !lastSessionWasToday };
-    }
+    if (!trainingDaySet.has(session.dayName)) continue;
+    if (!referenceSession) referenceSession = session;
+    if (completedThisCycle.has(session.dayName)) break; // previous cycle boundary
+    completedThisCycle.add(session.dayName);
+    if (completedThisCycle.size === trainingDays.length) break; // cycle just completed
   }
 
-  // No history matched current plan — start from beginning
-  return { day: trainingDays[0], isToday: true };
+  if (!referenceSession) {
+    // No history matched current plan — start from beginning
+    return { day: trainingDays[0], isToday: true };
+  }
+
+  const nextDay =
+    completedThisCycle.size >= trainingDays.length
+      ? trainingDays[0]                                       // full cycle done, restart
+      : trainingDays.find(d => !completedThisCycle.has(d))!;  // earliest not-yet-done day, in plan order
+
+  if (restGapPending) {
+    const availableOn = new Date(
+      startOfDay(new Date(mostRecent.completedAt)).getTime() + minRestDays * 86400000
+    ).toISOString();
+    return { day: nextDay, isToday: false, availableOn };
+  }
+
+  // FIX #5: isToday is true only when the last session was NOT today —
+  // meaning the user hasn't trained yet today and should do the next day.
+  // If the last session was today, they already trained, so isToday=false.
+  const lastSessionWasToday = isToday(referenceSession.completedAt);
+  return { day: nextDay, isToday: !lastSessionWasToday };
 }

@@ -400,26 +400,35 @@ export function ActiveWorkout() {
   const [showExtraWeight, setShowExtraWeight] = useState(false);
   const [showRPEInfo, setShowRPEInfo]     = useState(false);
 
-  // Feature (feedback round 4, #8): warm-up tracking. warmupStartRef holds
+  // Feature (feedback round 4, #8): warm-up tracking. warmupStart holds
   // the timestamp warm-up began (persisted so it survives a reload);
   // warmupElapsed just drives the live count-up display and is recomputed
-  // from warmupStartRef every second, so it's never the source of truth.
+  // from warmupStart every second, so it's never the source of truth.
   // warmupMinutesRef captures the final duration once "Start Workout" is
   // tapped, for logging alongside the workout at completion.
-  const warmupStartRef   = useRef<number | null>(loadWarmupStart());
+  //
+  // NOTE: warmupStart must be real state, not a ref. It used to be a ref
+  // (warmupStartRef) mutated directly inside startWarmup(), but a ref
+  // mutation never triggers a re-render — and the follow-up
+  // setWarmupElapsed(0) call was a no-op too, since warmupElapsed's
+  // initial value is already 0 and React bails out of re-rendering on an
+  // unchanged state value. The net effect was the "Start Warm-up" button
+  // appearing to do nothing: the click handler ran and sessionStorage got
+  // written, but nothing on screen ever updated.
+  const [warmupStart, setWarmupStart] = useState<number | null>(loadWarmupStart());
   const warmupMinutesRef = useRef<number | undefined>(undefined);
   const [warmupElapsed, setWarmupElapsed] = useState(0);
   useEffect(() => {
-    if (warmupStartRef.current == null) return;
-    const tick = () => setWarmupElapsed(Math.floor((Date.now() - (warmupStartRef.current as number)) / 1000));
+    if (warmupStart == null) return;
+    const tick = () => setWarmupElapsed(Math.floor((Date.now() - warmupStart) / 1000));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [warmupStartRef.current]);
+  }, [warmupStart]);
 
   const startWarmup = () => {
     const ms = Date.now();
-    warmupStartRef.current = ms;
+    setWarmupStart(ms);
     saveWarmupStart(ms);
     setWarmupElapsed(0);
   };
@@ -1173,7 +1182,7 @@ export function ActiveWorkout() {
               <p className="font-medium">Warm up first (5–10 min)</p>
               <p className="text-muted-foreground">• Light cardio + dynamic stretches</p>
               <p className="text-muted-foreground">• 1–2 warm-up sets at ~50% working weight</p>
-              {warmupStartRef.current == null ? (
+              {warmupStart == null ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1260,8 +1269,8 @@ export function ActiveWorkout() {
               size="lg"
               onClick={() => {
                 const startMs = Date.now();
-                if (warmupStartRef.current != null) {
-                  warmupMinutesRef.current = Math.round((startMs - warmupStartRef.current) / 60000);
+                if (warmupStart != null) {
+                  warmupMinutesRef.current = Math.round((startMs - warmupStart) / 60000);
                   clearWarmupStart();
                 }
                 startTimeRef.current = startMs;
