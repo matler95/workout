@@ -17,6 +17,7 @@ import { Profile } from './pages/Profile';
 import { ActiveWorkout } from './pages/ActiveWorkout';
 import { WorkoutEdit } from './components/WorkoutEdit';
 import { BottomNav } from './components/BottomNav';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -110,7 +111,9 @@ export default function App() {
       <ThemeProvider>
         <ThemeBridge>
           <AuthProvider>
-            <AppRoutes />
+            <ErrorBoundary>
+              <AppRoutes />
+            </ErrorBoundary>
             <Toaster />
           </AuthProvider>
         </ThemeBridge>

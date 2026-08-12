@@ -73,7 +73,8 @@ export function getEquipmentOptionsForMovement(movementId: string): string[] {
 const EQUIPMENT_PREFIXES_RE =
   /^(barbell|dumbbell|ez[\s-]?bar|smith machine|cable|machine|kettlebell|resistance band|band|weighted|bodyweight|leverage|seated|standing|lying|kneeling|incline|decline)\s+/i;
 
-export function getMovementDisplayName(movementId: string): string {
+export function getMovementDisplayName(movementId: string | undefined): string {
+  if (!movementId) return 'Exercise';
   const variants = getCachedGroupMap().get(movementId) ?? [];
   if (variants.length === 0) return movementId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 

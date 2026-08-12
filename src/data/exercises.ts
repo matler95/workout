@@ -31,7 +31,17 @@
 // no warning. Simplified to a plain field lookup on 2026-08-11.
 
 export function getMovementId(exercise: Exercise): string {
-  return exercise.movementId;
+  if (exercise.movementId) return exercise.movementId;
+
+  // Legacy fallback: exercise objects snapshotted into workout_plans.exercises
+  // (or a resumed in-progress session) before 2026-08-11 don't have a
+  // movementId key at all — `id` was never renamed, so look the canonical
+  // record up by id instead of returning undefined. Callers (see
+  // exerciseGrouping.ts -> getMovementDisplayName) call .replace() on this
+  // return value with no guard, so returning undefined here crashes the
+  // ActiveWorkout render entirely (blank screen on Start Workout).
+  const canonical = exerciseDatabase.find(e => e.id === exercise.id);
+  return canonical?.movementId ?? exercise.id ?? 'unknown-movement';
 }
 
 export const exerciseDatabase: Exercise[] = [
