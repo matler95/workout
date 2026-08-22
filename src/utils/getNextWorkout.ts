@@ -33,7 +33,7 @@ interface NextWorkout {
   availableOn?: string;
 }
 
-function isRestDay(workoutPlan: WorkoutPlanShape, dayName: string): boolean {
+export function isRestDay(workoutPlan: WorkoutPlanShape, dayName: string): boolean {
   const exs = workoutPlan.workouts[dayName];
   return Array.isArray(exs) && exs.length === 1 && (exs[0] as any).__rest === true;
 }
@@ -115,10 +115,24 @@ export function getNextWorkout(
     return { day: trainingDays[0], isToday: true };
   }
 
-  const nextDay =
+  let nextDay =
     completedThisCycle.size >= trainingDays.length
       ? trainingDays[0]                                       // full cycle done, restart
       : trainingDays.find(d => !completedThisCycle.has(d))!;  // earliest not-yet-done day, in plan order
+
+  // FIX (feedback round 4, #1): "full cycle done, restart at trainingDays[0]"
+  // ignored *which* day had just been completed. If the most recent session
+  // happened to be whatever day sits first in plan order (e.g. Push in a
+  // Push/Pull/Legs plan), or the last 3 sessions covered all training days
+  // out of plan order and the newest one was that first day, this restarted
+  // the rotation right back on the day the user just finished — "did Push
+  // Tuesday, told to do Push again Friday." A cycle "restarting" should
+  // never hand back the day that was just trained (unless it's the plan's
+  // only training day); advance to the next plan-order day after it instead.
+  if (nextDay === referenceSession.dayName && trainingDays.length > 1) {
+    const idx = trainingDays.indexOf(referenceSession.dayName);
+    nextDay = trainingDays[(idx + 1) % trainingDays.length];
+  }
 
   if (restGapPending) {
     const availableOn = new Date(

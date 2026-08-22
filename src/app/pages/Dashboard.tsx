@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getNextWorkout } from '../../utils/getNextWorkout';
+import { getNextWorkout, isRestDay } from '../../utils/getNextWorkout';
 import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -216,6 +216,11 @@ export function Dashboard() {
 
   const weekProg    = getWeeklyProgress();
   const nextWorkout = getNextWorkout(workoutPlan, workoutHistory, profile?.trainingDays);
+  // All actual training days from the plan, in plan order, rest days excluded —
+  // used to render one shortcut button per workout on the dashboard.
+  const trainingDayList = workoutPlan
+    ? Object.keys(workoutPlan.workouts).filter(d => !isRestDay(workoutPlan, d))
+    : [];
   const cals        = getCalorieTarget();
   const protein     = profile ? Math.round(profile.weight * 2.2) : null;
   const streak      = getStreak();
@@ -309,12 +314,41 @@ export function Dashboard() {
                 <Dumbbell className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
-            {nextWorkout && (
-              <div className="mt-4">
-                <Button size="lg" className="w-full rounded-2xl"
-                  onClick={() => goToActiveWorkout(navigate, nextWorkout.day)}>
-                  Start workout <Play className="w-4 h-4 ml-2" />
-                </Button>
+
+            {/* FIX (feedback round 4, #2): the single "Start workout" button
+                only ever launched whatever getNextWorkout() suggested, with
+                no way to jump straight to a different day in the plan
+                without going through /plan first. Now every training day
+                from the plan gets its own shortcut button, so any workout is
+                one tap away, while the suggested day is still called out
+                clearly (filled/primary + a "Suggested" badge) so it's
+                obvious what today is supposed to be. */}
+            {trainingDayList.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {trainingDayList.map(day => {
+                  const isSuggested = day === nextWorkout?.day;
+                  const count = (workoutPlan.workouts[day] || []).length;
+                  return (
+                    <Button
+                      key={day}
+                      variant={isSuggested ? 'primary' : 'outline'}
+                      className={`relative flex-col items-start h-auto py-3 px-3.5 rounded-2xl text-left whitespace-normal ${
+                        isSuggested ? '' : 'bg-white/60 dark:bg-transparent'
+                      }`}
+                      onClick={() => goToActiveWorkout(navigate, day)}
+                    >
+                      {isSuggested && (
+                        <span className="absolute top-2 right-2 text-[10px] font-semibold uppercase tracking-wide bg-white/25 rounded-full px-1.5 py-0.5">
+                          {nextWorkout?.isToday ? 'Today' : 'Suggested'}
+                        </span>
+                      )}
+                      <span className="font-semibold text-sm truncate w-full pr-10">{day}</span>
+                      <span className={`text-xs mt-0.5 flex items-center gap-1 ${isSuggested ? 'text-white/80' : 'text-muted-foreground'}`}>
+                        {count} exercises <Play className="w-2.5 h-2.5" />
+                      </span>
+                    </Button>
+                  );
+                })}
               </div>
             )}
           </CardContent>
