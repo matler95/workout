@@ -8,7 +8,7 @@
  *   3. Enable adaptive volume scaling in the future
  */
 
-import { inferMuscleGroup } from './inferMuscleGroup';
+import { inferMuscleGroupWeighted } from './inferMuscleGroup';
 import type { WorkoutSet, MuscleVolumeEntry } from './api';
 
 /**
@@ -23,22 +23,22 @@ export function calculateMuscleVolume(
   const volumeByMuscle: Record<string, MuscleVolumeEntry> = {};
 
   for (const set of sets) {
-    // Infer which muscles this exercise targets
-    const muscles = inferMuscleGroup(set.exerciseId, set.exerciseName);
+    // Infer which muscles this exercise targets, and how directly
+    // (primary mover = 1 full set, secondary/assisting = half a set — see
+    // FIX note on inferMuscleGroupWeighted for why this matters).
+    const muscles = inferMuscleGroupWeighted(set.exerciseId, set.exerciseName);
 
     // Skip if no muscles identified (e.g., mobility work)
     if (muscles.length === 0) continue;
 
-    // Distribute this set's volume equally across all target muscles
-    // (e.g., if bench press targets Chest + Triceps, each gets 1 set)
-    for (const muscle of muscles) {
+    for (const { muscle, weight } of muscles) {
       if (!volumeByMuscle[muscle]) {
         volumeByMuscle[muscle] = { sets: 0, reps: 0, volumeKg: 0 };
       }
 
-      volumeByMuscle[muscle].sets += 1;
-      volumeByMuscle[muscle].reps += set.reps;
-      volumeByMuscle[muscle].volumeKg += set.weight * set.reps;
+      volumeByMuscle[muscle].sets += weight;
+      volumeByMuscle[muscle].reps += set.reps * weight;
+      volumeByMuscle[muscle].volumeKg += set.weight * set.reps * weight;
     }
   }
 

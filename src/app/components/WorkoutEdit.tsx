@@ -14,6 +14,18 @@ interface EditableSet {
   setNumber: number;
   weightKg: number;
   reps: number;
+  // FIX: raw text mirrors of weightKg/reps, bound directly to the inputs.
+  // Previously the inputs' `value` was derived from the parsed number on
+  // every keystroke (value={weightKg === 0 ? '' : weightKg}), which
+  // re-normalizes the field's text on every render — e.g. typing "5" then
+  // "0" could get reordered/re-collapsed by the round-trip through
+  // parseFloat, so the only numbers that "stuck" reliably were ones with a
+  // 0 already at the start or end. Keeping the exact typed string here and
+  // only parsing it into weightKg/reps (for 1RM calc + save) fixes that —
+  // same pattern already used for the primary weight input in
+  // ActiveWorkout.tsx.
+  weightInput: string;
+  repsInput: string;
   dirty: boolean;
 }
 
@@ -55,14 +67,19 @@ export function WorkoutEdit() {
 
       setSession(sessionData);
 
-      const loaded: EditableSet[] = (setsData || []).map(s => ({
-        id:           s.id,
-        exerciseName: s.exercise_name,
-        setNumber:    s.set_number,
-        weightKg:     parseFloat(s.weight_kg),
-        reps:         s.reps,
-        dirty:        false,
-      }));
+      const loaded: EditableSet[] = (setsData || []).map(s => {
+        const weightKg = parseFloat(s.weight_kg);
+        return {
+          id:           s.id,
+          exerciseName: s.exercise_name,
+          setNumber:    s.set_number,
+          weightKg,
+          reps:         s.reps,
+          weightInput:  weightKg === 0 ? '' : String(weightKg),
+          repsInput:    String(s.reps),
+          dirty:        false,
+        };
+      });
 
       setSets(loaded);
       // Snapshot all original IDs — used by handleSave to detect deletions
@@ -76,11 +93,18 @@ export function WorkoutEdit() {
   };
 
   const updateSet = (id: string, field: 'weightKg' | 'reps', value: string) => {
-    setSets(prev => prev.map(s =>
-      s.id === id
-        ? { ...s, [field]: field === 'weightKg' ? parseFloat(value) || 0 : parseInt(value) || 0, dirty: true }
-        : s
-    ));
+    setSets(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      // FIX: keep the exact typed string in *Input, and parse a best-effort
+      // numeric value alongside it for the 1RM estimate + save payload. The
+      // input's displayed value now reads from weightInput/repsInput
+      // directly, never from a re-stringified number, so there's no more
+      // forced 0 at the start or end.
+      if (field === 'weightKg') {
+        return { ...s, weightInput: value, weightKg: parseFloat(value) || 0, dirty: true };
+      }
+      return { ...s, repsInput: value, reps: parseInt(value) || 0, dirty: true };
+    }));
   };
 
   const deleteSet = (id: string) => {
@@ -189,7 +213,7 @@ export function WorkoutEdit() {
                     <Input
                       type="number"
                       inputMode="decimal"
-                      value={s.weightKg === 0 ? '' : s.weightKg}
+                      value={s.weightInput}
                       onChange={e => updateSet(s.id, 'weightKg', e.target.value)}
                       className="w-20 text-center h-8 text-sm"
                       placeholder="0"
@@ -198,7 +222,7 @@ export function WorkoutEdit() {
                     <Input
                       type="number"
                       inputMode="numeric"
-                      value={s.reps}
+                      value={s.repsInput}
                       onChange={e => updateSet(s.id, 'reps', e.target.value)}
                       className="w-16 text-center h-8 text-sm"
                     />

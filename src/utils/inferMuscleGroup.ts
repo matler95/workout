@@ -123,25 +123,63 @@ export function inferMuscleGroup(
   exerciseId: string | undefined,
   exerciseName: string,
 ): string[] {
+  return inferMuscleGroupWeighted(exerciseId, exerciseName).map(m => m.muscle);
+}
+
+/**
+ * FIX (item #1 audit): calculateMuscleVolume / suggestDeload / checkFatigueWarnings
+ * all used to credit a FULL set to every muscle inferMuscleGroup() returned,
+ * with no distinction between the muscle an exercise actually targets and
+ * one it merely assists. E.g. bench press labels ['Chest', 'Triceps'] — a
+ * single set of bench press was counted as 1 full set of *direct* triceps
+ * volume, identical to a triceps pushdown. For a normal Push/Pull/Legs split
+ * this compounds fast: triceps/biceps/shoulders pick up "full" sets from
+ * nearly every compound press/pull on top of their own isolation work, so
+ * the MRV landmarks (calibrated for direct volume) get tripped constantly —
+ * producing a deload/fatigue warning that doesn't track how the muscle is
+ * actually being used, and doesn't match how the lifter feels.
+ *
+ * This variant returns each muscle alongside a weight: 1.0 when the
+ * exercise's own record lists it as a *primary* mover, 0.5 when it's only a
+ * *secondary* one (matching common practice for indirect/assistance
+ * volume). Volume-summing call sites should use this and multiply by
+ * `weight` instead of counting a flat 1 per set. Plain membership checks
+ * ("does this exercise touch muscle X at all") should keep using the
+ * unweighted `inferMuscleGroup()` above — that behavior is unchanged.
+ */
+export function inferMuscleGroupWeighted(
+  exerciseId: string | undefined,
+  exerciseName: string,
+): Array<{ muscle: string; weight: number }> {
   // ── Step 1: DB lookup by id ─────────────────────────────────────────────────
   if (exerciseId) {
     const record = exerciseDatabase.find(ex => ex.id === exerciseId);
     if (record) {
-      const labels = new Set<string>();
-      for (const muscle of [...record.primaryMuscles, ...record.secondaryMuscles]) {
+      const weightByLabel = new Map<string, number>();
+      for (const muscle of record.primaryMuscles) {
         const label = MUSCLE_TO_CHART_LABEL[muscle.toLowerCase()];
-        if (label) labels.add(label);
+        if (label) weightByLabel.set(label, 1.0);
       }
-      if (labels.size > 0) return Array.from(labels);
+      for (const muscle of record.secondaryMuscles) {
+        const label = MUSCLE_TO_CHART_LABEL[muscle.toLowerCase()];
+        if (label && !weightByLabel.has(label)) weightByLabel.set(label, 0.5);
+      }
+      if (weightByLabel.size > 0) {
+        return Array.from(weightByLabel, ([muscle, weight]) => ({ muscle, weight }));
+      }
       // Record found but no muscles mapped → fall through to keyword search
     }
   }
 
   // ── Step 2: Keyword fallback ────────────────────────────────────────────────
+  // Convention: the first label in each rule is the primary mover (weight
+  // 1.0); any additional labels are assisting muscles (weight 0.5) — this
+  // mirrors how the rules are already written (e.g. bench: ['Chest' (primary),
+  // 'Triceps' (assists])).
   const name = exerciseName.toLowerCase();
   for (const rule of KEYWORD_RULES) {
     if (rule.keywords.some(k => name.includes(k))) {
-      return rule.labels;
+      return rule.labels.map((muscle, i) => ({ muscle, weight: i === 0 ? 1.0 : 0.5 }));
     }
   }
 

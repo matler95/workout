@@ -14,7 +14,7 @@
 import type { UserProfile, WorkoutSession, VolumeEntry, WorkoutSet } from './api';
 import type { Exercise } from '../data/exercises';
 import { VOLUME_LANDMARKS } from './volumeTracking';
-import { inferMuscleGroup } from './inferMuscleGroup';
+import { inferMuscleGroup, inferMuscleGroupWeighted } from './inferMuscleGroup';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,10 +88,11 @@ function calculateStrengthTrend(recentSets: WorkoutSet[]) {
 function getPlateauLength(history: WorkoutSet[]): number {
   if (history.length === 0) return 0;
   const sorted = [...history].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const maxWeight = Math.max(...sorted.map(s => s.weight));
+  if (maxWeight <= 0) return 0; // bodyweight-only history — no meaningful "weight" plateau to detect here
   let plateauSets = 0;
-  const maxWeight = sorted[sorted.length - 1].weight;
   for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].weight < maxWeight * 1.01) plateauSets++;
+    if (sorted[i].weight >= maxWeight * 0.99) plateauSets++;
     else break;
   }
   return Math.round(plateauSets / 4.3);
@@ -122,10 +123,17 @@ export function suggestDeload(
   const distinctWeeks = new Set(volumeHistory.map(e => e.week_start)).size || 1;
   const muscleWeeklySets: Record<string, number> = {};
 
+  // FIX (item #1 audit): credit secondary/assisting muscles at half a set
+  // instead of a full one — see inferMuscleGroupWeighted for why. Without
+  // this, muscles that are mostly trained indirectly (triceps from
+  // pressing, biceps from pulling, shoulders from both compounds) rack up "full"
+  // sets from almost every compound in a normal Push/Pull/Legs split on top of
+  // their own isolation work, tripping the MRV check even when nothing
+  // about the training is actually excessive.
   for (const entry of volumeHistory) {
-    const muscleGroups = inferMuscleGroup(entry.exercise_id, entry.exercise_name);
-    for (const muscle of muscleGroups) {
-      muscleWeeklySets[muscle] = (muscleWeeklySets[muscle] || 0) + entry.total_sets;
+    const muscleGroups = inferMuscleGroupWeighted(entry.exercise_id, entry.exercise_name);
+    for (const { muscle, weight } of muscleGroups) {
+      muscleWeeklySets[muscle] = (muscleWeeklySets[muscle] || 0) + entry.total_sets * weight;
     }
   }
 
@@ -260,9 +268,11 @@ export function checkFatigueWarnings(
       }
 
       const weeklyVolume = recentSessions.reduce(
-        (sum, s) => sum + (s.sets || []).filter(set =>
-          inferMuscleGroup(set.exerciseId, set.exerciseName).includes(muscle)
-        ).length,
+        (sum, s) => sum + (s.sets || []).reduce((setSum, set) => {
+          const match = inferMuscleGroupWeighted(set.exerciseId, set.exerciseName)
+            .find(m => m.muscle === muscle);
+          return setSum + (match?.weight ?? 0);
+        }, 0),
         0
       );
       const mrvThreshold = VOLUME_LANDMARKS[muscle]?.MRV || 20;

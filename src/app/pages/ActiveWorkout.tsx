@@ -380,6 +380,16 @@ export function ActiveWorkout() {
   // Phase 6: edit-logged-sets modal — feedback item #1
   const [showEditSets, setShowEditSets]       = useState(false);
   const [editDraft, setEditDraft]             = useState<SetLog[]>([]);
+  // FIX: raw text mirror of editDraft's weight/reps, indexed to match.
+  // The inputs below used to read value={row.weight === 0 ? '' : row.weight},
+  // i.e. derived from the parsed number on every render. Since every
+  // keystroke ran through parseFloat/parseInt and got re-stringified before
+  // being fed back into the input, the field's text was normalized on every
+  // keystroke — in practice this reorders/collapses digits as you type, so
+  // the only values that reliably "stuck" were ones with a 0 already at the
+  // start or end. Tracking the exact typed string here (parsed into
+  // editDraft only for the 1RM calc + save) fixes that.
+  const [editDraftText, setEditDraftText]     = useState<{ weight: string; reps: string }[]>([]);
 
   // Phase 7: resumable in-progress session detected in localStorage — feedback item #3
   const [resumableSession, setResumableSession] = useState<QueuedWorkout | null>(null);
@@ -900,10 +910,15 @@ export function ActiveWorkout() {
 
   const openEditSets = () => {
     setEditDraft(completedSets.map(s => ({ ...s })));
+    setEditDraftText(completedSets.map(s => ({
+      weight: s.weight === 0 ? '' : String(s.weight),
+      reps:   String(s.reps),
+    })));
     setShowEditSets(true);
   };
 
   const updateEditDraft = (index: number, field: 'weight' | 'reps', value: string) => {
+    setEditDraftText(prev => prev.map((s, i) => (i !== index ? s : { ...s, [field]: value })));
     setEditDraft(prev => prev.map((s, i) => {
       if (i !== index) return s;
       const parsed = field === 'weight' ? parseFloat(value) : parseInt(value);
@@ -913,6 +928,7 @@ export function ActiveWorkout() {
 
   const removeEditDraftRow = (index: number) => {
     setEditDraft(prev => prev.filter((_, i) => i !== index));
+    setEditDraftText(prev => prev.filter((_, i) => i !== index));
   };
 
   const saveEditSets = () => {
@@ -1500,7 +1516,7 @@ export function ActiveWorkout() {
                       <Input
                         type="number"
                         inputMode="decimal"
-                        value={row.weight === 0 ? '' : row.weight}
+                        value={editDraftText[index]?.weight ?? (row.weight === 0 ? '' : String(row.weight))}
                         onChange={e => updateEditDraft(index, 'weight', e.target.value)}
                         className="w-20 text-center h-9 text-sm"
                         placeholder="0"
@@ -1509,7 +1525,7 @@ export function ActiveWorkout() {
                       <Input
                         type="number"
                         inputMode="numeric"
-                        value={row.reps}
+                        value={editDraftText[index]?.reps ?? String(row.reps)}
                         onChange={e => updateEditDraft(index, 'reps', e.target.value)}
                         className="w-16 text-center h-9 text-sm"
                       />
