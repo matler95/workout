@@ -15,6 +15,28 @@
  * We now derive a minimum rest-day gap from the user's target weekly
  * frequency and gate `isToday` on it, independent of calendar-week
  * boundaries (which is what let Sun+Mon count as "two different weeks").
+ *
+ * FIX (round 6): previous versions of the rotation logic all tried to
+ * reconstruct "how much of the current cycle has been completed" by
+ * walking history and collecting distinct training days, then either
+ * picking the earliest untouched one (in plan order) or, once a full cycle
+ * was detected, advancing past whichever day the walk happened to land on.
+ * That whole model breaks the moment real training doesn't look like a
+ * clean, non-repeating walk through the plan — which is the common case:
+ * repeating a day (Pull, Pull), skipping a day, or doing a day out of plan
+ * order all confuse "how many distinct days have I seen" as a proxy for
+ * "where in the cycle am I." E.g. Pull, Pull, Push, Legs, Pull, Push (most
+ * recent first) hits a repeat on the very first two entries, so the walk
+ * only ever collects {Pull} and falls back to "earliest day not in that
+ * set" = Push — even though Pull was just trained and Legs is next.
+ *
+ * A rotation doesn't need to reconstruct cycle progress at all: the only
+ * thing that determines what's next is what was done most recently. So
+ * nextDay is now simply "whichever training day comes after the most
+ * recently completed one, in plan order" — cyclically wrapping past the
+ * end of trainingDays. This is correct regardless of repeats, skips, gaps,
+ * or out-of-order history, because it never tries to infer cycle state from
+ * anything but the single most recent session.
  */
 
 interface WorkoutPlanShape {
@@ -81,59 +103,30 @@ export function getNextWorkout(
   const trainingDaySet = new Set(trainingDays);
 
   // Most recent session overall (regardless of which day it matched) governs
-  // rest-gap spacing — unaffected by the rotation fix below.
+  // rest-gap spacing.
   const mostRecent = workoutHistory[0];
   const minRestDays = minRestDaysFor(weeklyTargetDays);
   const daysSinceMostRecent = mostRecent ? calendarDaysSince(mostRecent.completedAt) : Infinity;
   const restGapPending = daysSinceMostRecent < minRestDays;
 
-  // Walk history newest-first and collect which training days have been
-  // completed *since the current rotation cycle started* — stop as soon as
-  // we see a day repeat (that marks the start of the previous cycle) or
-  // once every training day has been checked off (this cycle just
-  // completed).
-  //
-  // This replaces the old "(lastDoneDayIndex + 1) % trainingDays.length"
-  // approach, which assumed sessions always happen in plan order. If a
-  // user trains out of order (plan is Push/Pull/Legs, they do Pull when
-  // Push was suggested), the old logic advanced one slot past Pull and
-  // suggested Legs next — permanently skipping Push for that cycle. This
-  // version always suggests the earliest day (in plan order) not yet done
-  // in the current cycle, so nothing gets silently skipped.
-  const completedThisCycle = new Set<string>();
-  let referenceSession: WorkoutHistoryEntry | undefined;
-  for (const session of workoutHistory) {
-    if (!trainingDaySet.has(session.dayName)) continue;
-    if (!referenceSession) referenceSession = session;
-    if (completedThisCycle.has(session.dayName)) break; // previous cycle boundary
-    completedThisCycle.add(session.dayName);
-    if (completedThisCycle.size === trainingDays.length) break; // cycle just completed
-  }
+  // Find the most recent session that actually matches a current training
+  // day in the plan (the plan may have been edited since older sessions
+  // were logged, so we can't just trust workoutHistory[0]).
+  const referenceSession = workoutHistory.find(s => trainingDaySet.has(s.dayName));
 
   if (!referenceSession) {
     // No history matched current plan — start from beginning
     return { day: trainingDays[0], isToday: true };
   }
 
-  // FIX (round 5): "full cycle done, restart at trainingDays[0]" ignored
-  // *which* day the cycle actually ended on. It only looked at *how many*
-  // distinct training days had been seen, not their order — so a user who
-  // trained Legs -> Push -> Pull (a perfectly in-order cycle, just not
-  // starting from trainingDays[0]) would see all 3 days checked off and get
-  // sent back to trainingDays[0] ("Push") right after finishing Pull, even
-  // though the natural next day in the rotation is Legs. The previous patch
-  // only caught the narrower case where that restart happened to repeat the
-  // exact day just trained; it didn't fix the general case of restarting to
-  // the wrong day. Now, once a cycle completes, we continue the rotation
-  // from whichever day was most recently completed — trainingDays[0] is
-  // only used as a fallback if that day isn't found in the plan at all.
-  let nextDay: string;
-  if (completedThisCycle.size >= trainingDays.length) {
-    const idx = trainingDays.indexOf(referenceSession.dayName);
-    nextDay = idx === -1 ? trainingDays[0] : trainingDays[(idx + 1) % trainingDays.length];
-  } else {
-    nextDay = trainingDays.find(d => !completedThisCycle.has(d))!;  // earliest not-yet-done day, in plan order
-  }
+  // Next day in the rotation = whatever comes right after the most recently
+  // completed day, in plan order, wrapping back to the start once the plan's
+  // last training day was just done. This is deliberately the *only* signal
+  // used — see the FIX (round 6) note above for why anything more clever
+  // (reconstructing "cycle progress" from history) breaks on real-world
+  // training patterns.
+  const idx = trainingDays.indexOf(referenceSession.dayName);
+  const nextDay = idx === -1 ? trainingDays[0] : trainingDays[(idx + 1) % trainingDays.length];
 
   if (restGapPending) {
     const availableOn = new Date(
