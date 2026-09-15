@@ -101,6 +101,7 @@ export function compileSession(spec: SessionSpec, db: Exercise[]): CompiledSessi
 
   const compiled: CompiledExercise[] = [];
   const usedMovementIds = new Set<string>();
+  const usedSubstitutionGroups = new Set<string>();
   let minutesUsed = 0;
 
   // ── Credit seed exercises first ──────────────────────────────────────────
@@ -113,6 +114,7 @@ export function compileSession(spec: SessionSpec, db: Exercise[]): CompiledSessi
       fromSeed: true,
     });
     usedMovementIds.add(exercise.movementId);
+    usedSubstitutionGroups.add(exercise.substitutionGroupId);
     minutesUsed += sets * MINUTES_PER_SET;
 
     for (const m of exercise.muscles) {
@@ -128,13 +130,20 @@ export function compileSession(spec: SessionSpec, db: Exercise[]): CompiledSessi
     const stillNeeded = [...remaining.values()].some((v) => v > 0.01);
     if (!stillNeeded) break;
 
-    const candidates = db.filter(
+    const eligible = db.filter(
       (ex) =>
         ex.splitTags.includes(splitDay) &&
         !usedMovementIds.has(ex.movementId) &&
         equipmentSatisfied(ex.equipmentNeeded, equipmentAvailable)
     );
-    if (candidates.length === 0) break; // nothing left that fits equipment/split
+    if (eligible.length === 0) break; // nothing left that fits equipment/split
+
+    // Prefer exercises from a substitution group not already used this
+    // session — avoids back-to-back near-duplicate movements (e.g. two
+    // overhead-press variants). Fall back to reuse only if that's the only
+    // way left to close a remaining gap, so variety never costs coverage.
+    const fresh = eligible.filter((ex) => !usedSubstitutionGroups.has(ex.substitutionGroupId));
+    const candidates = fresh.length > 0 ? fresh : eligible;
 
     let best: Exercise | null = null;
     let bestScore = 0;
@@ -161,6 +170,7 @@ export function compileSession(spec: SessionSpec, db: Exercise[]): CompiledSessi
       fromSeed: false,
     });
     usedMovementIds.add(best.movementId);
+    usedSubstitutionGroups.add(best.substitutionGroupId);
     minutesUsed = projectedMinutes;
 
     for (const m of best.muscles) {
