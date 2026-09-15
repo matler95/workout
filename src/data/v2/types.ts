@@ -57,6 +57,10 @@ export type EquipmentItem =
   | 'lat-pulldown-machine'
   | 'seated-row-machine'
   | 'ab-wheel'
+  | 'adductor-machine'
+  | 'abductor-machine'
+  | 'hack-squat-machine'
+  | 'preacher-bench'
   | 'none'; // bodyweight, no equipment
 
 export type EquipmentType =

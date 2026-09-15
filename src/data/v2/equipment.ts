@@ -28,6 +28,10 @@ export const equipmentDatabase: EquipmentDef[] = [
   { id: 'lat-pulldown-machine', name: 'Lat Pulldown Machine' },
   { id: 'seated-row-machine', name: 'Seated Row Machine' },
   { id: 'ab-wheel', name: 'Ab Wheel' },
+  { id: 'adductor-machine', name: 'Hip Adductor Machine' },
+  { id: 'abductor-machine', name: 'Hip Abductor Machine' },
+  { id: 'hack-squat-machine', name: 'Hack Squat Machine' },
+  { id: 'preacher-bench', name: 'Preacher Bench' },
   { id: 'none', name: 'Bodyweight Only' },
 ];
 
@@ -50,8 +54,11 @@ export const equipmentGroups: Record<
     'shoulder-press-machine',
     'lat-pulldown-machine',
     'seated-row-machine',
+    'adductor-machine',
+    'abductor-machine',
+    'hack-squat-machine',
   ],
-  dumbbells: ['dumbbell', 'kettlebell', 'bench-flat', 'bench-incline', 'bench-decline'],
-  barbell: ['barbell', 'ez-bar', 'trap-bar', 'squat-rack', 'bench-flat', 'bench-incline'],
+  dumbbells: ['dumbbell', 'kettlebell', 'bench-flat', 'bench-incline', 'bench-decline', 'preacher-bench'],
+  barbell: ['barbell', 'ez-bar', 'trap-bar', 'squat-rack', 'bench-flat', 'bench-incline', 'preacher-bench'],
   calisthenics: ['pull-up-bar', 'dip-bars', 'resistance-band', 'ab-wheel', 'none'],
 };
