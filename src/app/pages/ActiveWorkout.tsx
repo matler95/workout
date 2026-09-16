@@ -34,7 +34,7 @@ import {
   Clock, Check, Trophy, X, TrendingUp, TrendingDown,
   HelpCircle, MoreVertical, ArrowDown, SkipForward, Minus, Plus,
   ChevronDown, ChevronUp, ArrowUp, ArrowUpDown, PlusCircle, Volume2, VolumeX,
-  Pencil, Trash2,
+  Pencil, Trash2, Repeat,
 } from 'lucide-react';
 import {
   computeAllSuggestions,
@@ -55,7 +55,10 @@ import {
   formatEquipmentLabel,
   type WeightMode,
 } from '../../utils/exerciseWeightMode';
-import { getMovementId } from '../../data/exercises';
+import { getMovementId, exerciseDatabase as v1ExerciseDatabase } from '../../data/exercises';
+import { adaptV1Exercise, adaptV1Database } from '../../utils/adaptV1ToV2';
+import { ExerciseSwapSheet } from '../components/v2/ExerciseSwapSheet';
+import type { EquipmentItem as V2EquipmentItem } from '../../data/v2/types';
 import { getMovementDisplayName } from '../../utils/exerciseGrouping';
 import {
   generateSessionId, queueStart, queueUpdate,
@@ -69,6 +72,12 @@ import {
 } from '../../utils/timerSound';
 import { AddExerciseDrawer, type AddExerciseResult } from '../components/AddExerciseDrawer';
 import { SetCompletePulse } from '../components/ui/SetCompletePulse';
+
+// Adapted once at module load — static source data (v1ExerciseDatabase never
+// changes at runtime), so there's no reason to recompute this per render or
+// per component instance. See adaptV1ToV2.ts for what this bridges and its
+// documented precision loss.
+const v2AdaptedDatabase = adaptV1Database(v1ExerciseDatabase);
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -162,6 +171,22 @@ function exerciseHistoryKey(ex: {
 function exerciseBaseKey(ex: { id?: string; name: string }): string {
   return (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
 }
+
+// TODO(v2): this app has no per-user "what equipment do I have" preference
+// yet (that's an onboarding concept introduced by the v2 rebuild — see
+// atlas-v2-build-plan.md). Until that's wired up, the swap sheet assumes
+// full commercial-gym access so equipment-based filtering doesn't hide
+// legitimate alternatives for users who do have everything available.
+// Once user-level equipment preferences exist, pass those here instead.
+const DEFAULT_AVAILABLE_EQUIPMENT: V2EquipmentItem[] = [
+  'barbell', 'ez-bar', 'trap-bar', 'dumbbell', 'kettlebell',
+  'bench-flat', 'bench-incline', 'bench-decline', 'squat-rack', 'smith-machine',
+  'cable-tower', 'pull-up-bar', 'dip-bars', 'resistance-band',
+  'leg-press-machine', 'leg-curl-machine', 'leg-extension-machine',
+  'chest-press-machine', 'shoulder-press-machine', 'lat-pulldown-machine',
+  'seated-row-machine', 'ab-wheel', 'adductor-machine', 'abductor-machine',
+  'hack-squat-machine', 'preacher-bench', 'none',
+];
 
 // ─── Suggestion pill ──────────────────────────────────────────────────────────
 
@@ -406,6 +431,7 @@ export function ActiveWorkout() {
 
   // Phase 3.2: mid-workout add exercise
   const [showAddExercise, setShowAddExercise]     = useState(false);
+  const [showSwapSheet, setShowSwapSheet]         = useState(false);
   const [showConfetti, setShowConfetti]   = useState(false);
   const [showExtraWeight, setShowExtraWeight] = useState(false);
   const [showRPEInfo, setShowRPEInfo]     = useState(false);
@@ -754,6 +780,87 @@ export function ActiveWorkout() {
     // Mark as ad-hoc so it doesn't count against skipped exercises
     setAdHocIds(prev => new Set(prev).add(exercise.id || exercise.name));
     toast.success(`${exercise.name} added to queue`);
+  };
+
+  // V2 build: swap the current exercise for an alternative from the same
+  // substitution group (see ExerciseSwapSheet / substitutes.ts). Mirrors
+  // handleAddExercise's plan-building logic but replaces the head of the
+  // queue instead of appending, since this is swapping the exercise the
+  // user is about to do, not adding a new one.
+  const handleSwapExercise = async (newV2Exercise: { id: string; name: string }, scope: 'session' | 'plan') => {
+    const oldExercise = exerciseQueue[0];
+    const newV1Exercise = v1ExerciseDatabase.find(e => e.id === newV2Exercise.id);
+    if (!oldExercise || !newV1Exercise) {
+      toast.error("Couldn't find that exercise — try again.");
+      return;
+    }
+
+    const profile = profileRef.current;
+    const tier = classifyExercise(newV1Exercise.name);
+    const [repLo, repHi] = getRepTarget(tier);
+    const equipmentType = newV1Exercise.equipmentType;
+    const mode = getWeightMode(newV1Exercise.name, equipmentType, tier);
+    const histKey = buildHistoryKey(newV1Exercise.id, newV1Exercise.name, equipmentType);
+    const existing = plans[histKey];
+    let suggestedWeight = existing?.suggestedWeight ?? 0;
+    let source: 'history' | 'estimated' | 'bodyweight' = existing?.source ?? 'estimated';
+    if (!existing) {
+      try {
+        const est = estimateStartingWeight(newV1Exercise.name, profile, newV1Exercise.id);
+        suggestedWeight = est.weight;
+        source = est.isBodyweight ? 'bodyweight' : 'estimated';
+      } catch { suggestedWeight = 0; }
+    }
+    const oldSets = plans[exerciseHistoryKey(oldExercise)]?.sets ?? plans[exerciseBaseKey(oldExercise)]?.sets ?? 3;
+    const newPlan: ExercisePlan = {
+      suggestedWeight,
+      suggestedReps: [repLo, repHi],
+      sets: oldSets, // keep the set count the user was already planning for this slot
+      source,
+      action: existing?.action,
+      isFirstSession: !existing,
+      mode,
+      equipmentType,
+    };
+    const newExerciseForQueue = { ...newV1Exercise, selectedEquipmentType: undefined };
+
+    setExerciseQueue(prev => [newExerciseForQueue, ...prev.slice(1)]);
+    setPlans(prev => ({ ...prev, [histKey]: newPlan }));
+    setRestTimer(0);
+    setShowExtraWeight(false);
+    clearRestStart();
+    resyncInputsForExercise(newExerciseForQueue, { ...plans, [histKey]: newPlan }, completedSets);
+
+    if (scope === 'session') {
+      toast.success(`Swapped in ${newV1Exercise.name} — just for today.`);
+      return;
+    }
+
+    // scope === 'plan' — also persist into workout_plans so this swap
+    // sticks for future sessions of this day. The in-session swap above
+    // already happened, so even if this write fails, today's workout
+    // isn't disrupted — only the "sticks for next time" part is at risk.
+    try {
+      const planResult = await planApi.get();
+      if (!planResult || !dayName) throw new Error('No plan loaded');
+      const dayExercises = planResult.workouts[dayName] || [];
+      const oldKey = exerciseBaseKey(oldExercise);
+      const idx = dayExercises.findIndex((e: any) => exerciseBaseKey(e) === oldKey);
+      if (idx === -1) throw new Error('Exercise not found in stored plan');
+      const oldPlanEntry = dayExercises[idx];
+      const updatedEntry = {
+        ...newV1Exercise,
+        sets: oldPlanEntry.sets ?? oldSets,
+        selectedEquipmentType: undefined,
+      };
+      const updatedDayExercises = [...dayExercises];
+      updatedDayExercises[idx] = updatedEntry;
+      await planApi.save({ ...planResult.workouts, [dayName]: updatedDayExercises });
+      toast.success(`${newV1Exercise.name} will replace ${oldExercise.name} in future ${dayName} sessions too.`);
+    } catch (err) {
+      console.error('Plan-wide swap persistence failed:', err);
+      toast.error("Swapped for today, but couldn't update the saved plan — try again from the plan screen.");
+    }
   };
 
   const handleReorder = (newQueue: any[]) => {
@@ -1489,6 +1596,18 @@ export function ActiveWorkout() {
         existingExerciseIds={new Set(exerciseQueue.map((e: any) => e.id || e.name))}
       />
 
+      {/* V2 build: swap sheet — session-only or plan-wide alternative for the current exercise */}
+      {currentExercise && (
+        <ExerciseSwapSheet
+          open={showSwapSheet}
+          onOpenChange={setShowSwapSheet}
+          exercise={adaptV1Exercise(currentExercise)}
+          availableEquipment={DEFAULT_AVAILABLE_EQUIPMENT}
+          db={v2AdaptedDatabase}
+          onConfirm={(newExercise, scope) => handleSwapExercise(newExercise, scope)}
+        />
+      )}
+
       {/* Phase 5: Reorder dialog */}
       <ReorderDialog
         open={showReorderDialog}
@@ -1667,6 +1786,15 @@ export function ActiveWorkout() {
                     <ArrowDown className="w-4 h-4" />
                     Do later
                     <span className="ml-auto text-xs text-muted-foreground">moves to end</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowSwapSheet(true)}
+                    className="gap-2"
+                  >
+                    <Repeat className="w-4 h-4" />
+                    Swap exercise
+                    <span className="ml-auto text-xs text-muted-foreground">equipment taken?</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
