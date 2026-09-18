@@ -58,7 +58,7 @@ import {
 import { getMovementId, exerciseDatabase as v1ExerciseDatabase } from '../../data/exercises';
 import { adaptV1Exercise, adaptV1Database } from '../../utils/adaptV1ToV2';
 import { ExerciseSwapSheet } from '../components/v2/ExerciseSwapSheet';
-import type { EquipmentItem as V2EquipmentItem } from '../../data/v2/types';
+import { resolveAvailableEquipment } from '../../utils/resolveAvailableEquipment';
 import { getMovementDisplayName } from '../../utils/exerciseGrouping';
 import {
   generateSessionId, queueStart, queueUpdate,
@@ -172,21 +172,11 @@ function exerciseBaseKey(ex: { id?: string; name: string }): string {
   return (ex.id && ex.id.trim() !== '') ? ex.id : ex.name;
 }
 
-// TODO(v2): this app has no per-user "what equipment do I have" preference
-// yet (that's an onboarding concept introduced by the v2 rebuild — see
-// atlas-v2-build-plan.md). Until that's wired up, the swap sheet assumes
-// full commercial-gym access so equipment-based filtering doesn't hide
-// legitimate alternatives for users who do have everything available.
-// Once user-level equipment preferences exist, pass those here instead.
-const DEFAULT_AVAILABLE_EQUIPMENT: V2EquipmentItem[] = [
-  'barbell', 'ez-bar', 'trap-bar', 'dumbbell', 'kettlebell',
-  'bench-flat', 'bench-incline', 'bench-decline', 'squat-rack', 'smith-machine',
-  'cable-tower', 'pull-up-bar', 'dip-bars', 'resistance-band',
-  'leg-press-machine', 'leg-curl-machine', 'leg-extension-machine',
-  'chest-press-machine', 'shoulder-press-machine', 'lat-pulldown-machine',
-  'seated-row-machine', 'ab-wheel', 'adductor-machine', 'abductor-machine',
-  'hack-squat-machine', 'preacher-bench', 'none',
-];
+// Equipment resolution now uses the real per-user onboarding selection
+// (profile.customEquipment) via the shared resolveAvailableEquipment util —
+// see that file for the fallback chain. ActiveWorkout already loads the
+// profile into profileRef (below), so this is real data, not a stand-in.
+
 
 // ─── Suggestion pill ──────────────────────────────────────────────────────────
 
@@ -1602,7 +1592,7 @@ export function ActiveWorkout() {
           open={showSwapSheet}
           onOpenChange={setShowSwapSheet}
           exercise={adaptV1Exercise(currentExercise)}
-          availableEquipment={DEFAULT_AVAILABLE_EQUIPMENT}
+          availableEquipment={resolveAvailableEquipment(profileRef.current)}
           db={v2AdaptedDatabase}
           onConfirm={(newExercise, scope) => handleSwapExercise(newExercise, scope)}
         />

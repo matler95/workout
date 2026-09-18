@@ -29,10 +29,10 @@ import {
 import { getMovementId } from '../../data/exercises';
 import { formatEquipmentLabel } from '../../utils/exerciseWeightMode';
 import { compileSession } from '../../utils/sessionCompiler';
+import { resolveAvailableEquipment } from '../../utils/resolveAvailableEquipment';
 import { adaptV1Exercise, adaptV1Database } from '../../utils/adaptV1ToV2';
 import { splitMuscleTargets } from '../../data/v2/muscleTargets';
-import { equipmentGroups } from '../../data/v2/equipment';
-import type { Muscle, EquipmentItem as V2EquipmentItem } from '../../data/v2/types';
+import type { Muscle } from '../../data/v2/types';
 import { Sparkles } from 'lucide-react';
 
 // Adapted once at module load, same rationale as ActiveWorkout.tsx — static
@@ -62,22 +62,6 @@ function mapDayTypeToSplitTag(dayType: string): 'push' | 'pull' | 'legs' | 'uppe
     return dayType;
   }
   return 'full_body'; // getDayType's 'full' fallback maps to v2's 'full_body'
-}
-
-/** v1 profile only has a binary equipment flag (full_gym / bodyweight), not
- *  the four-way machines/dumbbells/barbell/calisthenics breakdown from the
- *  build plan's onboarding design — that finer-grained picker hasn't been
- *  built yet. This is the honest mapping of what's actually collected today. */
-function resolveAvailableEquipment(profile: any): V2EquipmentItem[] {
-  if (profile?.equipment === 'bodyweight') {
-    return [...new Set(equipmentGroups.calisthenics)];
-  }
-  return [...new Set([
-    ...equipmentGroups.machines,
-    ...equipmentGroups.dumbbells,
-    ...equipmentGroups.barbell,
-    ...equipmentGroups.calisthenics,
-  ])];
 }
 
 // v2-powered coverage assessment — reuses the same per-split muscle-set
