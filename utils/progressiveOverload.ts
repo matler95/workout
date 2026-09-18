@@ -14,6 +14,15 @@
  * Previous fixes preserved:
  *   - FIX #2: rpeCorrections propagation
  *   - FIX #4: One-session directional suggestion
+ *   - FIX #5: classifyExercise no longer treats the bare word "barbell" (or
+ *     the mistaken literal "barbell curl") as a heavy-compound signal.
+ *     These matched BEFORE the isolation-keyword check, so every barbell
+ *     isolation exercise (curls, shrugs, calf raises, ab rollouts, side
+ *     bends...) was classified heavy_barbell — wrong rep target (4-8) and
+ *     a flat +2.5kg suggested jump instead of the correct ~5%-of-current
+ *     isolation increment. HEAVY_BARBELL_KEYWORDS now only contains
+ *     specific compound-lift phrases; ISOLATION_KEYWORDS gained the
+ *     entries that were relying on the bare "barbell" match by accident.
  */
 
 export type ExerciseTier =
@@ -57,8 +66,8 @@ export interface ProgressionSuggestion {
 // --- Exercise classification --------------------------------------------------
 
 const HEAVY_BARBELL_KEYWORDS = [
-  'barbell', 'squat', 'deadlift', 'bench press', 'overhead press',
-  'barbell row', 'barbell curl', 'barbell lunge', 'barbell rdl',
+  'squat', 'deadlift', 'bench press', 'overhead press',
+  'barbell row', 'barbell lunge', 'barbell rdl',
   'romanian deadlift', 'sumo', 'front squat', 'hack squat',
 ];
 
@@ -68,9 +77,9 @@ const BODYWEIGHT_KEYWORDS = [
 ];
 
 const ISOLATION_KEYWORDS = [
-  'curl', 'lateral raise', 'front raise', 'fly', 'flye',
+  'curl', 'lateral raise', 'front raise', 'raise', 'fly', 'flye',
   'extension', 'kickback', 'shrug', 'calf raise', 'face pull',
-  'cable curl', 'hammer curl', 'preacher',
+  'cable curl', 'hammer curl', 'preacher', 'side bend', 'rollout',
 ];
 
 export function classifyExercise(exerciseName: string): ExerciseTier {

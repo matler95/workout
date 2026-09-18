@@ -28,6 +28,17 @@ import {
 } from '../../utils/exerciseGrouping';
 import { getMovementId } from '../../data/exercises';
 import { formatEquipmentLabel } from '../../utils/exerciseWeightMode';
+import { compileSession } from '../../utils/sessionCompiler';
+import { resolveAvailableEquipment } from '../../utils/resolveAvailableEquipment';
+import { adaptV1Exercise, adaptV1Database } from '../../utils/adaptV1ToV2';
+import { splitMuscleTargets } from '../../data/v2/muscleTargets';
+import type { Muscle } from '../../data/v2/types';
+import { Sparkles } from 'lucide-react';
+
+// Adapted once at module load, same rationale as ActiveWorkout.tsx — static
+// source data, no reason to recompute per render. Reuses the exerciseDatabase
+// import above (the v1 database), not a separate import.
+const v2AdaptedDatabase = adaptV1Database(exerciseDatabase);
 
 // Exercise as stored in the plan — extends base Exercise with user-configured sets
 // Phase 1.4: added selectedEquipmentType and movementId for equipment-aware tracking
@@ -36,31 +47,6 @@ export interface ExerciseWithSets extends Exercise {
   selectedEquipmentType?: string;
   movementId?: string;
 }
-
-// ─── Muscle group normalization ───────────────────────────────────────────────
-
-const MUSCLE_ALIASES: Record<string, string> = {
-  chest: 'chest', upper_chest: 'chest', lower_chest: 'chest',
-  lats: 'back', upper_back: 'back', lower_back: 'back', traps: 'back', rhomboids: 'back',
-  front_delts: 'shoulders', side_delts: 'shoulders', rear_delts: 'shoulders', delts: 'shoulders',
-  biceps: 'biceps', triceps: 'triceps',
-  quads: 'quads', quadriceps: 'quads',
-  hamstrings: 'hamstrings', glutes: 'glutes', calves: 'calves', hip_flexors: 'hamstrings',
-  abs: 'core', core: 'core', obliques: 'core',
-};
-
-function normalizeMuscle(muscle: string): string {
-  return MUSCLE_ALIASES[muscle.toLowerCase()] ?? muscle.toLowerCase();
-}
-
-const MUSCLE_TARGETS: Record<string, string[]> = {
-  push:  ['chest', 'shoulders', 'triceps'],
-  pull:  ['back', 'biceps'],
-  legs:  ['quads', 'hamstrings', 'glutes'],
-  upper: ['chest', 'back', 'shoulders', 'biceps', 'triceps'],
-  lower: ['quads', 'hamstrings', 'glutes'],
-  full:  ['chest', 'back', 'quads', 'hamstrings'],
-};
 
 function getDayType(dayName: string): string {
   const n = dayName.toLowerCase();
@@ -71,28 +57,51 @@ function getDayType(dayName: string): string {
   return 'full';
 }
 
-function assessWorkout(exercises: Exercise[], dayName: string) {
+function mapDayTypeToSplitTag(dayType: string): 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full_body' {
+  if (dayType === 'push' || dayType === 'pull' || dayType === 'legs' || dayType === 'upper' || dayType === 'lower') {
+    return dayType;
+  }
+  return 'full_body'; // getDayType's 'full' fallback maps to v2's 'full_body'
+}
+
+// v2-powered coverage assessment — reuses the same per-split muscle-set
+// targets and involvement-weighted crediting as the session compiler
+// (src/utils/sessionCompiler.ts), instead of the old binary "was this
+// generic muscle group mentioned at all" check. Precision improvement:
+// the old version used MUSCLE_TARGETS' coarse aliased names (e.g.
+// 'shoulders', 'back'); this credits against v2's precise vocabulary
+// (front-delts, side-delts, rhomboids, lats, ...) with real set/involvement
+// weighting, so "3 sets of a secondary-only lateral raise" no longer counts
+// the same as "4 sets of a primary front-delt press."
+function assessWorkout(exercises: ExerciseWithSets[], dayName: string) {
   if (exercises.length === 0) {
-    return { score: 0, label: 'Empty', color: 'gray' as const, missing: [] };
+    return { score: 0, label: 'Empty', color: 'gray' as const, missing: [] as string[] };
   }
 
-  const dayType = getDayType(dayName);
-  const targets = MUSCLE_TARGETS[dayType] || MUSCLE_TARGETS.full;
+  const splitTag = mapDayTypeToSplitTag(getDayType(dayName));
+  const targets = splitMuscleTargets[splitTag] ?? {};
+  const targetEntries = Object.entries(targets) as [Muscle, number][];
+  const remaining = new Map<Muscle, number>(targetEntries);
 
-  const covered = new Set<string>();
-  exercises.forEach(ex => {
-    ex.primaryMuscles.forEach(m => covered.add(normalizeMuscle(m)));
-    ex.secondaryMuscles.forEach(m => covered.add(normalizeMuscle(m)));
-  });
+  for (const ex of exercises) {
+    const v2ex = adaptV1Exercise(ex);
+    const sets = ex.sets ?? 3;
+    for (const m of v2ex.muscles) {
+      if (!remaining.has(m.muscle)) continue;
+      const roleWeight = m.role === 'primary' ? 1.0 : 0.6;
+      const credit = sets * m.involvement * roleWeight;
+      remaining.set(m.muscle, (remaining.get(m.muscle) ?? 0) - credit);
+    }
+  }
 
-  const missing = targets.filter(m => !covered.has(m));
-  const coverage = Math.round(((targets.length - missing.length) / targets.length) * 100);
+  const missing = targetEntries.filter(([m]) => (remaining.get(m) ?? 0) > 0.5).map(([m]) => m);
+  const coverage = targetEntries.length > 0
+    ? Math.round(((targetEntries.length - missing.length) / targetEntries.length) * 100)
+    : 100;
 
   let score = coverage;
   if (exercises.length >= 3 && exercises.length <= 8) score = Math.min(100, score + 10);
-  const hasCompound = exercises.some(
-    ex => ex.primaryMuscles.length >= 2 || ex.secondaryMuscles.length >= 2
-  );
+  const hasCompound = exercises.some(ex => adaptV1Exercise(ex).mechanic === 'compound');
   if (hasCompound) score = Math.min(100, score + 10);
 
   const label = score >= 80 ? 'Complete' : score >= 60 ? 'Good' : score >= 40 ? 'Needs work' : 'Incomplete';
@@ -345,6 +354,44 @@ export function WorkoutBuilder() {
     setSelectedExercises(prev => ({ ...prev, [day]: exs }));
   };
 
+  // V2 build: "choose from template" (#1b) — generates a full day via the
+  // real session compiler instead of manual picking. Uses the adapted-422
+  // v1-backed database (not the merged 499-exercise library, which also
+  // includes curated exercises with non-v1 ids) so every generated pick
+  // maps back to a real v1 Exercise for the saved plan — same reasoning as
+  // ActiveWorkout.tsx's swap sheet.
+  const handleGenerateForDay = (day: string) => {
+    const splitTag = mapDayTypeToSplitTag(getDayType(day));
+    const availableEquipment = resolveAvailableEquipment(profile);
+    const durationMinutes = profile?.sessionLength && profile.sessionLength > 0 ? profile.sessionLength : 60;
+
+    const compiled = compileSession(
+      { splitDay: splitTag, equipmentAvailable: availableEquipment, durationMinutes, seedExercises: [] },
+      v2AdaptedDatabase
+    );
+
+    const generated: ExerciseWithSets[] = compiled.exercises
+      .map(ce => {
+        const v1ex = exerciseDatabase.find(e => e.id === ce.exercise.id);
+        if (!v1ex) return null;
+        return { ...v1ex, sets: ce.sets, movementId: v1ex.movementId ?? getMovementId(v1ex) } as ExerciseWithSets;
+      })
+      .filter((e): e is ExerciseWithSets => e !== null);
+
+    if (generated.length === 0) {
+      toast.error("Couldn't generate a session for this day — try adjusting your equipment setting in your profile.");
+      return;
+    }
+
+    setSelectedExercises(prev => ({ ...prev, [day]: generated }));
+
+    if (compiled.warnings.length > 0) {
+      toast(`Generated ${generated.length} exercises — ${compiled.warnings[0]}`);
+    } else {
+      toast.success(`Generated ${generated.length} exercises for ${day} (~${compiled.estimatedMinutes} min)`);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -487,9 +534,17 @@ export function WorkoutBuilder() {
                     </span>
                     {assessment.missing.length > 0 && currentExercises.length > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        Missing: {assessment.missing.map(m => m.replace(/_/g, ' ')).join(', ')}
+                        Missing: {assessment.missing.map(m => m.replace(/-/g, ' ')).join(', ')}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateForDay(day)}
+                      className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      {currentExercises.length === 0 ? 'Generate for me' : 'Regenerate (replaces current)'}
+                    </button>
                   </div>
 
                   <Card className="min-w-0">
@@ -501,7 +556,7 @@ export function WorkoutBuilder() {
                     <CardContent className="space-y-2">
                       {currentExercises.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-4 text-center">
-                          No exercises yet — add from the library below
+                          No exercises yet — add from the library below, or tap "Generate for me" above
                         </p>
                       ) : (
                         currentExercises.map((ex, idx) => {

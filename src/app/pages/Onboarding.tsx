@@ -8,6 +8,8 @@ import { Progress } from '../components/ui/progress';
 import { Slider } from '../components/ui/slider';
 import { Textarea } from '../components/ui/textarea';
 import { OptionGroup } from '../components/ui/OptionButton';
+import { OptionButton } from '../components/ui/OptionButton';
+import { equipmentGroups } from '../../data/v2/equipment';
 import { profileApi, progressApi } from '../../utils/api';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -87,7 +89,19 @@ export function Onboarding() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await profileApi.saveOnboarding(data as any);
+      // Keep the legacy binary `equipment` field populated for the existing
+      // consumers that still read it directly (SmartExerciseFilters,
+      // WorkoutBuilder's v1 exercise-list filter, api.ts's save payload) —
+      // `customEquipment` is the new source of truth for anything that
+      // needs the real granular breakdown (see resolveAvailableEquipment
+      // in WorkoutBuilder.tsx and ActiveWorkout.tsx).
+      const onlyCalisthenics =
+        data.customEquipment.length === 1 && data.customEquipment[0] === 'calisthenics';
+      const dataToSave: OnboardingData = {
+        ...data,
+        equipment: onlyCalisthenics ? 'bodyweight' : 'full_gym',
+      };
+      await profileApi.saveOnboarding(dataToSave as any);
       const weight = parseFloat(data.weight);
       if (weight >= 20 && weight <= 300) {
         progressApi.logBodyweight(weight, new Date().toISOString().split('T')[0]).catch(() => {});
@@ -107,7 +121,7 @@ export function Onboarding() {
       case 2:  return data.primaryGoal !== '';
       case 3:  return data.experienceLevel !== '';
       case 4:  return data.gender !== '' && data.age !== '' && data.height !== '' && data.weight !== '';
-      case 5:  return data.equipment !== '';
+      case 5:  return data.customEquipment.length > 0;
       case 6:  return true;
       case 7:  return data.workoutStyle !== '';
       case 8:  return data.absPreference !== '';
@@ -221,16 +235,34 @@ export function Onboarding() {
             </div>
           )}
 
-          {step === 5 && card('What equipment do you have?', undefined,
-            <OptionGroup
-              value={data.equipment as any}
-              onChange={v => setData({ ...data, equipment: v })}
-              options={[
-                { value: 'full_gym',   label: 'Full Gym',        sub: 'Barbells, cables, machines, dumbbells' },
-                { value: 'bodyweight', label: 'Bodyweight Only', sub: 'No equipment needed' },
-              ]}
-              cols={1}
-            />
+          {step === 5 && card('What equipment do you have access to?', 'Select everything available — pick more than one if you do',
+            <div className="grid grid-cols-1 gap-2.5">
+              {([
+                { key: 'barbell',      label: 'Barbell',      sub: 'Barbell, rack, bench' },
+                { key: 'dumbbells',    label: 'Dumbbells',    sub: 'Dumbbells, adjustable bench' },
+                { key: 'machines',     label: 'Machines',     sub: 'Cable towers, selectorized machines' },
+                { key: 'calisthenics', label: 'Calisthenics', sub: 'Pull-up bar, dip bars, bodyweight' },
+              ] as const).map(opt => {
+                const selected = data.customEquipment.includes(opt.key);
+                return (
+                  <OptionButton
+                    key={opt.key}
+                    selected={selected}
+                    label={opt.label}
+                    sub={opt.sub}
+                    onClick={() => setData({
+                      ...data,
+                      customEquipment: selected
+                        ? data.customEquipment.filter(k => k !== opt.key)
+                        : [...data.customEquipment, opt.key],
+                    })}
+                  />
+                );
+              })}
+              {data.customEquipment.length === 0 && (
+                <p className="text-xs text-muted-foreground">Pick at least one to continue.</p>
+              )}
+            </div>
           )}
 
           {step === 6 && (
