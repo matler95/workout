@@ -20,8 +20,8 @@ have credentials for — this is the exact list of what to do, in order.
 
 3. **Seed the exercise data.** From the repo root, on the `v2` branch:
    ```
-   V2_SUPABASE_URL=https://xxxx.supabase.co \
-   V2_SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+   SUPABASE_URL=https://xxxx.supabase.co \
+   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
    npx tsx data_migration/seedExercisesV2.ts
    ```
    Pull both values from the new project's Settings → API. This pushes

@@ -4556,11 +4556,6 @@ export const exerciseDatabase: Exercise[] = [
         "muscle": "hamstrings",
         "role": "secondary",
         "involvement": 0.4
-      },
-      {
-        "muscle": "quads",
-        "role": "secondary",
-        "involvement": 0.4
       }
     ],
     "equipmentType": "barbell",
@@ -4731,11 +4726,6 @@ export const exerciseDatabase: Exercise[] = [
       },
       {
         "muscle": "chest",
-        "role": "secondary",
-        "involvement": 0.4
-      },
-      {
-        "muscle": "lats",
         "role": "secondary",
         "involvement": 0.4
       },
@@ -6655,11 +6645,6 @@ export const exerciseDatabase: Exercise[] = [
       },
       {
         "muscle": "quads",
-        "role": "secondary",
-        "involvement": 0.4
-      },
-      {
-        "muscle": "front-delts",
         "role": "secondary",
         "involvement": 0.4
       },

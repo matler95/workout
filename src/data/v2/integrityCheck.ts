@@ -35,7 +35,12 @@ export function checkIntegrity(db: Exercise[] = exerciseDatabase): Issue[] {
     }
 
     // Every muscle referenced must exist in the controlled vocabulary
+    const muscleIdsSeen = new Set<string>();
     for (const m of ex.muscles) {
+      if (muscleIdsSeen.has(m.muscle)) {
+        issues.push({ exerciseId: ex.id, problem: `Duplicate muscle "${m.muscle}"` });
+      }
+      muscleIdsSeen.add(m.muscle);
       if (!muscleById[m.muscle]) {
         issues.push({ exerciseId: ex.id, problem: `Unknown muscle "${m.muscle}"` });
       }

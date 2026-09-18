@@ -55,16 +55,18 @@ const MUSCLE_MAP: Record<string, Muscle> = {
 };
 
 function mapMuscles(primary: string[], secondary: string[]): MuscleInvolvement[] {
-  const result: MuscleInvolvement[] = [];
+  const result = new Map<Muscle, MuscleInvolvement>();
   for (const m of primary) {
     const mapped = MUSCLE_MAP[m.toLowerCase()];
-    if (mapped) result.push({ muscle: mapped, role: 'primary', involvement: 0.9 });
+    if (mapped) result.set(mapped, { muscle: mapped, role: 'primary', involvement: 0.9 });
   }
   for (const m of secondary) {
     const mapped = MUSCLE_MAP[m.toLowerCase()];
-    if (mapped) result.push({ muscle: mapped, role: 'secondary', involvement: 0.4 });
+    if (mapped && !result.has(mapped)) {
+      result.set(mapped, { muscle: mapped, role: 'secondary', involvement: 0.4 });
+    }
   }
-  return result;
+  return [...result.values()];
 }
 
 function mapSplitTags(category: V1Exercise['category']): SplitTag[] {

@@ -6,8 +6,8 @@
  * Run AFTER migration_v2_exercise_schema.sql, against the NEW v2
  * Supabase project (not production):
  *
- *   V2_SUPABASE_URL=https://xxxx.supabase.co \
- *   V2_SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+ *   SUPABASE_URL=https://xxxx.supabase.co \
+ *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
  *   npx tsx data_migration/seedExercisesV2.ts
  *
  * Uses the SERVICE ROLE key deliberately — the exercises tables have no
@@ -23,11 +23,11 @@ import { createClient } from '@supabase/supabase-js';
 import { exerciseDatabase } from '../src/data/v2/exercises';
 import { checkIntegrity } from '../src/data/v2/integrityCheck';
 
-const url = process.env.V2_SUPABASE_URL;
-const serviceRoleKey = process.env.V2_SUPABASE_SERVICE_ROLE_KEY;
+const url = process.env.SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceRoleKey) {
-  console.error('Missing V2_SUPABASE_URL or V2_SUPABASE_SERVICE_ROLE_KEY env vars.');
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.');
   process.exit(1);
 }
 
